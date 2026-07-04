@@ -1,0 +1,34 @@
+# Build output / packaged artifacts
+dist/
+build/
+dist-lists/
+*.zip
+
+# Chrome-generated DNR index (regenerated on load; not source)
+_metadata/
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Secrets - never commit
+keys/
+.keys/
+*.jwk
+*.jwk.json
+*.pem
+.env
+.env.*
+
+# Claude Code - personal/local, not shared
+.claude/settings.local.json
+.claude/*.local.json
+.claude/local/

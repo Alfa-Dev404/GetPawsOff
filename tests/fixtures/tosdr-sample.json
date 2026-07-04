@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Example Service",
+    "urls": ["https://www.example.com/", "example.net"],
+    "rating": { "letter": "e" },
+    "points": [
+      { "case": { "classification": "blocker", "title": "This service sells your personal data" }, "topic": { "name": "Data Sale" } },
+      { "case": { "classification": "bad", "title": "They grant themselves a broad licence to your content" }, "topic": { "name": "Ownership" } },
+      { "case": { "classification": "good", "title": "You can delete your account" }, "topic": { "name": "Account" } },
+      { "case": { "classification": "neutral", "title": "Governed by the laws of somewhere" } }
+    ]
+  },
+  {
+    "name": "Friendly Co",
+    "domains": ["friendly.org"],
+    "rating": { "letter": "b" },
+    "points": [
+      { "case": { "classification": "good", "title": "No third-party tracking" } }
+    ]
+  }
+]

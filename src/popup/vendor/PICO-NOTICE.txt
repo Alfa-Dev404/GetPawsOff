@@ -1,0 +1,10 @@
+PawsOff, vendored stylesheet notice
+===================================
+
+pico.min.css  Pico CSS v2.1.1 (https://picocss.com)
+              Copyright 2019-2025 Pico CSS
+              Licensed under MIT (https://github.com/picocss/pico/blob/main/LICENSE.md)
+
+Vendored locally on purpose: the extension never loads styles (or anything
+else) from a CDN at runtime. PawsOff's own design tokens are bridged onto
+Pico's --pico-* variables in src/styles/popup.css.

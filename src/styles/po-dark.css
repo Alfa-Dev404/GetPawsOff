@@ -1,0 +1,40 @@
+/* PawsOff dark theme for extension pages (options, and any future page that
+ * opts in by linking this AFTER po-ui.css). Same design language as the popup:
+ * deep pine surfaces, warm paper text, icon-orange accent, hard offset shadows.
+ * po-ui.css is token-driven, so this file only re-points the --po-* tokens
+ * (plus a couple of contrast fixes); the shared stylesheet stays untouched for
+ * pages that remain light. */
+
+:root {
+  color-scheme: dark;
+
+  --po-paper:      #101613;   /* deep pine base (matches the popup) */
+  --po-grid:       rgba(242, 237, 227, 0.045);
+  --po-surface:    #1c2722;   /* cards */
+  --po-ink:        #f2ede3;   /* warm paper text + outlines */
+  --po-ink-soft:   #a7b0a5;   /* secondary text */
+
+  --po-accent:     #ff5e3a;   /* icon orange */
+  --po-accent-2:   #3fa89e;   /* teal, lightened for dark contrast */
+  --po-go:         #2fbf71;
+  --po-warn:       #f5c518;
+
+  /* Hard shadows/borders read better in the edge color than in light ink. */
+  --po-edge:       #0a0d0c;
+  --po-shadow:     4px 4px 0 var(--po-edge);
+  --po-shadow-sm:  3px 3px 0 var(--po-edge);
+  --po-border:     2px solid var(--po-edge);
+}
+
+/* Small bold labels sitting on accent/go/warn chips need dark text for AA. */
+.po-sticker { color: #14100c; }
+
+/* The header logo is the packaged icon now; keep it crisp on dark. */
+.po-top .logo-img {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border: var(--po-border);
+  border-radius: 10px;
+  box-shadow: var(--po-shadow-sm);
+}

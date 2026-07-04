@@ -1,0 +1,12 @@
+{
+  "trackers": [
+    { "name": "DoubleClick", "company_id": "google", "category": "advertising", "domains": ["doubleclick.net", "g.doubleclick.net"] },
+    { "name": "Google Analytics", "company_id": "google", "category": "site_analytics", "domains": ["google-analytics.com"] },
+    { "name": "Cloudflare CDN", "company_id": "cloudflare", "category": "cdn", "domains": ["cloudflare.com", "cloudflareinsights.com"] },
+    { "name": "Vimeo Player", "company_id": "vimeo", "category": "audio_video_player", "domains": ["vimeo.com"] }
+  ],
+  "companies": {
+    "google": { "name": "Google", "domains": ["google.com"] },
+    "cloudflare": { "name": "Cloudflare", "website_url": "https://www.cloudflare.com" }
+  }
+}

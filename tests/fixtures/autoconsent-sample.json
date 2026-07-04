@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Onetrust",
+    "detectCmp": [{ "exists": "#onetrust-banner-sdk" }],
+    "detectPopup": [{ "visible": "#onetrust-banner-sdk" }],
+    "optOut": [
+      { "hide": "#onetrust-consent-sdk" },
+      { "waitForThenClick": "#onetrust-reject-all-handler, .ot-pc-refuse-all-handler" }
+    ]
+  },
+  {
+    "name": "Cookiebot",
+    "detectCmp": [{ "exists": "#CybotCookiebotDialog" }],
+    "optOut": [{ "click": "#CybotCookiebotDialogBodyButtonDecline" }]
+  },
+  {
+    "name": "Sourcepoint",
+    "detectCmp": [{ "exists": "div[id^=\"sp_message_container\"]" }],
+    "detectPopup": [{ "visible": ".sp_choice_type_13" }],
+    "optOut": [
+      { "waitForThenClick": ".sp_choice_type_12" },
+      { "if": { "exists": ".sp_choice_type_SAVE_AND_EXIT" }, "then": [ { "waitForThenClick": ".sp_choice_type_REJECT_ALL" } ] }
+    ]
+  },
+  {
+    "name": "HideOnly",
+    "detectCmp": [{ "exists": "#foo" }],
+    "optOut": [{ "hide": "#foo" }, { "wait": 500 }]
+  }
+]

@@ -1,0 +1,191 @@
+/* po-ui.css - PawsOff shared design system.
+ *
+ * Visual language: graph-paper surface, black-outlined cards with hard offset
+ * shadows, sticker headings, bright accent pops, and a paw-print motif.
+ *
+ * THEMEABLE: every colour is a CSS custom property in :root. To match a future
+ * website, change the ~8 tokens in the THEME block - nothing else.
+ *
+ * CSP-CLEAN: no @import, no remote fonts, no CDN. System font stack only. All
+ * behaviour lives in linked .js (no inline handlers). Safe under
+ * "script-src 'self'; object-src 'self'".
+ */
+
+/* ───────────────────────── THEME TOKENS (swap these later) ───────────────── */
+/* PawsOff site brand (warm cream / ink-teal / paw-orange). Deliberately
+   LIGHT-ONLY: no prefers-color-scheme:dark block, so the settings page stays
+   high-contrast and readable instead of flipping to a hard-to-read near-black. */
+:root {
+  --po-paper:      #faf8f4;   /* warm cream base */
+  --po-grid:       rgba(28, 47, 42, 0.05);
+  --po-surface:    #fdfcf9;   /* cards (near-white) */
+  --po-ink:        #1c2f2a;   /* ink-teal: primary text + outlines */
+  --po-ink-soft:   #647b78;   /* secondary text */
+
+  --po-accent:     #e85c3a;   /* paw orange (primary action + logo) */
+  --po-accent-2:   #2d8078;   /* teal (secondary accent) */
+  --po-go:         #18c964;   /* on / success */
+  --po-warn:       #f0b429;   /* attention (amber) */
+
+  --po-radius:     14px;   /* cards */
+  --po-radius-sm:  10px;   /* controls: buttons, inputs, list items */
+  --po-shadow:     4px 4px 0 var(--po-ink);
+  --po-shadow-sm:  3px 3px 0 var(--po-ink);
+  --po-border:     2px solid var(--po-ink);
+
+  --po-font: "Plus Jakarta Sans", "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --po-font-hand: "Bradley Hand", "Segoe Print", "Comic Sans MS", "Chalkboard SE", var(--po-font);
+}
+
+/* ───────────────────────── BASE ─────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  font-family: var(--po-font);
+  color: var(--po-ink);
+  background-color: var(--po-paper);
+  /* graph-paper grid drawn purely in CSS - no image asset */
+  background-image:
+    linear-gradient(var(--po-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--po-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--po-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ───────────────────────── TYPE ─────────────────────────────────────────── */
+.po-script {
+  font-family: var(--po-font-hand);
+  color: var(--po-accent);
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+/* secondary accent label, used for small parenthetical notes */
+.po-aside {
+  font-family: var(--po-font-hand);
+  color: var(--po-accent-2);
+  font-weight: 700;
+}
+
+/* sticker title - white letters, black outline, hard shadow, on an accent slab,
+   slightly rotated. The "WORKFLOW" look. */
+.po-sticker {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--po-accent);
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: var(--po-border);
+  box-shadow: var(--po-shadow);
+  transform: rotate(-2deg);
+  -webkit-text-stroke: 1px var(--po-ink);
+  text-shadow: 2px 2px 0 var(--po-ink);
+}
+
+/* ───────────────────────── CARD ─────────────────────────────────────────── */
+.po-card {
+  background: var(--po-surface);
+  border: var(--po-border);
+  border-radius: var(--po-radius);
+  box-shadow: var(--po-shadow);
+  padding: 14px 16px;
+}
+.po-card + .po-card { margin-top: 14px; }
+
+.po-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.po-grow { flex: 1 1 auto; min-width: 0; }
+
+.po-title { font-size: 15px; font-weight: 800; margin: 0; }
+.po-sub   { font-size: 12.5px; color: var(--po-ink-soft); margin: 2px 0 0; line-height: 1.35; }
+.po-stat  { font-size: 13px; font-weight: 800; margin: 8px 0 0; }
+.po-stat .num { color: var(--po-accent); }
+
+/* paw badge that holds each feature's icon */
+.po-badge {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: var(--po-border);
+  border-radius: 12px;
+  background: var(--po-paper);
+  box-shadow: var(--po-shadow-sm);
+}
+.po-badge svg { width: 22px; height: 22px; }
+
+/* ───────────────────────── PAW TOGGLE ──────────────────────────────────────
+   Accessible: a visually-hidden checkbox drives a custom track whose thumb is a
+   paw print. Checked = lime "on". */
+.po-toggle { position: relative; display: inline-block; flex: 0 0 auto; }
+.po-toggle input {
+  position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer;
+}
+.po-toggle .track {
+  width: 50px; height: 28px; border-radius: 999px;
+  border: var(--po-border); background: var(--po-paper);
+  box-shadow: var(--po-shadow-sm);
+  display: flex; align-items: center; padding: 2px;
+  transition: background .15s ease;
+}
+.po-toggle .thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--po-surface); border: var(--po-border);
+  display: grid; place-items: center;
+  transform: translateX(0); transition: transform .16s ease;
+}
+.po-toggle .thumb svg { width: 13px; height: 13px; opacity: .65; }
+.po-toggle input:checked ~ .track { background: var(--po-go); }
+.po-toggle input:checked ~ .track .thumb { transform: translateX(22px); }
+.po-toggle input:focus-visible ~ .track { outline: 3px solid var(--po-accent); outline-offset: 2px; }
+
+/* ───────────────────────── BUTTONS / PILLS ─────────────────────────────── */
+.po-btn {
+  font-family: var(--po-font); font-weight: 800; font-size: 13px;
+  padding: 8px 14px; border: var(--po-border); border-radius: var(--po-radius-sm);
+  background: var(--po-surface); color: var(--po-ink);
+  box-shadow: var(--po-shadow-sm); cursor: pointer;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+
+/* text input - was previously hand-styled inline on the options page */
+.po-input {
+  padding: 8px 10px; border: var(--po-border); border-radius: var(--po-radius-sm);
+  background: var(--po-surface); color: var(--po-ink); font: inherit;
+}
+.po-input:focus-visible { outline: 3px solid var(--po-accent); outline-offset: 2px; }
+.po-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--po-ink); }
+.po-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--po-ink); }
+.po-btn.accent { background: var(--po-accent); color: #fff; }
+
+.po-pill {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  padding: 2px 8px; border-radius: 999px; border: var(--po-border);
+  background: var(--po-warn); color: var(--po-ink);
+}
+
+/* ───────────────────────── LAYOUT HELPERS ─────────────────────────────── */
+.po-divider { height: 0; border-top: 2px dashed var(--po-grid); margin: 14px 0; }
+.po-muted { color: var(--po-ink-soft); }
+.po-center { text-align: center; }
+.po-mt8 { margin-top: 8px; } .po-mt16 { margin-top: 16px; }
+
+/* grid of toggle rows (options page) */
+.po-list { display: grid; gap: 10px; }
+.po-list .item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: var(--po-border); border-radius: var(--po-radius-sm);
+  background: var(--po-paper);
+}
+.po-list .item .name { font-weight: 700; font-size: 13px; }
+.po-list .item .desc { font-size: 11.5px; color: var(--po-ink-soft); }
+
+/* footer line */
+.po-foot { font-size: 11.5px; color: var(--po-ink-soft); }

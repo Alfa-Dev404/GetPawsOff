@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GetPawsOff</title>
+  <link rel="stylesheet" href="vendor/pico.min.css">
+  <link rel="stylesheet" href="../styles/po-ui.css">
+  <link rel="stylesheet" href="../styles/popup.css">
+</head>
+<body class="po-pop-body">
+  <div id="popup-app" class="popup-shell">
+    <header class="popup-header">
+      <div class="brand-mark" aria-hidden="true">
+        <img src="../../icons/icon-squircle.svg" alt="" width="40" height="40">
+      </div>
+      <div class="header-copy">
+        <p class="eyebrow">Protecting</p>
+        <h1>Today's catch</h1>
+        <p class="site-line" id="site-url">this page</p>
+      </div>
+      <button id="guard-status" type="button" class="guard-pill" aria-live="polite" title="Turn all protection on or off">
+        <span id="guard-dot" class="guard-dot"></span>
+        <span id="guard-text">Active</span>
+      </button>
+    </header>
+
+    <section class="donut-strip" aria-label="Activity on this site">
+      <div id="donut" class="donut-ring is-empty" role="img" aria-label="No activity recorded yet">
+        <div class="donut-hole">
+          <p id="donut-total" class="donut-total">0</p>
+          <p class="donut-caption">caught</p>
+        </div>
+      </div>
+      <ul id="donut-legend" class="donut-legend"></ul>
+    </section>
+
+    <section class="stats-strip" aria-label="Current site totals">
+      <div class="stat-card accent">
+        <p id="stat-blocked" class="stat-value">0</p>
+        <p class="stat-label">Blocked</p>
+      </div>
+      <div class="stat-card">
+        <p id="stat-banners" class="stat-value">0</p>
+        <p class="stat-label">Banners</p>
+      </div>
+      <div class="stat-card">
+        <p id="stat-saved" class="stat-value">0kb</p>
+        <p class="stat-label">Data saved</p>
+      </div>
+    </section>
+
+    <section class="feature-row" aria-label="Protection features">
+      <button id="feat-banner" type="button" class="feat-pill" aria-pressed="true" title="Auto-reject cookie banners on sites you visit">Consent</button>
+      <button id="feat-tracker" type="button" class="feat-pill" aria-pressed="true" title="Block trackers and email pixels">Trackers</button>
+      <button id="feat-terms" type="button" class="feat-pill" aria-pressed="true" title="Flag bad clauses in Terms of Service pages">Terms</button>
+    </section>
+
+    <section class="filters-row" aria-label="Catch filters">
+      <div id="filters-container" class="filters"></div>
+    </section>
+
+    <section class="list-shell">
+      <ul id="trackers-list" class="tracker-list" aria-live="polite"></ul>
+    </section>
+
+    <footer class="popup-footer">
+      <button id="btn-unbreak" type="button" class="cta-button" aria-haspopup="true" aria-expanded="false" aria-controls="pause-menu" title="Pause GetPawsOff on this site so the page loads normally">Pause on this site</button>
+      <div id="pause-menu" class="pause-menu" hidden>
+        <button type="button" data-mins="15">15 min</button>
+        <button type="button" data-mins="30">30 min</button>
+        <button type="button" data-mins="60">1 hour</button>
+        <button type="button" data-mins="0">Always</button>
+      </div>
+      <div class="footer-row">
+        <div class="footer-links">
+          <button id="btn-report" type="button" class="text-link" title="Email us about a problem on this site. You will see the full draft before sending.">Report</button>
+          <button id="btn-reset" type="button" class="text-link">Reset</button>
+          <button id="open-options" type="button" class="text-link">Settings</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="../lib/po-allow.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

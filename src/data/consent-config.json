@@ -1,0 +1,186 @@
+{
+  "$comment": "PawsOff ConsentGhost - remote CMP selector config. Host this on Cloudflare Pages (e.g. https://config.getpawsoff.app/consent-ghost/consent-config.json) alongside its detached signature consent-config.json.sig (see scripts/sign-config.js). The content script's BUNDLED_CONSENT_CONFIG in src/content/consent-ghost.js is the offline/first-run mirror of this file - keep them in sync. background.js fetches + ECDSA-P256-verifies this before the content script will use it; any failure falls open to the bundled copy.",
+  "schemaVersion": 1,
+  "configVersion": "2026.06.18",
+  "frameworks": [
+    {
+      "name": "OneTrust",
+      "id": "onetrust",
+      "containerSelector": "#onetrust-banner-sdk, #onetrust-consent-sdk, .onetrust-pc-dark-filter",
+      "rejectSelectors": [
+        "#onetrust-reject-all-handler",
+        ".onetrust-reject-btn-handler",
+        "button[class*=\"onetrust-reject\"]",
+        ".ot-pc-refuse-all-handler"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "CookieYes",
+      "id": "cookieyes",
+      "containerSelector": ".cky-consent-container, .cky-modal, #cky-consent-elem",
+      "rejectSelectors": [
+        ".cky-btn-reject",
+        "[data-cky-tag=\"reject-button\"]",
+        "button[aria-label*=\"Reject\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Cookiebot",
+      "id": "cookiebot",
+      "containerSelector": "#CybotCookiebotDialog, #cookiebanner, .cookiebanner",
+      "rejectSelectors": [
+        "#CybotCookiebotDialogBodyButtonDecline",
+        "[id*=\"CybotCookiebot\"][id*=\"Decline\"]",
+        ".CybotCookiebotDialogBodyButton[onclick*=\"decline\"]",
+        "a#CybotCookiebotDialogBodyLevelButtonLevelOptinDeclineAll"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "TrustArc",
+      "id": "trustarc",
+      "containerSelector": "#truste-consent-content, .truste_overlay, #trustarc-irb-container",
+      "rejectSelectors": [
+        ".truste-reject-all-btn",
+        ".pdynamicbutton .rejectBtn",
+        "#trustarc-irb-btn-reject"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Quantcast",
+      "id": "quantcast",
+      "containerSelector": "#qc-cmp2-ui, .qc-cmp2-container",
+      "rejectSelectors": [
+        "button[data-id=\"reject-all\"]",
+        ".qc-cmp2-summary-buttons button[mode=\"secondary\"]",
+        ".qc-cmp2-button:not([mode=\"primary\"])"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Osano",
+      "id": "osano",
+      "containerSelector": ".osano-cm-window, .osano-cm-dialog",
+      "rejectSelectors": [
+        ".osano-cm-deny",
+        ".osano-cm-decline",
+        "button.osano-cm-btn[data-action=\"deny\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Didomi",
+      "id": "didomi",
+      "containerSelector": "#didomi-host, #didomi-notice, .didomi-popup-container",
+      "rejectSelectors": [
+        "#didomi-notice-disagree-button",
+        "[data-testid=\"didomi-notice-disagree-button\"]",
+        ".didomi-components-button--variant-link-secondary",
+        "[data-purpose=\"disagree\"]",
+        "[onclick*=\"Didomi.notice.hide\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "LeMonde / gdpr-lmd",
+      "id": "lemonde-gdpr-lmd",
+      "containerSelector": ".gdpr-lmd-wall, .gdpr-lmd-standard",
+      "rejectSelectors": [
+        ".gdpr-lmd-wall__refuse-link",
+        "[data-gdpr-expression=\"denyAll\"]",
+        ".js-gdpr-deny-subscribe"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Usercentrics",
+      "id": "usercentrics",
+      "containerSelector": "#usercentrics-root, uc-ui-container",
+      "pierceShadow": true,
+      "rejectSelectors": [
+        "[data-testid=\"uc-deny-all-button\"]",
+        "button#uc-btn-deny-all",
+        "[id=\"usercentrics-reject-all\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    },
+    {
+      "name": "Sourcepoint",
+      "id": "sourcepoint",
+      "containerSelector": "[id^=\"sp_message_container\"], [class*=\"sp_message_container\"], .sp_veil + [class*=\"sp_message\"], .message-stacks, .message-overlay, .sp_choice_type_13",
+      "rejectSelectors": [
+        "button.sp_choice_type_13",
+        "button.sp_choice_type_REJECT_ALL",
+        ".sp_choice_type_REJECT_ALL",
+        ".sp_choice_type_13",
+        "[data-sp-choice-type=\"13\"]",
+        "[data-sp_choice_type=\"13\"]",
+        "button[aria-label=\"Reject All\" i]",
+        "button[aria-label*=\"Reject all\" i]",
+        "button[aria-label*=\"Reject\" i]",
+        "button[title=\"Reject All\" i]",
+        "button[title*=\"Reject all\" i]",
+        "button[title*=\"Reject\" i]",
+        "button[title*=\"Disagree\" i]",
+        "button[aria-label*=\"Disagree\" i]",
+        "button[title*=\"Do not consent\" i]",
+        "button[aria-label*=\"Do not consent\" i]",
+        "button[title*=\"Decline\" i]",
+        "button[aria-label*=\"Decline\" i]",
+        "button[title*=\"Refuse\" i]",
+        "button[aria-label*=\"Refuse\" i]",
+        "button[title*=\"No, thank\" i]",
+        "button[aria-label*=\"No, thank\" i]",
+        "button[title*=\"Continue without accepting\" i]",
+        "button[aria-label*=\"Continue without accepting\" i]",
+        "button[title*=\"Necessary only\" i]",
+        "button[title*=\"Only necessary\" i]",
+        "button[title*=\"Essential only\" i]",
+        "button[title*=\"Ablehnen\" i]",
+        "button[aria-label*=\"Ablehnen\" i]",
+        "button[title*=\"Tout refuser\" i]",
+        "button[aria-label*=\"Tout refuser\" i]",
+        "button[title*=\"Refuser\" i]",
+        "button[title*=\"Rechazar\" i]",
+        "button[title*=\"Rifiuta\" i]",
+        "button[title*=\"Weigeren\" i]",
+        "button[title*=\"Afvis\" i]",
+        "button[title*=\"Neka\" i]",
+        "[data-action=\"reject\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.18"
+    },
+    {
+      "name": "Generic",
+      "id": "generic",
+      "containerSelector": "[class*=\"cookie-banner\"], [class*=\"cookie-consent\"], [id*=\"cookie-banner\"], [id*=\"gdpr\"], [role=\"dialog\"][aria-label*=\"cookie\"], [role=\"dialog\"][aria-label*=\"Cookie\"], [role=\"dialog\"][aria-label*=\"consent\"]",
+      "rejectSelectors": [
+        "button[id*=\"reject-all\"]",
+        "button[id*=\"decline-all\"]",
+        "button[class*=\"reject-all\"]",
+        "button[class*=\"decline-all\"]",
+        "[aria-label*=\"Reject all\" i]",
+        "[aria-label*=\"Decline all\" i]",
+        "button[data-consent-reject]",
+        "[data-action=\"reject\"]",
+        "[data-action=\"decline\"]",
+        "[data-gdpr-expression=\"denyAll\"]"
+      ],
+      "enabled": true,
+      "addedIn": "2026.06.07"
+    }
+  ]
+}

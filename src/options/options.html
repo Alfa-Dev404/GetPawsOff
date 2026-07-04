@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GetPawsOff Settings</title>
+  <link rel="stylesheet" href="../styles/po-ui.css">
+  <link rel="stylesheet" href="../styles/po-dark.css">
+  <style>
+    body { max-width: 760px; margin: 0 auto; padding: 28px 20px 56px; }
+    header.po-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    header.po-top .word { font-weight: 900; font-size: 22px; }
+    header.po-top .word .off { color: var(--po-accent); }
+    section { margin-top: 28px; }
+    section > h2 { margin: 0 0 14px; }
+    .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  </style>
+</head>
+<body>
+  <header class="po-top">
+    <img class="logo-img" src="../../icons/icon-squircle.svg" alt="" aria-hidden="true">
+    <span class="word">GetPaws<span class="off">Off</span> Settings</span>
+  </header>
+  <p class="po-muted" style="margin-top:0">Everything below is stored locally on your device. Nothing syncs to a server.</p>
+
+  <!-- ConsentGhost -->
+  <section>
+    <div class="sec-head">
+      <span class="po-sticker">ConsentGhost</span>
+      <label class="po-toggle"><input type="checkbox" id="cg-enabled" checked>
+        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+      </label>
+    </div>
+    <div class="po-card po-mt16">
+      <p class="po-sub">Automatically rejects cookie banners across <span id="cg-count">several</span> major consent frameworks, including OneTrust, Cookiebot, Didomi, and Sourcepoint. Works in 35 languages.</p>
+    </div>
+  </section>
+
+  <!-- Paused sites -->
+  <section>
+    <div class="sec-head"><span class="po-sticker">Paused sites</span></div>
+    <div class="po-card po-mt16">
+      <p class="po-sub">GetPawsOff is fully paused on these sites, the same as “Unbreak this site” in the popup. Use this when our blocking breaks a page you trust. Stored locally; only the domains you type here are kept.</p>
+      <div class="po-row po-mt8" style="gap:8px">
+        <input id="cg-sites-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="example.com" class="po-input" style="flex:1" />
+        <button class="po-btn" id="cg-sites-add">Add</button>
+      </div>
+      <div class="po-divider"></div>
+      <div class="po-list" id="cg-sites-list"><!-- rows injected by options.js --></div>
+    </div>
+  </section>
+
+  <!-- PixelBlock -->
+  <section>
+    <div class="sec-head">
+      <span class="po-sticker" style="background:var(--po-accent-2)">PixelBlock</span>
+      <label class="po-toggle"><input type="checkbox" id="pb-enabled" checked>
+        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+      </label>
+    </div>
+    <p class="po-sub po-mt8">Block tracking pixels per email provider:</p>
+    <div class="po-list po-mt8" id="pb-providers"><!-- rows injected by options.js --></div>
+  </section>
+
+  <!-- ToS Shield -->
+  <section>
+    <div class="sec-head">
+      <span class="po-sticker" style="background:var(--po-go)">ToS Shield</span>
+      <label class="po-toggle"><input type="checkbox" id="ts-enabled" checked>
+        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+      </label>
+    </div>
+    <p class="po-sub po-mt8">Choose which clause types to flag:</p>
+    <div class="po-list po-mt8" id="ts-categories"><!-- rows injected by options.js --></div>
+  </section>
+
+  <!-- Activity -->
+  <section>
+    <div class="sec-head"><span class="po-sticker" style="background:var(--po-warn);color:var(--po-ink);-webkit-text-stroke:0;text-shadow:none">Activity</span></div>
+    <div class="po-card po-mt16">
+      <div class="po-row" style="justify-content:space-between">
+        <p class="po-sub" style="margin:0">Recent local activity (never leaves your device).</p>
+        <button class="po-btn" id="clear-logs">Clear log</button>
+      </div>
+      <div class="po-divider"></div>
+      <div id="activity" class="po-sub">Loading…</div>
+    </div>
+  </section>
+
+  <p class="po-foot po-center po-mt16">GetPawsOff stores no data off your device.</p>
+
+  <script src="../lib/po-allow.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

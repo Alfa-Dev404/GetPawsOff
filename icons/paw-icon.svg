@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  paw-icon.svg - PawsOff master icon (source of truth for the PNGs).
+
+  Chrome's manifest requires PNGs (icon16/48/128.png), which cannot be authored
+  as text here. This SVG is the vector master: export it to the three sizes.
+
+  EXPORT (any one):
+    # ImageMagick
+    convert -background none icons/paw-icon.svg -resize 16x16   icons/icon16.png
+    convert -background none icons/paw-icon.svg -resize 48x48   icons/icon48.png
+    convert -background none icons/paw-icon.svg -resize 128x128 icons/icon128.png
+    # rsvg-convert
+    rsvg-convert -w 128 -h 128 icons/paw-icon.svg -o icons/icon128.png   (etc.)
+    # or open in Figma / Inkscape and export PNG at 16 / 48 / 128.
+
+  Design matches po-ui.css: warm paper tile, 2px black outline, hard offset
+  shadow, indigo-violet paw. Colours are inlined (manifest icons can't read CSS
+  variables) and mirror the default theme tokens
+  (--po-ink #14110f, --po-paper #f7f6f1, --po-accent #5b4be3).
+-->
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <rect x="20" y="22" width="92" height="92" rx="22" fill="#14110f"/>
+  <rect x="14" y="14" width="92" height="92" rx="22" fill="#f7f6f1" stroke="#14110f" stroke-width="5"/>
+  <g fill="#5b4be3">
+    <ellipse cx="60" cy="74" rx="20" ry="16"/>
+    <circle cx="36" cy="55" r="8.5"/>
+    <circle cx="50" cy="43" r="8.5"/>
+    <circle cx="70" cy="43" r="8.5"/>
+    <circle cx="84" cy="55" r="8.5"/>
+  </g>
+</svg>

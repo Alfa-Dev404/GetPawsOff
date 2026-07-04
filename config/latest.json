@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "keyId": "4vhmBudqnNfy95lCf6bxcGsW31OyW-W0Nqn9chpn_YQ",
+  "alg": "ES256",
+  "url": "/config/rules-v1.json",
+  "sig": "/config/rules-v1.json.sig"
+}

@@ -1,0 +1,152 @@
+{
+  "manifest_version": 3,
+  "name": "GetPawsOff",
+  "version": "0.1.0",
+  "description": "Blocks trackers, rejects cookie banners for you, and flags bad Terms of Service. Everything stays on your device.",
+  "minimum_chrome_version": "111",
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
+    "scripting",
+    "alarms",
+    "activeTab",
+    "tabs",
+    "webRequest"
+  ],
+
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "https://config.getpawsoff.app/*",
+    "https://*.privacy-mgmt.com/*",
+    "https://*.sp-prod.net/*",
+    "https://*.consensu.org/*",
+    "https://*.quantcast.mgr.consensu.org/*",
+    "https://cdn.privacy-mgmt.com/*",
+    "https://*.sourcepoint.com/*",
+    "https://sourcepoint.theguardian.com/*",
+    "https://mail.google.com/*",
+    "https://mail.proton.me/*",
+    "https://mail.protonmail.com/*",
+    "https://mail.zoho.com/*",
+    "https://mail.zoho.in/*",
+    "https://mail.zoho.eu/*",
+    "https://mail.yahoo.com/*",
+    "https://outlook.live.com/*",
+    "https://outlook.office.com/*",
+    "https://*.hotmail.com/*",
+    "https://app.fastmail.com/*",
+    "https://app.hey.com/*",
+    "https://app.tuta.com/*",
+    "https://mail.tutanota.com/*",
+    "https://www.icloud.com/mail*"
+  ],
+
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "easyprivacy",
+        "enabled": true,
+        "path": "src/rules/easyprivacy.json"
+      }
+    ]
+  },
+
+  "action": {
+    "default_title": "GetPawsOff",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": false
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content/consent-prehide.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/lib/po-catch.js", "src/lib/po-allow.js", "src/content/vendor/autoconsent-patterns.js", "src/content/vendor/autoconsent-rules.js", "src/content/pawsoff-consent-rules.js", "src/content/consent-rules-engine.js", "src/content/consent-ghost.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": [
+        "https://*.privacy-mgmt.com/*",
+        "https://*.sp-prod.net/*",
+        "https://*.consensu.org/*",
+        "https://cdn.privacy-mgmt.com/*",
+        "https://*.sourcepoint.com/*",
+        "https://sourcepoint.theguardian.com/*"
+      ],
+      "js": ["src/lib/po-catch.js", "src/lib/po-allow.js", "src/content/vendor/autoconsent-patterns.js", "src/content/vendor/autoconsent-rules.js", "src/content/pawsoff-consent-rules.js", "src/content/consent-rules-engine.js", "src/content/consent-ghost.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://mail.google.com/*",
+        "https://mail.proton.me/*",
+        "https://mail.protonmail.com/*",
+        "https://mail.zoho.com/*",
+        "https://mail.zoho.in/*",
+        "https://mail.zoho.eu/*",
+        "https://mail.yahoo.com/*",
+        "https://outlook.live.com/*",
+        "https://outlook.office.com/*",
+        "https://*.hotmail.com/*",
+        "https://app.fastmail.com/*",
+        "https://app.hey.com/*",
+        "https://app.tuta.com/*",
+        "https://mail.tutanota.com/*",
+        "https://www.icloud.com/mail*"
+      ],
+      "js": ["src/lib/po-catch.js", "src/lib/po-allow.js", "src/content/pixel-block.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/lib/po-catch.js", "src/lib/po-allow.js", "src/content/tos-shield.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/learn/prevalence-collector.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
+  "incognito": "split"
+}

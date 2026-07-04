@@ -1,0 +1,10 @@
+{
+  "name": "pawsoff-privacy-suite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Chrome MV3 privacy extension. This package.json exists only for dev scripts; the extension itself is zero-dependency and has no build step.",
+  "scripts": {
+    "test": "node tests/run.js",
+    "config:build": "node tools/build-lists.mjs"
+  }
+}

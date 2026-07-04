@@ -1,0 +1,36 @@
+PawsOff — Third-Party Notice: DuckDuckGo autoconsent
+====================================================
+
+The following files in this directory are DERIVED FROM the DuckDuckGo
+"autoconsent" project and remain licensed under the Mozilla Public License,
+v. 2.0 (MPL-2.0):
+
+    src/content/vendor/autoconsent-patterns.js   (from lib/heuristic-patterns.ts)
+    src/content/vendor/autoconsent-rules.json     (from rules/autoconsent/*.json)
+    src/content/vendor/autoconsent-rules.js       (generated wrapper of the .json)
+
+Upstream project:  https://github.com/duckduckgo/autoconsent
+Upstream license:  Mozilla Public License Version 2.0
+
+WHY MPL IS COMPATIBLE WITH PAWSOFF
+----------------------------------
+MPL-2.0 is a FILE-LEVEL (weak) copyleft. It permits combining these files with
+larger works under different terms, INCLUDING proprietary/closed terms, provided
+that the MPL-covered files themselves stay under MPL and their source remains
+available. Unlike the GPL, MPL does NOT "infect" the rest of PawsOff.
+
+OBLIGATIONS WE MEET
+-------------------
+1. The files above keep this MPL-2.0 notice and stay source-available. The
+   autoconsent-rules.js loader is a mechanical wrapper of autoconsent-rules.json
+   (same data, packaged as a script the MV3 content script can load without
+   web_accessible_resources) and is likewise MPL-2.0.
+2. Any modifications WE make to those files stay under MPL-2.0.
+3. PawsOff's own consent engine that *interprets* this data
+   (src/content/consent-rules-engine.js) is independently authored PawsOff code
+   and is NOT a derivative of the MPL files. It is governed by PawsOff's own
+   license. The engine reads the rule/pattern DATA at runtime; it does not copy
+   autoconsent engine code.
+4. A copy of the MPL-2.0 text is available at: https://mozilla.org/MPL/2.0/
+
+If you redistribute PawsOff, keep this NOTICE and the vendored files intact.

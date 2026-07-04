@@ -1,0 +1,145 @@
+name: Rebuild bundled EasyPrivacy ruleset
+
+# Chrome's MV3 static declarativeNetRequest ruleset (src/rules/easyprivacy.json,
+# declared in manifest.json) is FIXED CONTENT shipped in the extension package -
+# there is no API to replace a static ruleset's contents over the network, only
+# an ordinary extension update can refresh it. This workflow automates the
+# REBUILD (offline, from public EasyPrivacy filter-list text), not the
+# delivery: it opens a PR for a human to review and merge, and does NOT touch
+# the Chrome Web Store - publishing a new version stays the existing manual
+# `/package` step. See src/background/background.js's EasyPrivacy-delta feed
+# (config.getpawsoff.app/easyprivacy-delta/...) for the piece of this problem
+# that CAN update live, without a store release.
+#
+# Source: per src/rules/EASYPRIVACY-NOTICE.txt, the EasyPrivacy filter-list
+# text ships from the easylist/easylist GitHub repo (https://easylist.to/,
+# https://github.com/easylist/easylist) as 4 base files + their
+# *_international.txt counterparts, in the repo's `easyprivacy/` subfolder -
+# that pairing (repo + named files) is documented there, not guessed here.
+#
+# REQUIRED before this workflow can succeed - two source files this repo does
+# NOT know the origin of (nothing in the codebase names or links them; see
+# tools/easyprivacy-to-dnr.js's CLI, which errors with "0 allow rules" if
+# they're missing or empty). Set as repo Variables (Settings -> Secrets and
+# variables -> Actions -> Variables), not secrets - these are just URLs:
+#   EASYPRIVACY_ALLOWLIST_URL       raw URL to the allowlist source file
+#   EASYPRIVACY_ALLOWLIST_INTL_URL  raw URL to the international allowlist
+# The workflow fails loudly (not silently) if either is unset.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Require the allowlist source URLs to be configured
+        env:
+          EASYPRIVACY_ALLOWLIST_URL: ${{ vars.EASYPRIVACY_ALLOWLIST_URL }}
+          EASYPRIVACY_ALLOWLIST_INTL_URL: ${{ vars.EASYPRIVACY_ALLOWLIST_INTL_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$EASYPRIVACY_ALLOWLIST_URL" ] || [ -z "$EASYPRIVACY_ALLOWLIST_INTL_URL" ]; then
+            echo "::error::EASYPRIVACY_ALLOWLIST_URL and/or EASYPRIVACY_ALLOWLIST_INTL_URL repo variables are not set." \
+                 "Without both, tools/easyprivacy-to-dnr.js produces 0 allow rules and its own integrity" \
+                 "test fails - refusing to guess a source. Set them under Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
+
+      - name: Download EasyPrivacy source lists
+        env:
+          EASYPRIVACY_ALLOWLIST_URL: ${{ vars.EASYPRIVACY_ALLOWLIST_URL }}
+          EASYPRIVACY_ALLOWLIST_INTL_URL: ${{ vars.EASYPRIVACY_ALLOWLIST_INTL_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p .rebuild-src
+          base=https://raw.githubusercontent.com/easylist/easylist/master/easyprivacy
+          for f in easyprivacy_general easyprivacy_specific easyprivacy_thirdparty easyprivacy_trackingservers \
+                   easyprivacy_specific_international easyprivacy_thirdparty_international easyprivacy_trackingservers_international; do
+            curl -fsSL --max-time 60 "$base/$f.txt" -o ".rebuild-src/$f.txt"
+          done
+          curl -fsSL --max-time 60 "$EASYPRIVACY_ALLOWLIST_URL" -o .rebuild-src/allowlist.txt
+          curl -fsSL --max-time 60 "$EASYPRIVACY_ALLOWLIST_INTL_URL" -o .rebuild-src/allowlist_international.txt
+
+      - name: Regenerate DNR rules (offline converter)
+        run: |
+          node tools/easyprivacy-to-dnr.js src/rules \
+            .rebuild-src/easyprivacy_general.txt \
+            .rebuild-src/easyprivacy_specific.txt \
+            .rebuild-src/easyprivacy_thirdparty.txt \
+            .rebuild-src/easyprivacy_trackingservers.txt \
+            .rebuild-src/easyprivacy_specific_international.txt \
+            .rebuild-src/easyprivacy_thirdparty_international.txt \
+            .rebuild-src/easyprivacy_trackingservers_international.txt \
+            .rebuild-src/allowlist.txt \
+            .rebuild-src/allowlist_international.txt
+
+      - name: Regenerate the badge id->domain dedup map
+        run: node tools/easyprivacy-byid.mjs
+
+      - name: Regenerate the base-domain dedup set
+        # Consumed by the prevalence enforcer AND the EasyPrivacy delta feed
+        # to avoid ever spending a dynamic-rule slot on a domain the bundled
+        # ruleset already blocks. Must stay in sync with every rules rebuild.
+        run: node tools/easyprivacy-domains.mjs
+
+      - name: Run the full test suite
+        run: node tests/run.js
+
+      - name: Summarize the rule-count delta
+        id: diff
+        run: |
+          set -euo pipefail
+          rm -rf .rebuild-src
+          if git diff --quiet -- src/rules/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          before=$(git show HEAD:src/rules/easyprivacy.json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).length))")
+          after=$(node -e "console.log(require('./src/rules/easyprivacy.json').length)")
+          {
+            echo "summary<<EOF"
+            echo "EasyPrivacy rule count: $before -> $after ($(( after - before )) delta)"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open a PR (never auto-merge - a 10k+-rule diff needs human review)
+        if: steps.diff.outputs.changed == 'true'
+        # Pinned to a commit SHA, not the mutable v6 tag: this job runs with
+        # contents:write + pull-requests:write, so a moved tag could later
+        # point at different code with those permissions. Verified via GitHub's
+        # API that this SHA is what the v6 tag currently resolves to.
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
+        with:
+          commit-message: "chore(rules): refresh EasyPrivacy bundle"
+          title: "chore(rules): refresh EasyPrivacy bundle (${{ steps.diff.outputs.summary }})"
+          body: |
+            Automated weekly rebuild from the public EasyPrivacy filter lists
+            (see src/rules/EASYPRIVACY-NOTICE.txt for sourcing/licensing).
+
+            ${{ steps.diff.outputs.summary }}
+
+            `node tests/run.js` passed on the regenerated ruleset. This does
+            NOT publish to the Chrome Web Store - that stays the existing
+            manual `/package` step after this PR is reviewed and merged.
+          branch: chore/rebuild-easyprivacy
+          add-paths: |
+            src/rules/easyprivacy.json
+            src/rules/easyprivacy-meta.json
+            src/rules/easyprivacy-domains.json
+            src/rules/easyprivacy-byid.json

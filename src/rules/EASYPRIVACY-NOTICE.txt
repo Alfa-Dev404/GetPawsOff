@@ -1,0 +1,47 @@
+PawsOff — EasyPrivacy attribution & license notice
+==================================================
+
+The network-blocking ruleset in this folder is DERIVED FROM DATA, not code:
+
+  src/rules/easyprivacy.json        generated DNR (declarativeNetRequest) rules
+  src/rules/easyprivacy-meta.json   id -> human label map for the catch feed
+  src/rules/easyprivacy-domains.json derived bare-domain label index
+  src/rules/easyprivacy-byid.json   derived ruleId -> base-domain index for the
+                                    toolbar badge (built by tools/easyprivacy-byid.mjs)
+
+SOURCE
+------
+EasyPrivacy filter lists (part of the EasyList project)
+  https://easylist.to/  •  https://github.com/easylist/easylist
+Source files used (the `easyprivacy/` subset only):
+  easyprivacy_general.txt, easyprivacy_specific.txt, easyprivacy_thirdparty.txt,
+  easyprivacy_trackingservers.txt, and their *_international.txt counterparts.
+
+We do NOT ship EasyList's ad lists, the EasyList Cookie List, or fanboy
+annoyance lists — they are out of scope and more restrictively licensed.
+
+LICENSE
+-------
+EasyList / EasyPrivacy is dual-licensed:
+  - GNU General Public License v3.0 (GPL-3.0), and
+  - Creative Commons Attribution-ShareAlike 3.0 Unported (CC-BY-SA 3.0).
+
+This is DATA, consumed through PawsOff's own clean-room converter
+(tools/easyprivacy-to-dnr.js). The converter is PawsOff's independent code and
+is NOT a derivative of EasyList. Per MV3, list DATA may be bundled/updated
+without shipping remote code.
+
+MODIFICATIONS
+-------------
+The converter translates the network-blocking subset of Adblock Plus filter
+syntax into MV3 DNR rules and intentionally drops:
+  - cosmetic / scriptlet / regex / redirect / csp / removeparam filters
+    (not expressible in DNR), and
+  - consent-manager CORE assets (a CMP's own bootstrap script, web-worker, or
+    IAB TCF Global Vendor List). Blocking those breaks the user's ability to
+    reject a banner and causes re-inject/reload loops, which would make pages
+    worse — contrary to PawsOff's fail-open principle. CMP analytics endpoints
+    remain blocked.
+
+No upstream filter text is copied verbatim into shipped code; only the derived
+rule data is bundled, with this attribution.

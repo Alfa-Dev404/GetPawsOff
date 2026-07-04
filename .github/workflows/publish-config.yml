@@ -1,0 +1,141 @@
+name: Publish signed config
+
+# Builds + signs the extension's remote-config feeds and deploys them as
+# static files to Cloudflare Pages at config.getpawsoff.app. This is the
+# publish half of PawsOff's ONE permitted network exception (see CLAUDE.md
+# non-negotiable #2): every feed here is signed ECDSA-P256/SHA-256, and
+# src/background/background.js verifies the signature against the pinned
+# public key before trusting anything, failing OPEN (falls back to the
+# bundled/cached copy) on any fetch, parse, or signature failure.
+#
+# WHAT THIS PUBLISHES TODAY vs. what background.js CAN consume:
+#   - ConsentGhost (consent-ghost/consent-config.json) - REAL, built by
+#     tools/build-lists.mjs from live upstream sources. Published every run.
+#   - EasyPrivacy delta (easyprivacy-delta/domains.json) - published ONLY IF
+#     dist-lists/easyprivacy-delta/domains.json exists (see the "Build
+#     EasyPrivacy delta feed" step below - there is currently no automated
+#     source for "freshly emerging tracker domains"; that file is a manual/
+#     future-tooling input, deliberately not fabricated here). If absent,
+#     that feed is skipped without failing the workflow - an unpublished
+#     feed just 404s and the extension stays on whatever it already has.
+#   - ToS Shield (tos-shield/patterns.json) and PixelBlock
+#     (pixel-block/pixel-config.json) are NOT published by this workflow -
+#     neither has an extracted, publishable data source yet (their rules
+#     still live hardcoded in src/content/tos-shield.js / pixel-block.js).
+#     That extraction is separate follow-up work; publishing nothing for
+#     them is safe (the extension just keeps its bundled defaults).
+#
+# REQUIRED GitHub repo configuration before this workflow can succeed:
+#   Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#     CONFIG_SIGNING_PRIVATE_JWK  the raw JSON contents of
+#                                 .keys/config-signing-key.jwk (never commit
+#                                 this file - it's gitignored on purpose).
+#     CLOUDFLARE_API_TOKEN        a token scoped to Pages:Edit on ONE project.
+#     CLOUDFLARE_ACCOUNT_ID       your Cloudflare account id.
+#   Variables (same settings page, "Variables" tab):
+#     CLOUDFLARE_PAGES_PROJECT    the Cloudflare Pages project name that
+#                                 config.getpawsoff.app is attached to as a
+#                                 custom domain.
+# None of these are guessed or hardcoded anywhere in this file.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'tools/build-lists.mjs'
+      - 'tools/sign-file.mjs'
+      - 'src/data/**'
+      - 'dist-lists/easyprivacy-delta/domains.json'
+      - '.github/workflows/publish-config.yml'
+  schedule:
+    - cron: '0 5 * * *' # daily - matches the extension's own CONFIG_REFRESH_MINUTES cadence
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# A scheduled run and a push-triggered run can overlap; without this, whichever
+# deploy finishes LAST wins regardless of which built from the freshest
+# checkout, potentially rolling a legitimate update back to stale content.
+concurrency:
+  group: publish-signed-config
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build ConsentGhost config (live, from upstream sources)
+        run: node tools/build-lists.mjs
+
+      - name: Build EasyPrivacy delta feed (if a source input is present)
+        id: delta
+        run: |
+          mkdir -p dist-lists/easyprivacy-delta
+          if [ -f dist-lists/easyprivacy-delta/domains.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No dist-lists/easyprivacy-delta/domains.json input - skipping the delta feed this run."
+          fi
+
+      - name: Assemble publish/ directory
+        run: |
+          set -euo pipefail
+          mkdir -p publish/consent-ghost
+          cp dist-lists/consent-ghost/consent-config.json publish/consent-ghost/consent-config.json
+          if [ "${{ steps.delta.outputs.present }}" = "true" ]; then
+            mkdir -p publish/easyprivacy-delta
+            cp dist-lists/easyprivacy-delta/domains.json publish/easyprivacy-delta/domains.json
+          fi
+
+      - name: Sign every file in publish/
+        env:
+          CONFIG_SIGNING_PRIVATE_JWK: ${{ secrets.CONFIG_SIGNING_PRIVATE_JWK }}
+        run: |
+          set -euo pipefail
+          find publish -name '*.json' -print0 | while IFS= read -r -d '' f; do
+            node tools/sign-file.mjs "$f" "$f.sig"
+          done
+
+      - name: Verify every signature before publishing (belt and braces)
+        run: |
+          set -euo pipefail
+          find publish -name '*.json.sig' | while read -r sig; do
+            json="${sig%.sig}"
+            node -e "
+              const { webcrypto } = require('node:crypto');
+              const fs = require('node:fs');
+              (async () => {
+                const pub = JSON.parse(fs.readFileSync('tools/config-signing-public-key.json', 'utf8'));
+                const bytes = fs.readFileSync('$json');
+                const sigB64 = fs.readFileSync('$sig', 'utf8').trim();
+                const key = await webcrypto.subtle.importKey('jwk', pub, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+                const ok = await webcrypto.subtle.verify(
+                  { name: 'ECDSA', hash: 'SHA-256' }, key,
+                  Buffer.from(sigB64, 'base64'), bytes,
+                );
+                if (!ok) { console.error('SIGNATURE VERIFY FAILED for $json'); process.exit(1); }
+                console.error('verified $json');
+              })();
+            "
+          done
+
+      - name: Deploy to Cloudflare Pages
+        # gitHubToken is intentionally omitted: it only enables optional GitHub
+        # Deployment-record tracking, which would need a deployments:write grant
+        # this workflow doesn't otherwise need (it stays contents:read only).
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          directory: publish
