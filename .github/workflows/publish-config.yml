@@ -9,27 +9,25 @@ name: Publish signed config
 # bundled/cached copy) on any fetch, parse, or signature failure.
 #
 # WHAT THIS PUBLISHES TODAY vs. what background.js CAN consume:
-#   - ConsentGhost (consent-ghost/consent-config.json) - REAL, built by
-#     tools/build-lists.mjs from live upstream sources. Published every run.
-#   - EasyPrivacy delta (easyprivacy-delta/domains.json) - published ONLY IF
-#     dist-lists/easyprivacy-delta/domains.json exists (see the "Build
-#     EasyPrivacy delta feed" step below - there is currently no automated
-#     source for "freshly emerging tracker domains"; that file is a manual/
-#     future-tooling input, deliberately not fabricated here). If absent,
-#     that feed is skipped without failing the workflow - an unpublished
-#     feed just 404s and the extension stays on whatever it already has.
-#   - ToS Shield (tos-shield/patterns.json) and PixelBlock
-#     (pixel-block/pixel-config.json) are NOT published by this workflow -
-#     neither has an extracted, publishable data source yet (their rules
-#     still live hardcoded in src/content/tos-shield.js / pixel-block.js).
-#     That extraction is separate follow-up work; publishing nothing for
-#     them is safe (the extension just keeps its bundled defaults).
+#   - A signed release-manifest.json that points at immutable, hashed release
+#     artifacts. Legacy aliases remain for Store version 0.1.0.
+#   - ConsentGhost v2 (constrained semantic roles) for current clients, plus the
+#     schema-v1 compatibility alias used by Store version 0.1.0. Both are built
+#     from the same pinned AutoConsent release and published every run.
+#   - ToS reputation (tos-shield/reputation.json) — ToS;DR grade data for the
+#     next extension release. It is intentionally NOT published as patterns.json
+#     because reputation data does not match the executable pattern schema.
+#   - EasyPrivacy delta (easyprivacy-delta/domains.json) — conservative exact-
+#     domain additions not covered by the bundled static ruleset. Path/scoped/
+#     frame/media rules are intentionally excluded from the live top-up.
+#   - ToS pattern and PixelBlock selector feeds are not fabricated here; their
+#     legacy endpoints remain absent until schema-specific builders exist.
 #
 # REQUIRED GitHub repo configuration before this workflow can succeed:
 #   Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
 #     CONFIG_SIGNING_PRIVATE_JWK  the raw JSON contents of
 #                                 .keys/config-signing-key.jwk (never commit
-#                                 this file - it's gitignored on purpose).
+#                                 this file — it's gitignored on purpose).
 #     CLOUDFLARE_API_TOKEN        a token scoped to Pages:Edit on ONE project.
 #     CLOUDFLARE_ACCOUNT_ID       your Cloudflare account id.
 #   Variables (same settings page, "Variables" tab):
@@ -43,59 +41,72 @@ on:
     branches: [main, master]
     paths:
       - 'tools/build-lists.mjs'
+      - 'tools/build-release-manifest.mjs'
+      - 'tools/autoconsent-to-consent-rules.js'
+      - 'tools/easyprivacy-to-dnr.js'
+      - 'tools/easyprivacy-to-delta.js'
       - 'tools/sign-file.mjs'
+      - 'tools/tosdr-to-grades.js'
+      - '_headers'
       - 'src/data/**'
-      - 'dist-lists/easyprivacy-delta/domains.json'
+      - 'src/learn/psl-lite.js'
+      - 'src/rules/easyprivacy-domains.json'
       - '.github/workflows/publish-config.yml'
   schedule:
-    - cron: '0 5 * * *' # daily - matches the extension's own CONFIG_REFRESH_MINUTES cadence
+    - cron: '0 5 * * *' # daily — matches the extension's own CONFIG_REFRESH_MINUTES cadence
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
-# A scheduled run and a push-triggered run can overlap; without this, whichever
-# deploy finishes LAST wins regardless of which built from the freshest
-# checkout, potentially rolling a legitimate update back to stale content.
+# A scheduled run and a push-triggered run can overlap. Serialize deploys here,
+# then compare against the signed live manifest below because GitHub does not
+# guarantee that queued concurrency jobs start in sequence order.
 concurrency:
   group: publish-signed-config
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
-      - name: Build ConsentGhost config (live, from upstream sources)
-        run: node tools/build-lists.mjs
+      - name: Run offline safeguards
+        run: npm test
 
-      - name: Build EasyPrivacy delta feed (if a source input is present)
-        id: delta
-        run: |
-          mkdir -p dist-lists/easyprivacy-delta
-          if [ -f dist-lists/easyprivacy-delta/domains.json ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No dist-lists/easyprivacy-delta/domains.json input - skipping the delta feed this run."
-          fi
+      - name: Build signed-feed artifacts from pinned upstream sources
+        run: PAWSOFF_CONFIG_VERSION="$(date -u +'%Y%m%d%H%M%S')" node tools/build-lists.mjs
 
-      - name: Assemble publish/ directory
+      - name: Assemble immutable release and legacy aliases
         run: |
           set -euo pipefail
-          mkdir -p publish/consent-ghost
-          cp dist-lists/consent-ghost/consent-config.json publish/consent-ghost/consent-config.json
-          if [ "${{ steps.delta.outputs.present }}" = "true" ]; then
-            mkdir -p publish/easyprivacy-delta
-            cp dist-lists/easyprivacy-delta/domains.json publish/easyprivacy-delta/domains.json
+          generated_at="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
+          day="$(date -u +'%Y%m%d')"
+          release_id="${day}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          if ((GITHUB_RUN_ATTEMPT < 1 || GITHUB_RUN_ATTEMPT > 999)); then
+            echo 'GITHUB_RUN_ATTEMPT must be between 1 and 999' >&2
+            exit 1
           fi
+          sequence="$((GITHUB_RUN_NUMBER * 1000 + GITHUB_RUN_ATTEMPT))"
+          previous_sequence="$(((GITHUB_RUN_NUMBER - 1) * 1000 + 999))"
+          node tools/build-release-manifest.mjs \
+            --release-id "$release_id" \
+            --sequence "$sequence" \
+            --previous-sequence "$previous_sequence" \
+            --generated-at "$generated_at" \
+            --ttl-days 7 \
+            --out publish
+          cp _headers publish/_headers
+
+      - name: Validate generated artifacts
+        run: npm test
 
       - name: Sign every file in publish/
         env:
@@ -129,13 +140,97 @@ jobs:
             "
           done
 
-      - name: Deploy to Cloudflare Pages
-        # gitHubToken is intentionally omitted: it only enables optional GitHub
-        # Deployment-record tracking, which would need a deployments:write grant
-        # this workflow doesn't otherwise need (it stays contents:read only).
-        uses: cloudflare/pages-action@v1
+      - name: Reject stale or replayed release sequences
+        env:
+          LIVE_MANIFEST_URL: https://config.getpawsoff.app/release-manifest.json
+          LIVE_MANIFEST_PATH: ${{ runner.temp }}/live-release-manifest.json
+          LIVE_SIGNATURE_PATH: ${{ runner.temp }}/live-release-manifest.json.sig
+        run: |
+          set -euo pipefail
+          status="$(
+            curl --silent --show-error \
+              --proto '=https' \
+              --tlsv1.2 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 3 \
+              --retry-all-errors \
+              --output "$LIVE_MANIFEST_PATH" \
+              --write-out '%{http_code}' \
+              "$LIVE_MANIFEST_URL"
+          )"
+          if [[ "$status" != '200' ]]; then
+            echo "Live release manifest returned HTTP $status; refusing to publish." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-all-errors \
+            --output "$LIVE_SIGNATURE_PATH" \
+            "$LIVE_MANIFEST_URL.sig"
+          node <<'NODE'
+          const { webcrypto } = require('node:crypto');
+          const fs = require('node:fs');
+
+          (async () => {
+            const publicKey = JSON.parse(
+              fs.readFileSync('tools/config-signing-public-key.json', 'utf8'),
+            );
+            const liveBytes = fs.readFileSync(process.env.LIVE_MANIFEST_PATH);
+            const liveSignature = Buffer.from(
+              fs.readFileSync(process.env.LIVE_SIGNATURE_PATH, 'utf8').trim(),
+              'base64',
+            );
+            const key = await webcrypto.subtle.importKey(
+              'jwk',
+              publicKey,
+              { name: 'ECDSA', namedCurve: 'P-256' },
+              false,
+              ['verify'],
+            );
+            const signatureOk = await webcrypto.subtle.verify(
+              { name: 'ECDSA', hash: 'SHA-256' },
+              key,
+              liveSignature,
+              liveBytes,
+            );
+            if (!signatureOk) {
+              throw new Error('Live release manifest signature is invalid');
+            }
+
+            const live = JSON.parse(liveBytes);
+            const generated = JSON.parse(
+              fs.readFileSync('publish/release-manifest.json', 'utf8'),
+            );
+            for (const [label, sequence] of [
+              ['live', live.sequence],
+              ['generated', generated.sequence],
+            ]) {
+              if (!Number.isSafeInteger(sequence) || sequence < 1) {
+                throw new Error(`${label} release sequence is invalid`);
+              }
+            }
+            if (generated.sequence <= live.sequence) {
+              throw new Error(
+                `Generated sequence ${generated.sequence} must exceed live sequence ${live.sequence}`,
+              );
+            }
+            console.error(
+              `Sequence check passed: ${generated.sequence} > ${live.sequence}`,
+            );
+          })().catch((error) => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Deploy atomically to Cloudflare Pages
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-          directory: publish
+          command: pages deploy publish --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }} --branch=main
