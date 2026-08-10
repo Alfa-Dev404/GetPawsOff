@@ -1,9 +1,9 @@
-/* PawsOff - H5 regression: findConsentContainer must not skip a high-z banner
+/* PawsOff — H5 regression: findConsentContainer must not skip a high-z banner
  * that sits past node #MAX_CONTAINER_SCAN (1200) in DOM order.
  *
  * Old bug: the sweep capped the RAW node list in DOM order before filtering to
  * overlays, so a fixed/high-z banner beyond index 1200 was never examined. Fix:
- * filter to overlay-ish candidates FIRST (no cap), then sort-by-z and cap - so
+ * filter to overlay-ish candidates FIRST (no cap), then sort-by-z and cap — so
  * the cap can only drop low-priority nodes, never the banner.
  */
 'use strict';

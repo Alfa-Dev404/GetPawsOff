@@ -1,4 +1,4 @@
-/* PawsOff - EDGE-CASE tests for the observe-only prevalence learner.
+/* PawsOff — EDGE-CASE tests for the observe-only prevalence learner.
  *
  * These complement prevalence-learner.test.js by pinning the boundary
  * behaviours that are easiest to break during a Complex Method refactor of

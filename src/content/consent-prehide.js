@@ -2,12 +2,12 @@
  * consent-prehide.js, PawsOff ConsentGhost: pre-paint flash suppression.
  *
  * Split out of consent-ghost.js so only this tiny script runs at
- * document_start - hides vetted named-CMP container selectors behind an
+ * document_start — hides vetted named-CMP container selectors behind an
  * unconditional self-reveal watchdog, then hands off to the full engine
  * (document_idle) via window.__pawsOff_revealPrehide.
  *
  * IIFE, isolated-world only, window.__pawsOff_* namespace, silent failures,
- * anonymous <style> (no id/attr - anti-fingerprint), never touches nodes it
+ * anonymous <style> (no id/attr — anti-fingerprint), never touches nodes it
  * didn't create.
  */
 (function () {
@@ -83,7 +83,7 @@
       document.documentElement.appendChild(style);
       _style = style;
     }
-  } catch (_) { /* silent - fail-open: no prehide */ }
+  } catch (_) { /* silent — fail-open: no prehide */ }
 
   // UNCONDITIONAL watchdog: content can NEVER stay hidden if the engine bails in a
   // gated sub-frame, errors, or never loads. Scheduling failure → reveal NOW.

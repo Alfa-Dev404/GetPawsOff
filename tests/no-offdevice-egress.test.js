@@ -1,8 +1,8 @@
-/* PawsOff - negative-control: NO off-device telemetry/analytics egress in src/.
+/* PawsOff — negative-control: NO off-device telemetry/analytics egress in src/.
  *
  * Enforces the #1 non-negotiable principle (no telemetry / no network-home) by
  * scanning the extension's OWN JavaScript for known analytics/telemetry service
- * tokens and egress endpoints. Fails the build if any appear - so a future
+ * tokens and egress endpoints. Fails the build if any appear — so a future
  * "ship counters to <service>" change cannot land silently.
  *
  * Scope: src/ JS only, EXCLUDING src/content/vendor/ (MPL-vendored autoconsent
@@ -12,7 +12,7 @@
  *
  * NOTE on `segment`: ToS Shield uses "segmentation"/"segmentSentences" heavily, so
  * the Segment analytics service is matched as a domain (segment.com / segment.io /
- * cdn.segment) - never the bare English word.
+ * cdn.segment) — never the bare English word.
  */
 'use strict';
 
@@ -35,10 +35,10 @@ const FORBIDDEN = [
   /\/collect\b/i,
   /\bsegment\.(com|io)\b/i,
   /cdn\.segment\b/i,
-  // Egress PRIMITIVES - a future off-device path could use a brand we don't list,
+  // Egress PRIMITIVES — a future off-device path could use a brand we don't list,
   // so forbid the transports themselves. (fetch is intentionally NOT here: it's
   // used for the signed config fetch + local getURL reads. None of these appear
-  // in src/ today - keep it that way.)
+  // in src/ today — keep it that way.)
   /\bsendBeacon\b/,
   /\bWebSocket\b/,
   /\bXMLHttpRequest\b/,

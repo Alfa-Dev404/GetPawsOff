@@ -49,11 +49,11 @@
   // A persisted site key must be a hashHost() output ('h:' prefix), never a
   // plaintext hostname (hash-only privacy invariant). Only the sentinel is
   // checked, not an exact length, so tampered/legacy plaintext keys get
-  // dropped. The per-site `domains` map stays plaintext on purpose - those
+  // dropped. The per-site `domains` map stays plaintext on purpose — those
   // are public tracker names the popup shows the user, not site identities.
   function isHashKey(k) { return typeof k === 'string' && k.slice(0, 2) === 'h:' && k.length > 2; }
 
-  // Builds a fresh, validated state from arbitrary input without mutating it -
+  // Builds a fresh, validated state from arbitrary input without mutating it —
   // every setter normalizes first, which is what gives them all a no-mutation guarantee.
   function normalizeState(raw) {
     var st = emptyState();
@@ -65,7 +65,7 @@
       // pausedUntil: epoch-ms expiry for a timed pause; 0 = indefinite. A
       // legacy entry (field absent) defaults to 0/indefinite for backward
       // compat, but a field that's present and garbage must NOT collapse to
-      // that same value - that would silently turn a broken 15-minute pause
+      // that same value — that would silently turn a broken 15-minute pause
       // permanent. Sentinel 1 keeps it truthy but reads as already-expired,
       // so protection comes back instead of staying off.
       var pausedUntil;
@@ -109,7 +109,7 @@
   }
 
   // Paused = flagged AND not expired. A lapsed timed pause reads as NOT paused
-  // everywhere (content scripts included) the instant it expires - protection
+  // everywhere (content scripts included) the instant it expires — protection
   // resumes on its own even before the background alarm cleans up storage.
   function isPaused(state, oh, now) {
     var s = (state && state.sites && oh) ? state.sites[oh] : null;
@@ -172,7 +172,7 @@
 
   // until: epoch-ms expiry for a timed pause; omit/0 for indefinite ("Always").
   function setPaused(state, oh, on, until) {
-    var st = normalizeState(state); // fresh clone - input untouched
+    var st = normalizeState(state); // fresh clone — input untouched
     // Guard against a caller bug passing a plaintext host: normalizeState
     // only cleans existing entries, so without this a bad `oh` would write a
     // plaintext key straight to storage until the next read/write cycle.

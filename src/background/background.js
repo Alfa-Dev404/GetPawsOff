@@ -2,17 +2,24 @@
 // ones. Order matters: psl-lite.js (self.PawsOffPSL) → prevalence-learner.js
 // (self.__pawsOff_prevalence) → prevalence-enforcer.js.
 //
-// The learner only observes; it never blocks. The enforcer can turn 'block'
-// verdicts into dynamic DNR rules but stays dormant by default
-// (__pawsOff_pv_enforce_enabled defaults false, no UI flips it yet).
+// The learner only observes; it never blocks. The enforcer can turn mature,
+// high-confidence verdicts into dynamic DNR rules when the user selects
+// Adaptive mode; Standard and Preview remain non-blocking.
 try {
   importScripts(
     '../learn/psl-lite.js',
     '../learn/prevalence-learner.js',
     '../learn/prevalence-enforcer.js',
-    '../lib/po-allow.js', // self.PawsOffAllow - timed-pause expiry updates the allowlist
   );
 } catch (e) { /* prevalence tier optional */ }
+// po-allow exposes self.PawsOffAllow for timed-pause expiry updates. Load it
+// independently so an optional prevalence-tier failure cannot disable pauses.
+try { importScripts('../lib/po-allow.js'); } catch (_) { /* pause helpers fail closed */ }
+
+try { importScripts('release-feed.js'); } catch (_) { /* signed feeds fail closed */ }
+try { importScripts('bounded-response.js'); } catch (_) { /* signed fetches fail closed */ }
+try { importScripts('config-validation.js'); } catch (_) { /* remote configs fail closed */ }
+try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches fail closed */ }
 
 // background.js, PawsOff
 //
@@ -26,10 +33,8 @@ try {
 //     network-level block is live before any content script runs.
 //  2. Message router for all three content scripts (DNR toggles, ToS config,
 //     diagnostics, ping).
-//  3. ToS Shield, fetch + SubtleCrypto-verify + cache the signed remote
-//     patterns.json from our Cloudflare Pages host (content scripts can only do
-//     cross-origin fetches awkwardly; the worker is the right place, and it
-//     caches into the same storage key the content script already reads).
+//  3. Fetch signed, immutable release-manifest feeds for descriptive reputation,
+//     consent selectors, and conservative EasyPrivacy top-ups.
 //  4. Error logging to chrome.storage.local (unique-key writes).
 //
 // HARD RULES (shared across PawsOff)
@@ -59,8 +64,9 @@ try {
   const LOG_PREFIX       = '__pawsOff_background_log_';
   const LOG_MAX          = 200;
   const PRUNE_SAMPLE     = 0.1;
-  const TOS_CONFIG_CACHE_KEY = '__pawsOff_tosShield_config'; // SAME key ToS Shield reads
   const TOS_SCHEMA_VERSION   = 1;
+  const TOS_REPUTATION_CACHE_KEY = '__pawsOff_tosReputation';
+  const TOS_REPUTATION_SCHEMA_VERSION = 1;
   // PixelBlock settings, the SAME key pixel-block.js / popup / options write.
   // The background reads it so DNR baseline rules respect the user's toggles
   // across browser restarts (otherwise blocking silently persists when off).
@@ -72,43 +78,41 @@ try {
   // cache key is read indirectly by consent-ghost.js via the getConfig message
   // (the content script never touches storage for this, background owns the
   // verify path). Schema is { schemaVersion, configVersion, frameworks[] }.
-  const CG_CONFIG_CACHE_KEY  = '__pawsOff_consentGhost_config';
-  const CG_SCHEMA_VERSION    = 1;
+  const CG_CONFIG_CACHE_KEY  = '__pawsOff_consentGhost_release_config_v1';
+  const CG_SCHEMA_VERSIONS   = new Set([1, 2]);
 
-  // ── PixelBlock remote config (provider DOM selectors, same signing key) ────
-  // Schema: { schemaVersion:1, configVersion:string, providers:[{id, emailBodySelectors?,
-  // excludeSelectors?, legitimateProxies?}] }. Allows selector patches without a
-  // store release. Does NOT carry tracking domains (those live in the static DNR
-  // ruleset + the bundled TRACKING_DOMAINS constant which background owns).
-  const PB_CONFIG_URL       = 'https://config.getpawsoff.app/pixel-block/pixel-config.json';
-  const PB_CONFIG_SIG_URL   = 'https://config.getpawsoff.app/pixel-block/pixel-config.json.sig';
-  const PB_CONFIG_CACHE_KEY = '__pawsOff_pixelBlock_config';
   const PB_SCHEMA_VERSION   = 1;
 
-  // ── ToS Shield remote config (our own host; NEVER tosdr.org) ──────────────
-  const CONFIG_URL     = 'https://config.getpawsoff.app/tos-shield/patterns.json';
-  const CONFIG_SIG_URL = 'https://config.getpawsoff.app/tos-shield/patterns.json.sig';
   const CONFIG_ALARM   = 'pawsoff_tos_config_refresh';
-  const CONFIG_REFRESH_MINUTES = 1440; // once a day
+  // Hourly. The poll itself costs one 2KB manifest + signature: release feeds
+  // live at immutable /releases/<id>/ paths (max-age=31536000), so an unchanged
+  // release re-resolves to URLs already in the HTTP cache and fetches nothing.
+  const CONFIG_REFRESH_MINUTES = 60;
 
-  // ── ConsentGhost remote config (same host, same signing key) ──────────────
-  const CG_CONFIG_URL     = 'https://config.getpawsoff.app/consent-ghost/consent-config.json';
-  const CG_CONFIG_SIG_URL = 'https://config.getpawsoff.app/consent-ghost/consent-config.json.sig';
+  // A signed, short-lived manifest points clients at immutable release
+  // artifacts. This build consumes no standalone mutable config endpoint.
+  const RELEASE_MANIFEST_URL = 'https://config.getpawsoff.app/release-manifest.json';
+  const RELEASE_MANIFEST_SIG_URL = `${RELEASE_MANIFEST_URL}.sig`;
+  const RELEASE_MANIFEST_CACHE_KEY = '__pawsOff_release_manifest';
+  const RELEASE_SEQUENCE_KEY = '__pawsOff_release_sequence';
+  const RELEASE_MANIFEST_MAX_BYTES = 256 * 1024;
+  const SIGNATURE_MAX_BYTES = 8 * 1024;
+  const SIGNED_FEED = (typeof self !== 'undefined' && self.PawsOffSignedFeed) || null;
+  const BOUNDED_RESPONSE = (typeof self !== 'undefined' && self.PawsOffBoundedResponse) || null;
 
   // ── EasyPrivacy DELTA: signed live top-up feed for freshly-emerging trackers ─
   // The bundled static ruleset (src/rules/easyprivacy.json) only refreshes via
-  // an extension update - Chrome has no API to replace a static DNR ruleset's
+  // an extension update — Chrome has no API to replace a static DNR ruleset's
   // contents over the network. This feed fills the gap between updates: a
   // small, signed, quota-bounded domain list applied as dynamic DNR rules,
   // same trust model as the 3 configs above (fail-open, never "block
-  // everything"). Dedups against easyprivacy-domains.json. Dormant + shadow by
-  // default (DELTA_ENABLED_KEY/DELTA_SHADOW_KEY), same rollout as the enforcer.
-  const DELTA_CONFIG_URL     = 'https://config.getpawsoff.app/easyprivacy-delta/domains.json';
-  const DELTA_CONFIG_SIG_URL = 'https://config.getpawsoff.app/easyprivacy-delta/domains.json.sig';
+  // everything"). Dedups against easyprivacy-domains.json. The maintained,
+  // conservatively-converted feed is enabled by default and can be disabled in
+  // Settings; shadow remains available for diagnostics and staged rollouts.
   const DELTA_CONFIG_CACHE_KEY = '__pawsOff_ep_delta_config';
   const DELTA_SCHEMA_VERSION = 1;
-  const DELTA_ENABLED_KEY = '__pawsOff_ep_delta_enabled'; // boolean, default false
-  const DELTA_SHADOW_KEY  = '__pawsOff_ep_delta_shadow';  // boolean, default TRUE
+  const DELTA_ENABLED_KEY = '__pawsOff_ep_delta_enabled'; // boolean, default TRUE
+  const DELTA_SHADOW_KEY  = '__pawsOff_ep_delta_shadow';  // boolean, default false
   const DELTA_META_KEY    = '__pawsOff_ep_delta_meta';    // {updated, shadow, applied/wouldApply, candidates}
   // Rule id band: clear of PixelBlock (9100-9199), site-pause (9300-9499),
   // per-domain allow (9500-9999), and the prevalence-enforcer/learner
@@ -116,13 +120,13 @@ try {
   // single 30,000-rule MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES cap.
   const DELTA_ID_BASE = 20000;
   const DELTA_ID_MAX  = 29999;   // span 10000
-  const DELTA_PRIORITY = 1;      // MUST stay below ALLOW_PRIORITY (2) - user allow always wins
+  const DELTA_PRIORITY = 1;      // MUST stay below ALLOW_PRIORITY (2) — user allow always wins
   const DELTA_HEADROOM = 1000;   // never claim the last 1000 of the shared 30k
   const MAX_DELTA_RULES = 2000;  // self-cap, far under the shared budget
   const DELTA_RESOURCE_TYPES = ['ping', 'image', 'xmlhttprequest']; // beacon carriers only
   // Ceiling, not just a default: a per-domain override from the signed feed
   // may only pick from this set. Without it, feed content alone would decide
-  // whether a domain can hit main_frame/sub_frame/websocket/media - a
+  // whether a domain can hit main_frame/sub_frame/websocket/media — a
   // compromised key or bad feed edit must not grant a broader block than this.
   const DELTA_ALLOWED_RESOURCE_TYPES = new Set(['ping', 'image', 'xmlhttprequest', 'script', 'stylesheet', 'font']);
 
@@ -131,13 +135,28 @@ try {
   // tools/gen-config-key.mjs; also committed at tools/config-signing-public-key.json,
   // which the signing tools verify against before writing a signature. Every
   // consumer below fails open to the bundled/cached copy on any fetch,
-  // signature, or key failure - an unpublished feed just 404s harmlessly.
+  // signature, or key failure — an unpublished feed just 404s harmlessly.
   const PINNED_PUBLIC_KEY_JWK = {
     kty: 'EC',
     crv: 'P-256',
     x: '4fDL20b_S9gr9ieY4K5tE502h_ZedTrZizcIU7fFnww',
     y: 'BIWrF4Tb5XzDQl0tXKc-4tbu-TCXxVR1bvXljNk0FGY',
   };
+
+  const CONFIG_VALIDATION_API = (typeof self !== 'undefined' && self.PawsOffConfigValidation) || null;
+  const CONFIG_VALIDATION = CONFIG_VALIDATION_API && CONFIG_VALIDATION_API.create({
+    tosSchemaVersion: TOS_SCHEMA_VERSION,
+    reputationSchemaVersion: TOS_REPUTATION_SCHEMA_VERSION,
+    deltaSchemaVersion: DELTA_SCHEMA_VERSION,
+    maxDeltaRules: MAX_DELTA_RULES,
+    deltaAllowedTypes: DELTA_ALLOWED_RESOURCE_TYPES,
+    consentSchemaVersions: CG_SCHEMA_VERSIONS,
+    pixelSchemaVersion: PB_SCHEMA_VERSION,
+    getBaseDomain(host) {
+      const psl = typeof self !== 'undefined' && self.PawsOffPSL;
+      return psl && typeof psl.getBaseDomain === 'function' ? psl.getBaseDomain(host) : null;
+    },
+  });
 
   // ── PixelBlock: tracker domains (canonical copy for the NETWORK layer) ────
   // Keep in sync with pixel-block.js (its copy drives the DOM fallback). If a
@@ -176,6 +195,15 @@ try {
     { id: 'fastmail',   dnrIndex: 5, hosts: ['app.fastmail.com'] },
     { id: 'hey',        dnrIndex: 6, hosts: ['app.hey.com'] },
     { id: 'tutanota',   dnrIndex: 7, hosts: ['app.tuta.com', 'mail.tutanota.com'] },
+    // iCloud is iframeLimited for the DOM tier (pixel-block.js cannot read its
+    // sandboxed message iframe), but the network tier needs no DOM access, so
+    // it was omitted here by oversight rather than by design. Registered as the
+    // bare apex: initiatorDomains matches subdomains too, so this covers
+    // www.icloud.com and any *.icloud.com frame the message body loads from.
+    // If that frame turns out to carry an opaque (sandboxed) origin, no
+    // initiatorDomains value can match it and this stays inert there while
+    // still covering the top-level document.
+    { id: 'icloud',     dnrIndex: 8, hosts: ['icloud.com'] },
   ];
   const DNR_ID_MIN = DNR_RULE_ID_BASE;
   const DNR_ID_MAX = DNR_RULE_ID_BASE + 99; // reserved range for PixelBlock
@@ -185,13 +213,27 @@ try {
   // and declared in manifest.declarative_net_request. Toggled by the master
   // switch; matches are surfaced in the per-site catch feed via an id→label map.
   const EASYPRIVACY_RULESET_ID = 'easyprivacy';
+
+  /**
+   * The popup's Trackers pill represents every tracker-blocking tier, not just
+   * PixelBlock. Keep the bundled list, signed delta, and provider rules aligned
+   * with that promise. Missing keys default on; unreadable storage stands down.
+   */
+  function masterProtectionEnabled(stored) {
+    return !(stored && typeof stored === 'object' && stored[MASTER_KEY] === false);
+  }
+  function trackerProtectionEnabled(stored) {
+    if (!masterProtectionEnabled(stored)) return false;
+    const pixelSettings = stored[PB_SETTINGS_KEY];
+    return !(pixelSettings && typeof pixelSettings === 'object' && pixelSettings.globalEnabled === false);
+  }
   const NET_TOTAL_KEY = '__pawsOff_net_total_blocked';
   let _epMeta = null; // lazy id→label map (fetched once from the packaged json)
   let _epById = null; // lazy id→domain-index map for per-tracker badge dedup
 
   // FNV-1a/32, identical to po-catch.hashHost so background-written catches
   // share the same hashed-origin space the popup filters on.
-  function fnvHash(host) {
+  function hashHost(host) {
     if (!host || typeof host !== 'string') return null;
     let h = 0x811c9dc5;
     const str = host.toLowerCase();
@@ -211,7 +253,7 @@ try {
     try {
       const url = (sender && sender.tab && sender.tab.url) || '';
       if (!url) return null;
-      return fnvHash(new URL(url).hostname);
+      return hashHost(new URL(url).hostname);
     } catch (_) { return null; }
   }
 
@@ -237,20 +279,20 @@ try {
     return _epById;
   }
 
-  // Enable/disable the static ruleset to follow the master switch (fail-open:
-  // unknown state → enabled, the privacy-protective default).
+  // Enable/disable the static ruleset with the global guard and Trackers pill
+  // Missing keys default on, while unreadable storage stands protection down.
   async function syncEasyPrivacyRuleset() {
     try {
       if (!chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateEnabledRulesets) return;
-      let masterOff = false;
+      let enabled = false;
       try {
-        const s = await chrome.storage.local.get(MASTER_KEY);
-        masterOff = s && s[MASTER_KEY] === false;
-      } catch (_) { /* fail-open */ }
-      if (masterOff) {
-        await chrome.declarativeNetRequest.updateEnabledRulesets({ disableRulesetIds: [EASYPRIVACY_RULESET_ID] });
-      } else {
+        const stored = await chrome.storage.local.get([MASTER_KEY, PB_SETTINGS_KEY]);
+        enabled = trackerProtectionEnabled(stored);
+      } catch (_) { /* unreadable user state stands protection down */ }
+      if (enabled) {
         await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: [EASYPRIVACY_RULESET_ID] });
+      } else {
+        await chrome.declarativeNetRequest.updateEnabledRulesets({ disableRulesetIds: [EASYPRIVACY_RULESET_ID] });
       }
     } catch (err) {
       await logRecord('ep_ruleset_sync_error', { message: err && err.message });
@@ -264,26 +306,13 @@ try {
   // ─────────────────────────────────────────────────────────────────────────
   let _deltaDomainIndex = null; // in-memory id -> domain, rebuilt each sync (for badge/catch-feed labels)
 
+  function isValidDeltaDomain(domain) {
+    return !!CONFIG_VALIDATION_API && CONFIG_VALIDATION_API.isValidDomain(domain);
+  }
+
   /** Structural validation before we trust a fetched delta config at all. */
   function validateDeltaConfig(cfg) {
-    try {
-      if (!cfg || typeof cfg !== 'object') return false;
-      if (cfg.schemaVersion !== DELTA_SCHEMA_VERSION) return false;
-      if (typeof cfg.configVersion !== 'string') return false;
-      if (!Array.isArray(cfg.domains)) return false;
-      for (const d of cfg.domains) {
-        if (!d || typeof d.domain !== 'string' || !d.domain) return false;
-        if (d.resourceTypes !== undefined) {
-          // Reject the whole config if any entry smuggles a type outside
-          // DELTA_ALLOWED_RESOURCE_TYPES - a feed can pick, never expand, the ceiling.
-          if (!Array.isArray(d.resourceTypes) || d.resourceTypes.length === 0) return false;
-          if (d.resourceTypes.some((t) => !DELTA_ALLOWED_RESOURCE_TYPES.has(t))) return false;
-        }
-      }
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return !!CONFIG_VALIDATION && CONFIG_VALIDATION.validateDeltaConfig(cfg);
   }
   async function getCachedDeltaConfig() {
     try {
@@ -298,38 +327,19 @@ try {
    *  null, leaves the cache (and therefore the currently-applied rules)
    *  untouched. On a successfully adopted config, reconciles the DNR band. */
   async function refreshEasyPrivacyDelta(force) {
-    try {
-      if (!PINNED_PUBLIC_KEY_JWK) return null;
-      const [cfgRes, sigRes] = await Promise.all([
-        fetch(DELTA_CONFIG_URL, { cache: 'no-cache', credentials: 'omit' }),
-        fetch(DELTA_CONFIG_SIG_URL, { cache: 'no-cache', credentials: 'omit' }),
-      ]);
-      if (!bothResponsesOk(cfgRes, sigRes)) return null;
-
-      const text = await cfgRes.text();
-      const sig = await sigRes.text();
-      if (!(await verifyConfigSignature(text, sig))) {
-        await logRecord('ep_delta_sig_invalid');
-        return null;
-      }
-
-      let parsed;
-      try { parsed = JSON.parse(text); } catch (_) { await logRecord('ep_delta_parse_error'); return null; }
-      if (!validateDeltaConfig(parsed)) { await logRecord('ep_delta_invalid'); return null; }
-
-      const cached = await getCachedDeltaConfig();
-      if (shouldAdoptConfig(force, cached, parsed)) {
-        await chrome.storage.local.set({ [DELTA_CONFIG_CACHE_KEY]: parsed });
-        await syncEasyPrivacyDeltaRules();
-      }
-      return parsed;
-    } catch (err) {
-      await logRecord('ep_delta_fetch_error', { message: err && err.message });
-      return null;
-    }
+    const released = await fetchReleaseConfig({
+      feedKey: 'easyPrivacyDelta',
+      cacheKey: DELTA_CONFIG_CACHE_KEY,
+      validate: validateDeltaConfig,
+      getCached: getCachedDeltaConfig,
+      logPrefix: 'ep_delta',
+      force,
+    });
+    if (released) await syncEasyPrivacyDeltaRules();
+    return released;
   }
 
-  /** Base domains already covered by the bundled static ruleset - never
+  /** Base domains already covered by the bundled static ruleset — never
    *  duplicate a block the packaged list already does. Same source file the
    *  prevalence enforcer already loads for the identical purpose. */
   let _deltaCoveredCache = null;
@@ -358,7 +368,7 @@ try {
     return budget > 0 ? budget : 0;
   }
   /** Current dynamic+session rule state, split into "our band" vs "everyone
-   *  else" - mirrors prevalence-enforcer.js's getDynamicState() so the two
+   *  else" — mirrors prevalence-enforcer.js's getDynamicState() so the two
    *  independent budget calculations can never double-count each other. */
   async function getDeltaDynamicState() {
     const dnr = chrome.declarativeNetRequest;
@@ -416,22 +426,23 @@ try {
   }
   /** Reconcile the delta DNR band to the cached config. Full-reconcile (clear
    *  the whole band, re-add what's currently desired), same pattern as the
-   *  enforcer. Shadow mode (default true) computes the plan into
+   *  enforcer. Shadow mode computes the plan into
    *  DELTA_META_KEY but applies nothing. */
-  async function syncEasyPrivacyDeltaRules() {
+  async function reconcileEasyPrivacyDeltaRules() {
     const dnr = chrome.declarativeNetRequest;
     if (!dnr || !dnr.updateDynamicRules) return { ok: false, reason: 'no_dnr' };
     try {
-      const s = await chrome.storage.local.get([DELTA_ENABLED_KEY, DELTA_SHADOW_KEY, MASTER_KEY]);
-      const masterOff = s && s[MASTER_KEY] === false;
-      const enabled = !!(s && s[DELTA_ENABLED_KEY]) && !masterOff; // master switch always wins
-      const shadow = !(s && s[DELTA_SHADOW_KEY] === false); // default true
+      let s;
+      try { s = await chrome.storage.local.get([DELTA_ENABLED_KEY, DELTA_SHADOW_KEY, MASTER_KEY, PB_SETTINGS_KEY]); }
+      catch (_) { s = null; }
+      const enabled = !!s && !(s[DELTA_ENABLED_KEY] === false) && trackerProtectionEnabled(s);
+      const shadow = !!(s && s[DELTA_SHADOW_KEY] === true); // default false
       const dyn = await getDeltaDynamicState();
 
       if (!enabled) {
         // OFF: make sure no delta rules linger, clear the label map too. A
         // removal failure propagates to the outer catch (ok:false) instead of
-        // being swallowed here - reporting ok:true while blocking rules are
+        // being swallowed here — reporting ok:true while blocking rules are
         // still live would misrepresent master-off/disable as fully honored.
         if (dyn.bandIds.length) {
           await dnr.updateDynamicRules({ removeRuleIds: dyn.bandIds, addRules: [] });
@@ -448,7 +459,7 @@ try {
 
       if (shadow) {
         // Compute what WOULD happen, apply nothing (and clear any leftovers
-        // from a prior non-shadow run) - a removal failure here must propagate
+        // from a prior non-shadow run) — a removal failure here must propagate
         // to the outer catch, not report shadow success while old non-shadow
         // block rules are still silently live.
         if (dyn.bandIds.length) {
@@ -459,6 +470,7 @@ try {
           [DELTA_META_KEY]: {
             updated: Date.now(), shadow: true,
             wouldApply: plan.addRules.length, candidates: domains.length, budget,
+            configVersion: cached && cached.configVersion,
             sample: plan.addRules.slice(0, 50).map((r) => r.condition.requestDomains[0]),
           },
         });
@@ -470,13 +482,34 @@ try {
       await dnr.updateDynamicRules({ removeRuleIds: Array.from(removeSet), addRules: plan.addRules });
       _deltaDomainIndex = plan.idMap;
       await chrome.storage.local.set({
-        [DELTA_META_KEY]: { updated: Date.now(), shadow: false, applied: plan.addRules.length, candidates: domains.length, budget },
+        [DELTA_META_KEY]: {
+          updated: Date.now(), shadow: false, applied: plan.addRules.length,
+          candidates: domains.length, budget, configVersion: cached && cached.configVersion,
+        },
       });
       return { ok: true, enabled: true, shadow: false, applied: plan.addRules.length };
     } catch (err) {
       await logRecord('ep_delta_sync_error', { message: err && err.message });
       return { ok: false, reason: 'sync_error', error: err && err.message };
     }
+  }
+  let deltaSyncPromise = null;
+  let deltaSyncPending = false;
+  async function syncEasyPrivacyDeltaRules() {
+    if (deltaSyncPromise) {
+      deltaSyncPending = true;
+      return deltaSyncPromise;
+    }
+    deltaSyncPromise = (async function () {
+      let result;
+      do {
+        deltaSyncPending = false;
+        result = await reconcileEasyPrivacyDeltaRules();
+      } while (deltaSyncPending);
+      return result;
+    }());
+    try { return await deltaSyncPromise; }
+    finally { deltaSyncPromise = null; }
   }
   async function setDeltaEnabled(on) {
     await chrome.storage.local.set({ [DELTA_ENABLED_KEY]: !!on });
@@ -490,56 +523,82 @@ try {
     try {
       const s = await chrome.storage.local.get([DELTA_ENABLED_KEY, DELTA_SHADOW_KEY, DELTA_META_KEY]);
       return {
-        enabled: !!(s && s[DELTA_ENABLED_KEY]),
-        shadow: !(s && s[DELTA_SHADOW_KEY] === false),
+        enabled: !(s && s[DELTA_ENABLED_KEY] === false),
+        shadow: !!(s && s[DELTA_SHADOW_KEY] === true),
         meta: (s && s[DELTA_META_KEY]) || null,
       };
     } catch (_) {
-      return { enabled: false, shadow: true, meta: null };
+      return { enabled: true, shadow: false, meta: null };
     }
   }
 
   // Surface network-blocked trackers in the per-site catch feed, hashed-origin
   // only and capped per poll. Best-effort: any failure is swallowed silently.
+  async function tabOriginHash(tabId) {
+    if (tabId < 0) return null;
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab) return null;
+      if (!tab.url) return null;
+      return hashHost(new URL(tab.url).hostname);
+    } catch (_) {
+      return null;
+    }
+  }
+  function trackerIdentityForRule(meta, id) {
+    const deltaLabel = _deltaDomainIndex ? _deltaDomainIndex[id] : null;
+    if (deltaLabel) return String(deltaLabel);
+    if (!meta || !meta[id]) return '';
+    return String(meta[id]);
+  }
+  function networkCatchFieldsForRule(meta, id) {
+    const identity = trackerIdentityForRule(meta, id);
+    return {
+      label: 'Tracker',
+      detail: identity ? hashHost(identity) : 'Blocked by tracker protection',
+    };
+  }
+  function buildNetworkCatchWrites(ruleIds, meta, originHash) {
+    const writes = {};
+    for (const id of ruleIds) {
+      const fields = networkCatchFieldsForRule(meta, id);
+      const key = '__pawsOff_catch_' + Date.now() + '_' + rand();
+      writes[key] = {
+        ts: Date.now(), originHash: originHash, feature: 'tracker',
+        label: fields.label, category: 'Tracker',
+        detail: fields.detail, mayBreak: false, wall: false, source: 'dnr',
+      };
+    }
+    return writes;
+  }
+  function recordNetworkBadge(tabId, ruleIds, idMap) {
+    if (tabId < 0) return;
+    const keys = [];
+    for (const id of ruleIds) keys.push(dedupKeyForRule(idMap, id));
+    addTrackers(_tabTrackers, tabId, keys);
+    refreshBadge(tabId);
+    persistTabBadge(tabId);
+  }
+  async function persistNetworkCatchWrites(writes) {
+    if (!Object.keys(writes).length) return;
+    try { await chrome.storage.local.set(writes); } catch (_) { /* best-effort feed */ }
+  }
   async function writeNetworkCatches(epByTab) {
+    if (!(await isTrackerProtectionEnabled())) return;
     const meta = await loadEpMeta();
     const idMap = await loadEpById();
-    for (const [tabId, ruleIds] of epByTab.entries()) {
-      const epoch0 = tabEpoch(tabId); // captured before any await in this iteration
-      let originHash = null;
-      try {
-        if (tabId >= 0 && chrome.tabs && chrome.tabs.get) {
-          const tab = await chrome.tabs.get(tabId);
-          if (tab && tab.url) originHash = fnvHash(new URL(tab.url).hostname);
-        }
-      } catch (_) { /* tab gone - leave originHash null */ }
-      const writes = {};
-      for (const id of ruleIds) {
-        // Delta-band ids have no entry in the static id→label map (that map
-        // only covers the bundled ruleset's 1-13823 range); the domain itself
-        // IS the label there - same plaintext-tracker-name precedent as
-        // easyprivacy-meta.json's labels, never a first-party host.
-        const deltaLabel = _deltaDomainIndex && _deltaDomainIndex[id];
-        const label = deltaLabel ? String(deltaLabel) : ((meta && meta[id]) ? String(meta[id]) : 'tracker');
-        const key = '__pawsOff_catch_' + Date.now() + '_' + rand();
-        writes[key] = {
-          ts: Date.now(), originHash: originHash, feature: 'tracker',
-          label: label.slice(0, 80), category: 'Tracker',
-          detail: label.slice(0, 120), mayBreak: false, wall: false, source: 'dnr',
-        };
-      }
+    for (const [tabId, entry] of epByTab.entries()) {
+      const originHash = await tabOriginHash(tabId);
+      if (!(await badgeWorkStillCurrent(tabId, entry.epoch))) continue;
+      const ruleIds = entry.ruleIds;
       // Toolbar badge: accumulate DISTINCT blocked trackers per tab. The
       // build-time id→domain map (easyprivacy-byid.json) collapses one tracker
       // company's many rules to a single count; rules with no domain fall back
-      // to per-rule counting. In-memory only - no page host is ever stored.
-      if (tabId >= 0 && tabEpoch(tabId) === epoch0) { // tab hasn't navigated since we started
-        const keys = [];
-        for (const id of ruleIds) keys.push(dedupKeyForRule(idMap, id));
-        addTrackers(_tabTrackers, tabId, keys);
-        refreshBadge(tabId);
-        persistTabBadge(tabId); // mirror to storage.session so it survives SW eviction
-      }
-      try { if (Object.keys(writes).length) await chrome.storage.local.set(writes); } catch (_) { /* silent */ }
+      // to per-rule counting. In-memory only — no page host is ever stored.
+      recordNetworkBadge(tabId, ruleIds, idMap);
+      // Delta-band labels come from the signed domain index; static labels use
+      // the bundled id map. Neither source contains a first-party page host.
+      await persistNetworkCatchWrites(buildNetworkCatchWrites(ruleIds, meta, originHash));
     }
   }
 
@@ -551,14 +610,29 @@ try {
   // ─────────────────────────────────────────────────────────────────────────
   const _tabTrackers = new Map(); // tabId -> Set<dedup-key> of blocks on the live page
   const _tabBlockedReqs = new Map(); // tabId -> COUNT of blocked requests (popup stats)
+  // Reconcile cursor lives beside the badge state because a global pause moves
+  // it forward: matches from before/during the pause must never reappear later.
+  let _lastDnrPoll = 0;
   // Per-tab navigation generation: badge-mutating async work can still be in
   // flight when the user navigates away, so a slow block from the OLD page
   // could get miscounted onto the NEW one. Bumped on navigation start;
   // callers capture the epoch before their awaits and discard if it moved.
   const _tabNavEpoch = new Map();
+  const _tabNavStartedAt = new Map();
   function tabEpoch(tabId) { return _tabNavEpoch.get(tabId) || 0; }
-  function bumpTabEpoch(tabId) { const n = tabEpoch(tabId) + 1; _tabNavEpoch.set(tabId, n); return n; }
-  const BADGE_COLOR = '#3c4043';       // dark grey background - white count pops
+  function bumpTabEpoch(tabId, startedAt) {
+    const n = tabEpoch(tabId) + 1;
+    _tabNavEpoch.set(tabId, n);
+    _tabNavStartedAt.set(tabId, Number.isFinite(startedAt) ? startedAt : Date.now());
+    return n;
+  }
+  function matchBelongsToCurrentPage(match) {
+    if (!match || typeof match.tabId !== 'number' || match.tabId < 0) return true;
+    const navigationStartedAt = _tabNavStartedAt.get(match.tabId);
+    if (!Number.isFinite(navigationStartedAt)) return true;
+    return Number.isFinite(match.timeStamp) && match.timeStamp >= navigationStartedAt;
+  }
+  const BADGE_COLOR = '#3c4043';       // dark grey background — white count pops
   const BADGE_TEXT_COLOR = '#ffffff';  // white count text (forced, not auto-picked)
   const BADGE_SESSION_PREFIX = '__pawsOff_badge_'; // session-storage mirror key per tab
 
@@ -583,7 +657,7 @@ try {
     }
     return 'r' + id;
   }
-  /** PURE: badge key for a BLOCKED request URL - 'd'+idx if its registrable
+  /** PURE: badge key for a BLOCKED request URL — 'd'+idx if its registrable
    *  domain is in our tracker index (Map domain → idx into the byid d array),
    *  else '' (not ours to count: some other extension's block, or a non-tracker
    *  failure). The URL/domain is reduced to the opaque index and discarded.
@@ -616,19 +690,39 @@ try {
     try { if (chrome.action && chrome.action.setBadgeText) await chrome.action.setBadgeText({ tabId, text }); }
     catch (_) { /* tab likely closed */ }
   }
-  // Refresh a tab's badge from its accumulated count. Master switch OFF → blank
-  // (protection stood down). Fail-open: any error just leaves the badge as-is.
+  async function isMasterProtectionEnabled() {
+    try { return masterProtectionEnabled(await chrome.storage.local.get(MASTER_KEY)); }
+    catch (_) { return false; }
+  }
+  async function isTrackerProtectionEnabled() {
+    try {
+      return trackerProtectionEnabled(await chrome.storage.local.get([MASTER_KEY, PB_SETTINGS_KEY]));
+    } catch (_) {
+      return false;
+    }
+  }
+  async function badgeWorkStillCurrent(tabId, expectedEpoch) {
+    if (!(await isMasterProtectionEnabled())) return false;
+    return tabEpoch(tabId) === expectedEpoch;
+  }
+  function badgeSessionKeys(all) {
+    const keys = [];
+    for (const key of Object.keys(all || {})) {
+      if (key.indexOf(BADGE_SESSION_PREFIX) === 0) keys.push(key);
+    }
+    return keys;
+  }
+  // Refresh a tab's badge from its accumulated count. The master switch stops
+  // new counting, but the last total remains visible as an honest statistic.
   async function refreshBadge(tabId) {
     try {
       if (tabId == null || tabId < 0) return;
-      const s = await chrome.storage.local.get(MASTER_KEY);
-      if (s && s[MASTER_KEY] === false) { await setBadge(tabId, ''); return; }
       await setBadge(tabId, badgeText(tabBadgeCount(tabId)));
     } catch (_) { /* silent */ }
   }
   // New page in a tab → drop its count and reset the badge to "0"; the next
-  // reconcile ticks it up from that page's own blocks. (refreshBadge is
-  // master-switch-aware, so a paused suite still shows blank, not "0".)
+  // reconcile ticks it up from that page's own blocks. A paused suite keeps the
+  // visible baseline without counting anything on the new page.
   function resetTabBadge(tabId) {
     try {
       bumpTabEpoch(tabId); // fence off any in-flight block that belonged to the old page
@@ -658,38 +752,68 @@ try {
       chrome.storage.session.remove(BADGE_SESSION_PREFIX + tabId);
     } catch (_) { /* silent */ }
   }
+  async function badgeRestoreSnapshot() {
+    const session = chrome.storage?.session;
+    if (!session) return null;
+    if (typeof session.get !== 'function') return null;
+    const all = await session.get(null);
+    if (!all) return null;
+    return { session, all };
+  }
+  async function queryOpenTabIds(seed) {
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of (tabs || [])) {
+        if (tab && typeof tab.id === 'number') seed.add(tab.id);
+      }
+      return seed;
+    } catch (_) {
+      return null;
+    }
+  }
+  function storedBadgeState(value) {
+    if (Array.isArray(value)) return { keys: value, blockedRequests: 0 };
+    if (!value) return { keys: [], blockedRequests: 0 };
+    const keys = Array.isArray(value.k) ? value.k : [];
+    let blockedRequests = 0;
+    if (typeof value.n === 'number') blockedRequests = value.n | 0;
+    return { keys, blockedRequests };
+  }
+  function restoreBadgeSession(key, value, openIds) {
+    const tabId = parseInt(key.slice(BADGE_SESSION_PREFIX.length), 10);
+    if (!Number.isInteger(tabId)) return false;
+    if (openIds) {
+      if (!openIds.has(tabId)) return true;
+    }
+    const state = storedBadgeState(value);
+    if (state.blockedRequests > 0) _tabBlockedReqs.set(tabId, state.blockedRequests);
+    if (!state.keys.length) return false;
+    addTrackers(_tabTrackers, tabId, state.keys);
+    refreshBadge(tabId);
+    return false;
+  }
+  function restoreBadgeSessions(all, openIds) {
+    const stale = [];
+    for (const key of badgeSessionKeys(all)) {
+      if (restoreBadgeSession(key, all[key], openIds)) stale.push(key);
+    }
+    return stale;
+  }
+  async function removeBadgeSessions(session, keys) {
+    if (!keys.length) return;
+    if (typeof session.remove !== 'function') return;
+    try { await session.remove(keys); } catch (_) { /* session mirror is best-effort */ }
+  }
   // On SW cold start (incl. wake from eviction): rebuild the in-memory counts from
   // the session mirror and repaint each still-open tab's badge. Prunes entries for
   // tabs that closed while the worker was dead.
   async function rehydrateBadges() {
     try {
-      if (!chrome.storage || !chrome.storage.session || !chrome.storage.session.get) return;
-      const all = await chrome.storage.session.get(null);
-      if (!all) return;
-      let openIds = null;
-      try {
-        if (chrome.tabs && chrome.tabs.query) {
-          const tabs = await chrome.tabs.query({});
-          openIds = new Set((tabs || []).map(function (t) { return t && t.id; }));
-        }
-      } catch (_) { openIds = null; } // can't enumerate → skip pruning, keep counts
-      const stale = [];
-      for (const k of Object.keys(all)) {
-        if (k.indexOf(BADGE_SESSION_PREFIX) !== 0) continue;
-        const tabId = parseInt(k.slice(BADGE_SESSION_PREFIX.length), 10);
-        if (!Number.isInteger(tabId)) continue;
-        if (openIds && !openIds.has(tabId)) { stale.push(k); continue; }
-        const v = all[k];
-        const keys = Array.isArray(v) ? v : (v && Array.isArray(v.k) ? v.k : []);
-        if (v && typeof v.n === 'number' && v.n > 0) _tabBlockedReqs.set(tabId, v.n | 0);
-        if (keys.length) {
-          addTrackers(_tabTrackers, tabId, keys);
-          refreshBadge(tabId);
-        }
-      }
-      if (stale.length && chrome.storage.session.remove) {
-        try { await chrome.storage.session.remove(stale); } catch (_) { /* silent */ }
-      }
+      const snapshot = await badgeRestoreSnapshot();
+      if (!snapshot) return;
+      const openIds = await queryOpenTabIds(new Set());
+      const stale = restoreBadgeSessions(snapshot.all, openIds);
+      await removeBadgeSessions(snapshot.session, stale);
     } catch (_) { /* fail-open: no rehydration */ }
   }
   // Set the badge grey background + white text once per service-worker start
@@ -707,30 +831,28 @@ try {
   // Full-color icon while protecting; greyed variant when the user disables
   // everything, so the "off" state is visible at a glance. Global swap (not
   // per-tab). Guarded + fail-open: any failure keeps the colored icon.
-  const ICONS_ON  = { 16: 'icons/icon16.png', 48: 'icons/icon48.png', 128: 'icons/icon128.png' };
-  const ICONS_OFF = { 16: 'icons/icon16-off.png', 48: 'icons/icon48-off.png', 128: 'icons/icon128-off.png' };
+  // Leading slashes make these extension-root paths. Without them Chrome
+  // resolves from this nested service worker and setIcon rejects with
+  // "Failed to fetch", silently leaving the manifest's colored default.
+  const ICONS_ON  = { 16: '/icons/icon16.png', 48: '/icons/icon48.png', 128: '/icons/icon128.png' };
+  const ICONS_OFF = { 16: '/icons/icon16-off.png', 48: '/icons/icon48-off.png', 128: '/icons/icon128-off.png' };
+  let _actionIconEpoch = 0;
+  async function paintActionIcon(off) {
+    try {
+      if (chrome.action && chrome.action.setIcon) {
+        await chrome.action.setIcon({ path: off ? ICONS_OFF : ICONS_ON });
+      }
+    } catch (_) { /* icon paint failure must not skip badge/state cleanup */ }
+  }
   async function syncActionIcon() {
     try {
-      if (!chrome.action || !chrome.action.setIcon) return;
-      let off = false;
-      try {
-        const s = await chrome.storage.local.get(MASTER_KEY);
-        off = !!(s && s[MASTER_KEY] === false);
-      } catch (_) { /* fail-open: keep the colored icon */ }
-      await chrome.action.setIcon({ path: off ? ICONS_OFF : ICONS_ON });
-      // Master off → blank every OPEN tab's badge too; back on → repaint.
-      // _tabTrackers only holds tabs with a nonzero count, so a freshly-
-      // navigated tab at "0" would be missed - query all open tabs instead.
-      const tabIds = new Set(_tabTrackers.keys());
-      try {
-        if (chrome.tabs && chrome.tabs.query) {
-          const tabs = await chrome.tabs.query({});
-          for (const tab of (tabs || [])) {
-            if (tab && typeof tab.id === 'number') tabIds.add(tab.id);
-          }
-        }
-      } catch (_) { /* fall back to the known counted tabs */ }
-      for (const tabId of tabIds) refreshBadge(tabId);
+      const epoch = ++_actionIconEpoch;
+      const off = !(await isMasterProtectionEnabled());
+      // A storage event may have painted a newer state while the startup read
+      // was pending. Never let that stale read overwrite the user's choice.
+      if (epoch !== _actionIconEpoch) return;
+      await paintActionIcon(off);
+      if (off) _lastDnrPoll = Date.now();
     } catch (_) { /* silent */ }
   }
   try { syncActionIcon(); } catch (_) { /* silent */ } // every SW start
@@ -797,7 +919,7 @@ try {
         out[k] = v.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[url]').slice(0, 200);
       } else if (typeof v === 'number' || typeof v === 'boolean' || v == null) {
         out[k] = v;
-      } // objects/arrays are dropped - could nest a URL/host
+      } // objects/arrays are dropped — could nest a URL/host
     }
     return out;
   }
@@ -852,7 +974,7 @@ try {
    * Register/refresh the baseline DNR ruleset, respecting stored settings and
    * the master switch. Always removes the full id range first, then re-adds
    * only enabled providers, so this is idempotent across install/startup and
-   * toggle changes. Fail-open: unreadable settings enable everything.
+   * toggle changes. Unreadable settings stand blocking down.
    * @returns {Promise<void>}
    */
   async function syncBaselineRules() {
@@ -860,16 +982,15 @@ try {
       if (!chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateDynamicRules) return;
 
       let settings = null;
-      let masterOff = false;
+      let trackersEnabled = false;
       try {
         const stored = await chrome.storage.local.get([PB_SETTINGS_KEY, MASTER_KEY]);
         settings = stored && stored[PB_SETTINGS_KEY];
-        masterOff = stored && stored[MASTER_KEY] === false;
-      } catch (_) { /* fail-open below */ }
+        trackersEnabled = trackerProtectionEnabled(stored);
+      } catch (_) { /* unreadable user state stands protection down */ }
 
-      const globalOff = masterOff || (settings && settings.globalEnabled === false);
       const providerOn = (id) => {
-        if (globalOff) return false;
+        if (!trackersEnabled) return false;
         if (!settings || !settings.providers) return true; // no settings yet → on
         return settings.providers[id] !== false;
       };
@@ -905,7 +1026,7 @@ try {
         out.push({
           id,
           priority: 1,
-          action: { type: 'block' }, // force block - never redirect/modifyHeaders
+          action: { type: 'block' }, // force block — never redirect/modifyHeaders
           condition: {
             requestDomains: Array.isArray(cond.requestDomains) ? cond.requestDomains : TRACKING_DOMAINS.slice(),
             initiatorDomains: Array.isArray(cond.initiatorDomains) ? cond.initiatorDomains : undefined,
@@ -964,7 +1085,7 @@ try {
     return s;
   }
 
-  // Numeric FNV-1a/32, distinct from fnvHash(), which returns a 'h:'-prefixed
+  // Numeric FNV-1a/32, distinct from hashHost(), which returns a 'h:'-prefixed
   // STRING that cannot be used as a numeric DNR rule id.
   function allowRuleHash(str) {
     let h = 0x811c9dc5;
@@ -992,14 +1113,14 @@ try {
   // sitePauseRuleId()/domainAllowRuleId() give a preferred slot from the host
   // hash, but hash%span collides (birthday: >50% at ~17 paused sites), and a
   // collision would silently clobber an earlier paused site. A persisted map
-  // assigns a stable, unique id per site instead - starting at the preferred
-  // slot and linear-probing to the next free id. Keys are fnvHash digests
+  // assigns a stable, unique id per site instead — starting at the preferred
+  // slot and linear-probing to the next free id. Keys are hashHost digests
   // (no plaintext host persisted); freed on unpause/clear.
   const ID_MAP_KEY = '__pawsOff_allow_idmap';
-  function keyForHost(host) { const h = normAllowHost(host); return h ? fnvHash(h) : null; }
+  function keyForHost(host) { const h = normAllowHost(host); return h ? hashHost(h) : null; }
   function keyForDomain(host, domain) {
     const h = normAllowHost(host), d = normAllowHost(domain);
-    return (h && d) ? (fnvHash(h) + '|' + fnvHash(d)) : null;
+    return (h && d) ? (hashHost(h) + '|' + hashHost(d)) : null;
   }
   function normalizeIdMap(raw) {
     const m = (raw && typeof raw === 'object') ? raw : {};
@@ -1043,7 +1164,7 @@ try {
     return null; // band full → caller stands down (never clobbers a live rule)
   }
   async function loadIdMap() {
-    // Return null on read failure so the caller STANDS DOWN - proceeding with an
+    // Return null on read failure so the caller STANDS DOWN — proceeding with an
     // empty map could reuse ids of live rules whose mappings we simply couldn't read.
     try { const r = await chrome.storage.local.get(ID_MAP_KEY); return normalizeIdMap(r && r[ID_MAP_KEY]); }
     catch (_) { return null; }
@@ -1095,6 +1216,41 @@ try {
     _allowChain = _allowChain.then(run, run);
     return _allowChain;
   }
+  async function removePauseRule(map, key, id) {
+    const hadPause = Object.prototype.hasOwnProperty.call(map.pause, key);
+    const hadMeta = Object.prototype.hasOwnProperty.call(map.pauseMeta, key);
+    const pauseValue = map.pause[key];
+    const metaValue = map.pauseMeta[key];
+    delete map.pause[key];
+    delete map.pauseMeta[key];
+    if (!(await saveIdMap(map))) {
+      if (hadPause) map.pause[key] = pauseValue;
+      if (hadMeta) map.pauseMeta[key] = metaValue;
+      return { ok: false };
+    }
+    try {
+      await applyAllowRules([id], []);
+    } catch (_) {
+      if (hadPause) map.pause[key] = pauseValue;
+      if (hadMeta) map.pauseMeta[key] = metaValue;
+      await saveIdMap(map);
+      return { ok: false };
+    }
+    return { ok: true };
+  }
+
+  async function unpauseSiteHash(message, map) {
+    const key = message && message.siteHash;
+    if (typeof key !== 'string') return { ok: false };
+    if (!/^h:[0-9a-f]{8}$/.test(key)) return { ok: false };
+    const id = map.pause[key];
+    if (id == null) return { ok: false };
+    const res = await removePauseRule(map, key, id);
+    if (res.ok) {
+      try { chrome.alarms.clear(pauseAlarmName(key)); } catch (_) { /* silent */ }
+    }
+    return res;
+  }
   async function _handleAllowMessageImpl(message) {
     try {
       const op = message && message.op;
@@ -1119,11 +1275,11 @@ try {
           const rule = buildSitePauseRule(h, id);
           if (!rule) return { ok: false };
           // Timed pause: remember expiry + the allowlist hash (fnv of the RAW
-          // host - the popup's key, which differs from `key` for www hosts) and
+          // host — the popup's key, which differs from `key` for www hosts) and
           // arm a per-site alarm so protection auto-resumes even if the popup
           // never reopens. until<=0 = indefinite ("Always"): no meta, no alarm.
           const until = (message && typeof message.until === 'number' && message.until > 0) ? message.until : 0;
-          if (until > 0) map.pauseMeta[key] = { u: until, oh: fnvHash(String(site || '').trim().toLowerCase()) };
+          if (until > 0) map.pauseMeta[key] = { u: until, oh: hashHost(String(site || '').trim().toLowerCase()) };
           else delete map.pauseMeta[key];
           const res = await commit([id], [rule]); // remove-then-add same id
           if (res.ok) {
@@ -1140,11 +1296,14 @@ try {
           const key = keyForHost(site);
           const id = (map.pause[key] != null) ? map.pause[key] : sitePauseRuleId(site);
           if (id == null) return { ok: false };
-          delete map.pause[key];
-          delete map.pauseMeta[key];
-          try { chrome.alarms.clear(pauseAlarmName(key)); } catch (_) { /* silent */ }
-          return commit([id], []);
+          const res = await removePauseRule(map, key, id);
+          if (res.ok) {
+            try { chrome.alarms.clear(pauseAlarmName(key)); } catch (_) { /* silent */ }
+          }
+          return res;
         }
+        case 'unpauseSiteHash':
+          return unpauseSiteHash(message, map);
         case 'allowDomain': {
           const h = normAllowHost(site), d = normAllowHost(domain);
           if (!h || !d) return { ok: false };
@@ -1196,7 +1355,7 @@ try {
   // allowlist flag; (3) sweepExpiredPauses() at startup catches anything a lost
   // alarm missed and re-arms alarms for still-future expiries.
   const PAUSE_ALARM_PREFIX = 'pawsoff_pause_';
-  /** PURE: alarm name for a pause-map key (a hash - never a plaintext host). */
+  /** PURE: alarm name for a pause-map key (a hash — never a plaintext host). */
   function pauseAlarmName(key) { return PAUSE_ALARM_PREFIX + key; }
 
   function expireSitePause(key) { // serialized on _allowChain: no popup-op races
@@ -1215,7 +1374,7 @@ try {
         return;
       }
       const id = (map.pause[key] != null) ? map.pause[key] : null;
-      // Remove the live DNR rule BEFORE persisting the metadata deletion - if
+      // Remove the live DNR rule BEFORE persisting the metadata deletion — if
       // this throws after the map is saved, the rule would stay live with
       // nothing left to find and clean it up. This ordering means a failure
       // here leaves pauseMeta intact, so the retry alarm tries again.
@@ -1239,7 +1398,7 @@ try {
       await logRecord('pause_expire_error', { message: err && err.message });
     }
   }
-  // Clear the allowlist pause flag for an EXPIRED timed pause only - an
+  // Clear the allowlist pause flag for an EXPIRED timed pause only — an
   // indefinite ("Always") pause is the user's explicit choice and is never
   // touched. The write fires storage.onChanged, so popup + content scripts see
   // the resume immediately.
@@ -1316,7 +1475,7 @@ try {
 
   // ─────────────────────────────────────────────────────────────────────────
   //  ToS Shield, signed remote config fetch / verify / cache
-  // ────────────────────────────────────────────────────────────────────������───
+  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Structural validation before trusting a fetched config.
@@ -1325,27 +1484,18 @@ try {
    */
   /** A defined, non-null object value. */
   function isPlainObject(v) {
-    return !!v && typeof v === 'object';
+    return !!CONFIG_VALIDATION_API && CONFIG_VALIDATION_API.isPlainObject(v);
   }
   /** ToS config must carry both the categories and patterns arrays. */
   function hasRequiredArrays(cfg) {
-    return Array.isArray(cfg.categories) && Array.isArray(cfg.patterns);
+    return !!CONFIG_VALIDATION_API && CONFIG_VALIDATION_API.hasRequiredArrays(cfg);
   }
   /** ToS config must carry all four behavioural sections. */
   function hasRequiredSections(cfg) {
-    return !!(cfg.pageDetection && cfg.segmentation && cfg.negation && cfg.scoring);
+    return !!CONFIG_VALIDATION_API && CONFIG_VALIDATION_API.hasRequiredSections(cfg);
   }
   function validateConfig(cfg) {
-    try {
-      if (!isPlainObject(cfg)) return false;
-      if (cfg.schemaVersion !== TOS_SCHEMA_VERSION) return false;
-      if (typeof cfg.configVersion !== 'string') return false;
-      if (!hasRequiredArrays(cfg)) return false;
-      if (!hasRequiredSections(cfg)) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return !!CONFIG_VALIDATION && CONFIG_VALIDATION.validateTosConfig(cfg);
   }
 
   /**
@@ -1377,94 +1527,84 @@ try {
     }
   }
 
-  /**
-   * Read the currently cached, valid config (or null).
-   * @returns {Promise<Object|null>}
-   */
-  async function getCachedConfig() {
+  const SIGNED_CONFIG_CLIENT_API = (typeof self !== 'undefined' && self.PawsOffSignedConfigClient) || null;
+  const SIGNED_CONFIG_CLIENT = SIGNED_CONFIG_CLIENT_API && SIGNED_CONFIG_CLIENT_API.create({
+    signedFeed: SIGNED_FEED,
+    boundedResponse: BOUNDED_RESPONSE,
+    publicKey: PINNED_PUBLIC_KEY_JWK,
+    currentVersion: VERSION,
+    manifestUrl: RELEASE_MANIFEST_URL,
+    manifestSignatureUrl: RELEASE_MANIFEST_SIG_URL,
+    manifestCacheKey: RELEASE_MANIFEST_CACHE_KEY,
+    sequenceKey: RELEASE_SEQUENCE_KEY,
+    manifestMaxBytes: RELEASE_MANIFEST_MAX_BYTES,
+    signatureMaxBytes: SIGNATURE_MAX_BYTES,
+    storage: chrome.storage.local,
+    fetch,
+    crypto: self.crypto,
+    verifySignature: verifyConfigSignature,
+    compareVersions,
+    log: logRecord,
+  });
+
+  function fetchReleaseConfig(options) {
+    return SIGNED_CONFIG_CLIENT ? SIGNED_CONFIG_CLIENT.fetchReleaseConfig(options) : Promise.resolve(null);
+  }
+
+  function handleGetTosConfig() {
+    return Promise.resolve({ ok: false, config: null });
+  }
+
+  // ── ToS;DR reputation context ────────────────────────────────────────────
+  // This is descriptive community context, never executable matching logic.
+  // The content script still flags clauses from local page text and labels the
+  // grade separately so a community rating cannot manufacture a finding.
+  let tosReputationMemory = null;
+
+  function validateTosReputationConfig(cfg) {
+    return !!CONFIG_VALIDATION && CONFIG_VALIDATION.validateTosReputationConfig(cfg);
+  }
+
+  async function getCachedTosReputation() {
+    if (tosReputationMemory && validateTosReputationConfig(tosReputationMemory)) return tosReputationMemory;
     try {
-      const s = await chrome.storage.local.get(TOS_CONFIG_CACHE_KEY);
-      const c = s && s[TOS_CONFIG_CACHE_KEY];
-      return validateConfig(c) ? c : null;
+      const stored = await chrome.storage.local.get(TOS_REPUTATION_CACHE_KEY);
+      const cfg = stored && stored[TOS_REPUTATION_CACHE_KEY];
+      if (!validateTosReputationConfig(cfg)) return null;
+      tosReputationMemory = cfg;
+      return cfg;
     } catch (_) {
       return null;
     }
   }
 
-  /**
-   * Fetch + verify the remote config; cache it if strictly newer (or forced).
-   * Fail-closed: returns null on any failure and leaves the cache untouched.
-   * @param {boolean} force
-   * @returns {Promise<Object|null>}
-   */
-  /** Both the config body and its detached signature must fetch successfully. */
-  function bothResponsesOk(cfgRes, sigRes) {
-    return !!cfgRes && cfgRes.ok && !!sigRes && sigRes.ok;
-  }
-  /** Adopt a freshly verified config when forced, uncached, or strictly newer. */
-  function shouldAdoptConfig(force, cached, parsed) {
-    return force || !cached || compareVersions(parsed.configVersion, cached.configVersion) > 0;
-  }
-
-  /**
-   * Shared fetch→verify→parse→validate→cache-if-newer flow for all signed
-   * remote configs (ToS Shield, ConsentGhost, PixelBlock - same pinned key,
-   * same ECDSA-P256/SHA-256 signature path). Fail-closed: any failure returns
-   * null and leaves the cache untouched.
-   * @param {{cfgUrl: string, sigUrl: string, cacheKey: string, validate: Function, getCached: Function, logPrefix: string, force: boolean}} opts
-   * @returns {Promise<Object|null>}
-   */
-  async function fetchSignedConfig({ cfgUrl, sigUrl, cacheKey, validate, getCached, logPrefix, force }) {
-    try {
-      if (!PINNED_PUBLIC_KEY_JWK) return null; // remote disabled until key pinned
-      const [cfgRes, sigRes] = await Promise.all([
-        fetch(cfgUrl, { cache: 'no-cache', credentials: 'omit' }),
-        fetch(sigUrl, { cache: 'no-cache', credentials: 'omit' }),
-      ]);
-      if (!bothResponsesOk(cfgRes, sigRes)) return null;
-
-      const text = await cfgRes.text();
-      const sig = await sigRes.text();
-      if (!(await verifyConfigSignature(text, sig))) {
-        await logRecord(`${logPrefix}_config_sig_invalid`);
-        return null;
-      }
-
-      let parsed;
-      try { parsed = JSON.parse(text); } catch (_) { await logRecord(`${logPrefix}_config_parse_error`); return null; }
-      if (!validate(parsed)) { await logRecord(`${logPrefix}_config_invalid`); return null; }
-
-      const cached = await getCached();
-      if (shouldAdoptConfig(force, cached, parsed)) {
-        await chrome.storage.local.set({ [cacheKey]: parsed });
-      }
-      return parsed;
-    } catch (err) {
-      await logRecord(`${logPrefix}_config_fetch_error`, { message: err && err.message });
-      return null;
-    }
-  }
-
-  async function refreshTosConfig(force) {
-    return fetchSignedConfig({
-      cfgUrl: CONFIG_URL,
-      sigUrl: CONFIG_SIG_URL,
-      cacheKey: TOS_CONFIG_CACHE_KEY,
-      validate: validateConfig,
-      getCached: getCachedConfig,
-      logPrefix: 'tos',
+  async function refreshTosReputation(force) {
+    const cfg = await fetchReleaseConfig({
+      feedKey: 'tosReputation',
+      cacheKey: TOS_REPUTATION_CACHE_KEY,
+      validate: validateTosReputationConfig,
+      getCached: getCachedTosReputation,
+      logPrefix: 'tos_reputation',
       force,
     });
+    if (cfg) tosReputationMemory = cfg;
+    return cfg;
   }
 
-  /**
-   * Message handler: return a verified config (cached, else fetch once).
-   * @returns {Promise<{ok: boolean, config: Object|null}>}
-   */
-  async function handleGetTosConfig() {
-    let cfg = await getCachedConfig();
-    if (!cfg) cfg = await refreshTosConfig(false);
-    return { ok: !!cfg, config: cfg || null };
+  function lookupTosReputation(host, cfg) {
+    return CONFIG_VALIDATION ? CONFIG_VALIDATION.lookupTosReputation(host, cfg) : null;
+  }
+
+  async function handleGetTosReputation(sender) {
+    let cfg = await getCachedTosReputation();
+    if (!cfg) cfg = await refreshTosReputation(false);
+    let host = '';
+    try { host = new URL((sender && sender.tab && sender.tab.url) || '').hostname; } catch (_) { /* no tab URL */ }
+    return {
+      ok: !!cfg,
+      reputation: cfg ? lookupTosReputation(host, cfg) : null,
+      source: cfg ? { attribution: cfg.attribution, configVersion: cfg.configVersion } : null,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1478,15 +1618,7 @@ try {
    * @returns {boolean}
    */
   function validateConsentConfig(cfg) {
-    try {
-      if (!cfg || typeof cfg !== 'object') return false;
-      if (cfg.schemaVersion !== CG_SCHEMA_VERSION) return false;
-      if (typeof cfg.configVersion !== 'string') return false;
-      if (!Array.isArray(cfg.frameworks) || cfg.frameworks.length === 0) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return !!CONFIG_VALIDATION && CONFIG_VALIDATION.validateConsentConfig(cfg);
   }
 
   /**
@@ -1512,15 +1644,24 @@ try {
    * @returns {Promise<Object|null>}
    */
   async function refreshConsentConfig(force) {
-    return fetchSignedConfig({
-      cfgUrl: CG_CONFIG_URL,
-      sigUrl: CG_CONFIG_SIG_URL,
+    const releasedV2 = await fetchReleaseConfig({
+      feedKey: 'consentGhostV2',
+      cacheKey: CG_CONFIG_CACHE_KEY,
+      validate: validateConsentConfig,
+      getCached: getCachedConsentConfig,
+      logPrefix: 'cg_v2',
+      force,
+    });
+    if (releasedV2) return releasedV2;
+    const released = await fetchReleaseConfig({
+      feedKey: 'consentGhost',
       cacheKey: CG_CONFIG_CACHE_KEY,
       validate: validateConsentConfig,
       getCached: getCachedConsentConfig,
       logPrefix: 'cg',
       force,
     });
+    return released;
   }
 
   /**
@@ -1544,58 +1685,11 @@ try {
    * @returns {boolean}
    */
   function validatePixelBlockConfig(cfg) {
-    try {
-      if (!cfg || typeof cfg !== 'object') return false;
-      if (cfg.schemaVersion !== PB_SCHEMA_VERSION) return false;
-      if (typeof cfg.configVersion !== 'string') return false;
-      if (!Array.isArray(cfg.providers)) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return !!CONFIG_VALIDATION && CONFIG_VALIDATION.validatePixelBlockConfig(cfg);
   }
 
-  /**
-   * Read the cached, valid PixelBlock config (or null).
-   * @returns {Promise<Object|null>}
-   */
-  async function getCachedPixelBlockConfig() {
-    try {
-      const s = await chrome.storage.local.get(PB_CONFIG_CACHE_KEY);
-      const c = s && s[PB_CONFIG_CACHE_KEY];
-      return validatePixelBlockConfig(c) ? c : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /**
-   * Fetch + verify + cache the PixelBlock remote config. Reuses the same
-   * verifyConfigSignature() (same pinned key, same ECDSA-P256/SHA-256).
-   * Fail-closed: any failure returns null and leaves the cache untouched.
-   * @param {boolean} force
-   * @returns {Promise<Object|null>}
-   */
-  async function refreshPixelBlockConfig(force) {
-    return fetchSignedConfig({
-      cfgUrl: PB_CONFIG_URL,
-      sigUrl: PB_CONFIG_SIG_URL,
-      cacheKey: PB_CONFIG_CACHE_KEY,
-      validate: validatePixelBlockConfig,
-      getCached: getCachedPixelBlockConfig,
-      logPrefix: 'pb',
-      force,
-    });
-  }
-
-  /**
-   * Message handler: return a verified PixelBlock config (cached, else fetch).
-   * @returns {Promise<{ok: boolean, config: Object|null}>}
-   */
-  async function handleGetPixelBlockConfig() {
-    let cfg = await getCachedPixelBlockConfig();
-    if (!cfg) cfg = await refreshPixelBlockConfig(false);
-    return { ok: !!cfg, config: cfg || null };
+  function handleGetPixelBlockConfig() {
+    return Promise.resolve({ ok: false, config: null });
   }
 
   // Inject the CMP API tier into the page's MAIN world only after the isolated
@@ -1608,7 +1702,7 @@ try {
       if (typeof sender.frameId === 'number' && sender.frameId !== 0) return { ok: false };
       const pageUrl = sender.url || sender.tab.url || '';
       const host = new URL(pageUrl).hostname;
-      const originHash = fnvHash(host);
+      const originHash = hashHost(host);
       const stored = await chrome.storage.local.get([CG_DISABLED_KEY, ALLOW_KEY]);
       if (stored && stored[CG_DISABLED_KEY] === true) return { ok: false, disabled: true };
       const allow = stored && stored[ALLOW_KEY];
@@ -1655,6 +1749,12 @@ try {
             handleGetTosConfig().then(sendResponse, () => sendResponse({ ok: false, config: null }));
             return true;
 
+          // Optional signed community grade for the sender's top-level site.
+          // The hostname comes from sender.tab.url, never message-controlled.
+          case 'pawsoff_tosShield_getReputation':
+            handleGetTosReputation(sender).then(sendResponse, () => sendResponse({ ok: false, reputation: null }));
+            return true;
+
           // ConsentGhost, hand back a verified, cached consent-config.json.
           case 'pawsoff_consentGhost_getConfig':
             handleGetConsentConfig().then(sendResponse, () => sendResponse({ ok: false, config: null }));
@@ -1677,7 +1777,7 @@ try {
           // Without a tabId, returns the global count (legacy PixelBlock
           // behavior) via getMatchedRules.
           case 'pawsoff_getDnrStats':
-            // Per-tab ALWAYS answers from the in-memory counter - the popup
+            // Per-tab ALWAYS answers from the in-memory counter — the popup
             // polls this every 1s while open, so it must never fall through to
             // quota-billed getMatchedRules (20 calls/10min would be gone in 20s).
             if (typeof message.tabId === 'number' && message.tabId >= 0) {
@@ -1697,7 +1797,7 @@ try {
 
           // Any feature (ConsentGhost / PixelBlock / ToS Shield) can forward a
           // diagnostic for the worker to persist.
-          // NOTE: no caller yet - nothing in the shipped content scripts sends
+          // NOTE: no caller yet — nothing in the shipped content scripts sends
           // this today (features write diagnostics to chrome.storage directly).
           // Kept as a deliberate forward-compat / SW-console sink, not dead code.
           case 'pawsoff_diag':
@@ -1716,7 +1816,7 @@ try {
           }
 
           // Lightweight liveness/handshake for any content script.
-          // NOTE: no caller yet - nothing in the shipped code sends this today.
+          // NOTE: no caller yet — nothing in the shipped code sends this today.
           // Kept as a deliberate forward-compat / SW-console handshake, not dead
           // code (reachable only from the service-worker console).
           case 'pawsoff_ping':
@@ -1730,14 +1830,11 @@ try {
           // catches even though DNR already blocked requests.
           case 'pawsoff_reconcile_now':
             // force=true: popup open is a user gesture (quota-exempt), and the
-            // user is actively looking - skip the 45s poll spacing.
+            // user is actively looking — skip the 45s poll spacing.
             reconcileDnrMatches(true).then(function () { sendResponse({ ok: true }); }, function () { sendResponse({ ok: false }); });
             return true;
 
-          // EasyPrivacy delta feed - DORMANT-BY-DESIGN opt-in control surface
-          // (mirrors the prevalence enforcer's pawsoff_pv_enforce_* messages).
-          // No shipped UI sends these yet; reachable only from the
-          // service-worker console or a future gated enable UI.
+          // Signed EasyPrivacy delta feed controls used by the Settings page.
           case 'pawsoff_ep_delta_setEnabled':
             setDeltaEnabled(!!message.enabled).then(function (r) { sendResponse(r); }, function () { sendResponse({ ok: false }); });
             return true;
@@ -1760,7 +1857,7 @@ try {
         return false;
       }
     });
-  } catch (_) { /* silent - runtime API unavailable */ }
+  } catch (_) { /* silent — runtime API unavailable */ }
 
   // ─────────────────────────────────────────────────────────────────────────
   //  Lifecycle, install / startup / periodic refresh
@@ -1775,9 +1872,8 @@ try {
       syncBaselineRules();
       syncEasyPrivacyRuleset();
       sweepExpiredPauses(); // clean up lapsed timed pauses + re-arm their alarms
-      refreshTosConfig(true);
+      refreshTosReputation(true);
       refreshConsentConfig(true);
-      refreshPixelBlockConfig(true);
       refreshEasyPrivacyDelta(true);
       try {
         chrome.alarms.create(CONFIG_ALARM, { periodInMinutes: CONFIG_REFRESH_MINUTES });
@@ -1809,8 +1905,21 @@ try {
     chrome.storage.onChanged.addListener((changes, area) => {
       try {
         if (area !== 'local') return;
-        if (changes[PB_SETTINGS_KEY] || changes[MASTER_KEY]) syncBaselineRules();
-        if (changes[MASTER_KEY]) { syncEasyPrivacyRuleset(); syncActionIcon(); syncEasyPrivacyDeltaRules(); }
+        if (changes[PB_SETTINGS_KEY] || changes[MASTER_KEY]) {
+          syncBaselineRules();
+          syncEasyPrivacyRuleset();
+          syncEasyPrivacyDeltaRules();
+        }
+        if (changes[MASTER_KEY]) {
+          // Use the event payload instead of reading storage again. Besides
+          // avoiding an unnecessary round trip, this starts setIcon while the
+          // MV3 storage event is still active, so Chrome cannot suspend the
+          // worker between the storage read and the toolbar repaint.
+          const off = changes[MASTER_KEY].newValue === false;
+          _actionIconEpoch++;
+          paintActionIcon(off);
+          if (off) _lastDnrPoll = Date.now();
+        }
         if (changes[DELTA_ENABLED_KEY] || changes[DELTA_SHADOW_KEY]) syncEasyPrivacyDeltaRules();
       } catch (err) {
         logRecord('dnr_onchanged_error', { message: err && err.message });
@@ -1852,7 +1961,11 @@ try {
   } catch (_) { /* silent */ }
   try {
     chrome.tabs.onRemoved.addListener(function (tabId) {
-      try { _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId); _tabNavEpoch.delete(tabId); clearTabBadgeSession(tabId); } catch (_) { /* silent */ }
+      try {
+        _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId);
+        _tabNavEpoch.delete(tabId); _tabNavStartedAt.delete(tabId);
+        clearTabBadgeSession(tabId);
+      } catch (_) { /* silent */ }
     });
   } catch (_) { /* silent */ }
   // SW cold start / wake from eviction → restore per-tab counts from the session
@@ -1865,7 +1978,7 @@ try {
   // onErrorOccurred/ERR_BLOCKED_BY_CLIENT instantly and with no quota. Counted
   // only if the domain is in our bundled tracker map, deduped by the same
   // opaque 'd'+idx key the reconcile path emits (no domain string stored).
-  // Observation only - no webRequest API → the reconcile tier still feeds the
+  // Observation only — no webRequest API → the reconcile tier still feeds the
   // badge, just slower.
   let _epDomainIndex = null; // lazy Map: tracker base domain → index into byid d
   async function loadEpDomainIndex() {
@@ -1877,18 +1990,26 @@ try {
     _epDomainIndex = m;
     return _epDomainIndex;
   }
+  function pslBaseDomainGetter() {
+    if (typeof self === 'undefined') return null;
+    const psl = self.PawsOffPSL;
+    if (!psl) return null;
+    if (typeof psl.getBaseDomain !== 'function') return null;
+    return psl.getBaseDomain;
+  }
   async function onBlockedRequest(tabId, url) {
     try {
       const epoch0 = tabEpoch(tabId); // captured before any await
-      const psl = (typeof self !== 'undefined') && self.PawsOffPSL;
-      if (!psl || !psl.getBaseDomain) return; // PSL not loaded → stand down
+      if (!(await isMasterProtectionEnabled())) return;
+      const getBaseDomain = pslBaseDomainGetter();
+      if (!getBaseDomain) return; // PSL not loaded → stand down
       const idx = await loadEpDomainIndex();
-      const key = blockedKeyForUrl(url, idx, psl.getBaseDomain);
+      const key = blockedKeyForUrl(url, idx, getBaseDomain);
       if (!key) return;
-      // The request may have been in flight for the PREVIOUS page - if the tab
+      // The request may have been in flight for the PREVIOUS page — if the tab
       // navigated while we awaited the domain index, this block belongs to a
       // page that's no longer showing; don't let it bump the new page's count.
-      if (tabEpoch(tabId) !== epoch0) return;
+      if (!(await badgeWorkStillCurrent(tabId, epoch0))) return;
       bumpBlockedReqs(_tabBlockedReqs, tabId); // every blocked REQUEST (popup stats)
       const before = tabBadgeCount(tabId);
       const after = addTrackers(_tabTrackers, tabId, [key]);
@@ -1908,103 +2029,128 @@ try {
     }
   } catch (_) { /* silent */ }
 
-  let _lastDnrPoll = 0;
   let _reconcileInFlight = null;
   // Chrome quota: getMatchedRules allows only 20 calls per 10 minutes (user-
   // gesture calls exempt); past it every call fails. 45s spacing caps unforced
   // polls at ~13/10min, leaving headroom for popup-forced (gesture) calls. The
-  // badge no longer depends on this poll (webRequest tier is instant) - this
+  // badge no longer depends on this poll (webRequest tier is instant) — this
   // paces the catch-feed/counter reconcile.
   const DNR_POLL_MIN_MS = 45000;
   // Serialize: alarm + tab-switch + popup can all trigger a reconcile at once.
   // Concurrent runs would double-read getMatchedRules and race _lastDnrPoll /
   // the counter writes. Coalesce overlapping calls onto one in-flight promise.
-  // `force` (popup open - a user gesture, quota-exempt) bypasses the spacing.
+  // `force` (popup open — a user gesture, quota-exempt) bypasses the spacing.
   function reconcileDnrMatches(force) {
     if (_reconcileInFlight) return _reconcileInFlight;
     if (!force && _lastDnrPoll && Date.now() - _lastDnrPoll < DNR_POLL_MIN_MS) return Promise.resolve();
     _reconcileInFlight = _reconcileDnrMatchesImpl().finally(function () { _reconcileInFlight = null; });
     return _reconcileInFlight;
   }
+  async function readNewDnrMatches() {
+    const dnr = chrome.declarativeNetRequest;
+    if (!dnr) return null;
+    if (typeof dnr.getMatchedRules !== 'function') return null;
+    if (!(await isTrackerProtectionEnabled())) {
+      _lastDnrPoll = Date.now();
+      return null;
+    }
+    const pollStartedAt = Date.now();
+    const result = await dnr.getMatchedRules({ minTimeStamp: _lastDnrPoll });
+    _lastDnrPoll = pollStartedAt;
+    if (!(await isTrackerProtectionEnabled())) return null;
+    if (!result) return [];
+    return Array.isArray(result.rulesMatchedInfo) ? result.rulesMatchedInfo : [];
+  }
+  function isEasyPrivacyMatch(match, ruleId) {
+    if (match.rule.rulesetId === EASYPRIVACY_RULESET_ID) return true;
+    return ruleId >= DELTA_ID_BASE && ruleId <= DELTA_ID_MAX;
+  }
+  function addEasyPrivacyMatch(summary, match, ruleId) {
+    summary.epTotal += 1;
+    const tabId = (typeof match.tabId === 'number') ? match.tabId : -1;
+    let entry = summary.epByTab.get(tabId);
+    if (!entry) {
+      entry = { ruleIds: new Set(), epoch: tabEpoch(tabId) };
+      summary.epByTab.set(tabId, entry);
+    }
+    if (entry.ruleIds.size < 12) entry.ruleIds.add(ruleId);
+  }
+  function pixelBlockProviderForRule(ruleId) {
+    if (ruleId < DNR_RULE_ID_BASE) return null;
+    return PIXELBLOCK_PROVIDERS.find((provider) => provider.dnrIndex === ruleId - DNR_RULE_ID_BASE) || null;
+  }
+  function summarizeDnrMatches(matches) {
+    const summary = { perProvider: {}, dnrTotal: 0, epByTab: new Map(), epTotal: 0 };
+    for (const match of matches) {
+      if (!matchBelongsToCurrentPage(match)) continue;
+      const ruleId = match.rule.ruleId;
+      if (isEasyPrivacyMatch(match, ruleId)) {
+        addEasyPrivacyMatch(summary, match, ruleId);
+        continue;
+      }
+      const provider = pixelBlockProviderForRule(ruleId);
+      if (!provider) continue;
+      summary.perProvider[provider.id] = (summary.perProvider[provider.id] || 0) + 1;
+      summary.dnrTotal += 1;
+    }
+    return summary;
+  }
+  async function incrementLocalCounter(key, amount) {
+    try {
+      const stored = await chrome.storage.local.get(key);
+      let current = 0;
+      if (stored) {
+        if (typeof stored[key] === 'number') current = stored[key];
+      }
+      await chrome.storage.local.set({ [key]: current + amount });
+    } catch (_) { /* monotonic counters are best-effort */ }
+  }
+  async function recordEasyPrivacyMatches(summary) {
+    if (!summary.epTotal) return;
+    await incrementLocalCounter(NET_TOTAL_KEY, summary.epTotal);
+    try { await writeNetworkCatches(summary.epByTab); } catch (_) { /* best-effort catch feed */ }
+  }
+  async function writeProviderDnrEvents(perProvider) {
+    for (const [providerId, count] of Object.entries(perProvider)) {
+      const key = '__pawsOff_pixelBlock_event_' + Date.now() + '_' + rand();
+      await chrome.storage.local.set({ [key]: { ts: Date.now(), provider: providerId, blocked_count: count, source: 'dnr', tracking_domains: [] } });
+    }
+  }
   async function _reconcileDnrMatchesImpl() {
     try {
-      if (!chrome.declarativeNetRequest || !chrome.declarativeNetRequest.getMatchedRules) return;
-      const { rulesMatchedInfo = [] } = await chrome.declarativeNetRequest.getMatchedRules({ minTimeStamp: _lastDnrPoll });
-      _lastDnrPoll = Date.now();
-      const perProvider = {};
-      let dnrTotal = 0;
-      const epByTab = new Map(); // EasyPrivacy network-tier matches grouped by tab
-      let epTotal = 0;
-      for (const m of rulesMatchedInfo) {
-        const id = m.rule.ruleId;
-        if (m.rule.rulesetId === EASYPRIVACY_RULESET_ID) {
-          epTotal += 1;
-          const tabId = (typeof m.tabId === 'number') ? m.tabId : -1;
-          if (!epByTab.has(tabId)) epByTab.set(tabId, new Set());
-          const set = epByTab.get(tabId);
-          if (set.size < 12) set.add(id); // cap distinct labels written per poll
-          continue;
-        }
-        // EasyPrivacy DELTA (dynamic band 20000-29999): same tier as the
-        // static ruleset above, just a live-sourced rule instead of a bundled
-        // one - without this branch a delta match falls through to the
-        // PixelBlock check below (id - DNR_RULE_ID_BASE never matches a
-        // provider) and silently vanishes from the badge/catch-feed even
-        // though DNR already blocked it.
-        if (id >= DELTA_ID_BASE && id <= DELTA_ID_MAX) {
-          epTotal += 1;
-          const tabId = (typeof m.tabId === 'number') ? m.tabId : -1;
-          if (!epByTab.has(tabId)) epByTab.set(tabId, new Set());
-          const set = epByTab.get(tabId);
-          if (set.size < 12) set.add(id);
-          continue;
-        }
-        if (id < DNR_RULE_ID_BASE) continue;
-        const provider = PIXELBLOCK_PROVIDERS.find((p) => p.dnrIndex === id - DNR_RULE_ID_BASE);
-        if (provider) { perProvider[provider.id] = (perProvider[provider.id] || 0) + 1; dnrTotal += 1; }
-      }
+      const rulesMatchedInfo = await readNewDnrMatches();
+      if (!rulesMatchedInfo) return;
+      const summary = summarizeDnrMatches(rulesMatchedInfo);
 
       // EasyPrivacy network tier: bump the all-time counter and surface each
       // blocked tracker in the per-site catch feed (hashed origin only).
-      if (epTotal) {
-        try {
-          const s = await chrome.storage.local.get(NET_TOTAL_KEY);
-          const cur = (s && typeof s[NET_TOTAL_KEY] === 'number') ? s[NET_TOTAL_KEY] : 0;
-          await chrome.storage.local.set({ [NET_TOTAL_KEY]: cur + epTotal });
-        } catch (_) { /* silent */ }
-        try { await writeNetworkCatches(epByTab); } catch (_) { /* silent */ }
-      }
-      if (!dnrTotal) return;
+      await recordEasyPrivacyMatches(summary);
+      if (!summary.dnrTotal) return;
 
       // Network-level (DNR) blocks feed the same monotonic counter the popup
       // displays and the DOM tier increments (__pawsOff_pb_total_blocked). The
-      // two tiers are disjoint - the DOM tier stops counting a domain once its
-      // DNR rule is registered - so summing them can't double-count.
-      try {
-        const s = await chrome.storage.local.get('__pawsOff_pb_total_blocked');
-        const cur = (s && typeof s['__pawsOff_pb_total_blocked'] === 'number') ? s['__pawsOff_pb_total_blocked'] : 0;
-        await chrome.storage.local.set({ '__pawsOff_pb_total_blocked': cur + dnrTotal });
-      } catch (_) { /* silent */ }
+      // two tiers are disjoint — the DOM tier stops counting a domain once its
+      // DNR rule is registered — so summing them can't double-count.
+      await incrementLocalCounter('__pawsOff_pb_total_blocked', summary.dnrTotal);
 
       // Per-provider breakdown under the canonical event prefix getStats() reads,
       // so the per-provider view reflects DNR blocks too.
-      for (const [providerId, count] of Object.entries(perProvider)) {
-        const key = '__pawsOff_pixelBlock_event_' + Date.now() + '_' + rand();
-        await chrome.storage.local.set({ [key]: { ts: Date.now(), provider: providerId, blocked_count: count, source: 'dnr', tracking_domains: [] } });
-      }
-    } catch (_) { /* silent - feedback API/permission unavailable */ }
+      await writeProviderDnrEvents(summary.perProvider);
+    } catch (_) { /* silent — feedback API/permission unavailable */ }
   }
-
-  // (Data-removal / push-rescan monitoring is not part of this free extension.)
 
   try {
     chrome.alarms.onAlarm.addListener((alarm) => {
       try {
         if (alarm && alarm.name === CONFIG_ALARM) {
-          refreshTosConfig(false);
-          refreshConsentConfig(false);    // shares the same daily refresh alarm
-          refreshPixelBlockConfig(false); // provider selectors, same cadence
-          refreshEasyPrivacyDelta(false); // live tracker-domain top-up, same cadence
+          // force: re-fetch the manifest instead of trusting the cached copy.
+          // Without this the periodic refresh reuses a stored manifest until it
+          // expires (ttl-days), so a new release goes unnoticed for days no
+          // matter how often this alarm fires. shouldAdoptManifest still gates
+          // adoption on a strictly higher sequence, so replays cannot land.
+          refreshTosReputation(true);
+          refreshConsentConfig(true);
+          refreshEasyPrivacyDelta(true);
         } else if (alarm && alarm.name === 'pawsoff_pb_dnr_reconcile') {
           reconcileDnrMatches();
         } else if (alarm && typeof alarm.name === 'string' && alarm.name.indexOf(PAUSE_ALARM_PREFIX) === 0) {
@@ -2033,11 +2179,12 @@ try {
         hasRequiredArrays: hasRequiredArrays,
         hasRequiredSections: hasRequiredSections,
         validateConfig: validateConfig,
+        validateTosReputationConfig: validateTosReputationConfig,
+        lookupTosReputation: lookupTosReputation,
         validateConsentConfig: validateConsentConfig,
         validatePixelBlockConfig: validatePixelBlockConfig,
         canVerifySignatures: canVerifySignatures,
         PINNED_PUBLIC_KEY_JWK: PINNED_PUBLIC_KEY_JWK,
-        shouldAdoptConfig: shouldAdoptConfig,
         validateDeltaConfig: validateDeltaConfig,
         computeDeltaBudget: computeDeltaBudget,
         planDeltaRules: planDeltaRules,
@@ -2048,8 +2195,21 @@ try {
         DELTA_RESOURCE_TYPES: DELTA_RESOURCE_TYPES,
         DELTA_ALLOWED_RESOURCE_TYPES: DELTA_ALLOWED_RESOURCE_TYPES,
         syncEasyPrivacyDeltaRules: syncEasyPrivacyDeltaRules,
-        bothResponsesOk: bothResponsesOk,
-        fnvHash: fnvHash,
+        syncEasyPrivacyRuleset: syncEasyPrivacyRuleset,
+        syncBaselineRules: syncBaselineRules,
+        isMasterProtectionEnabled: isMasterProtectionEnabled,
+        isTrackerProtectionEnabled: isTrackerProtectionEnabled,
+        masterProtectionEnabled: masterProtectionEnabled,
+        trackerProtectionEnabled: trackerProtectionEnabled,
+        syncActionIcon: syncActionIcon,
+        rehydrateBadges: rehydrateBadges,
+        reconcileDnrMatches: reconcileDnrMatches,
+        readNewDnrMatches: readNewDnrMatches,
+        getLastDnrPoll: function () { return _lastDnrPoll; },
+        isPinnedConfigUrl: SIGNED_CONFIG_CLIENT_API && SIGNED_CONFIG_CLIENT_API.isPinnedConfigUrl,
+        responseWithinLimit: BOUNDED_RESPONSE && BOUNDED_RESPONSE.headerWithinLimit,
+        readResponseTextWithinLimit: BOUNDED_RESPONSE && BOUNDED_RESPONSE.readText,
+        hashHost: hashHost,
         topOriginHashFromSender: topOriginHashFromSender,
         normAllowHost: normAllowHost,
         allowRuleHash: allowRuleHash,
@@ -2057,6 +2217,8 @@ try {
         domainAllowRuleId: domainAllowRuleId,
         buildSitePauseRule: buildSitePauseRule,
         buildDomainAllowRule: buildDomainAllowRule,
+        buildNetworkCatchWrites: buildNetworkCatchWrites,
+        networkCatchFieldsForRule: networkCatchFieldsForRule,
         handleAllowMessage: handleAllowMessage,
         allocateRuleId: allocateRuleId,
         keyForHost: keyForHost,
@@ -2069,6 +2231,8 @@ try {
         pauseAlarmName: pauseAlarmName,
         tabEpoch: tabEpoch,
         bumpTabEpoch: bumpTabEpoch,
+        matchBelongsToCurrentPage: matchBelongsToCurrentPage,
+        summarizeDnrMatches: summarizeDnrMatches,
         normalizeIdMap: normalizeIdMap,
         ALLOW_PRIORITY: ALLOW_PRIORITY,
         ALLOW_PAUSE_ID_BASE: ALLOW_PAUSE_ID_BASE,

@@ -1,14 +1,14 @@
 /* Cross-file hashHost consistency guard (audit item E2).
  *
  * PawsOff hashes hostnames with a one-way FNV-1a/32 digest ("h:" + 8 hex). That
- * exact function is DUPLICATED in 8 files because content scripts run in isolated
- * worlds and CANNOT share a module import - the duplication is a requirement, not
+ * exact function is DUPLICATED in 9 runtime files because content scripts run in isolated
+ * worlds and CANNOT share a module import — the duplication is a requirement, not
  * a smell, so we must NOT refactor it into one shared source (see CLAUDE.md).
  *
  * The risk of duplication is DRIFT: if one copy diverges, the popup/options can no
  * longer find a site's hashed radar/catch snapshot written by a content script,
  * silently breaking per-site UI. Individual copies are exercised by their own
- * tests; this test is the missing piece - it pins that ALL 8 copies produce
+ * tests; this guard pins all 9 copies to the same output
  * byte-for-byte identical output for the same input.
  *
  * It does NOT import the functions (most files have no test hook). Each copy is a
@@ -23,10 +23,10 @@ const { test, assert, eq } = require('./harness/framework');
 
 const ROOT = path.join(__dirname, '..');
 
-// The 8 isolated-world copies. name = the identifier each file uses.
+// The isolated-world copies. name = the identifier each file uses.
 const COPIES = [
-  { file: 'src/background/background.js',        name: 'fnvHash'  },
-  { file: 'src/content/tos-shield.js',           name: 'hashHost' },
+  { file: 'src/background/background.js',        name: 'hashHost' },
+  { file: 'src/content/tos-shield-core.js',      name: 'hashHost' },
   { file: 'src/content/pixel-block.js',          name: 'hashHost' },
   { file: 'src/content/consent-ghost.js',        name: 'hashHost' },
   { file: 'src/learn/prevalence-collector.js',   name: 'hashHost' },

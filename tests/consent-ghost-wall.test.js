@@ -1,4 +1,4 @@
-/* PawsOff - pay-or-consent WALL classifier (contentpass / focus.de).
+/* PawsOff — pay-or-consent WALL classifier (contentpass / focus.de).
  *
  * focus.de runs contentpass: a pay-OR-consent wall where the only non-accept
  * choice is a paid subscription. There is NO free reject, so clicking a

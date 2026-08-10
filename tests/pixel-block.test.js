@@ -1,4 +1,4 @@
-/* PawsOff - Tier-1 unit tests for the Pixel & Tracker Swatter (pixel-block.js).
+/* PawsOff — Tier-1 unit tests for the Pixel & Tracker Swatter (pixel-block.js).
  *
  * Covers the PURE, side-effect-free core of the content script:
  *   - classifyUrl(): the 4-way allow / skip / block / inspect decision that
@@ -7,7 +7,7 @@
  *     leaks a spy pixel (under-block), so it gets the most cases:
  *       • inline refs (cid:/blob:) are ALLOWED, data: is SKIPPED (no network)
  *       • a provider's legitimate proxy (Gmail googleusercontent) is ALLOWED
- *         even though it is remote - it already shields the user
+ *         even though it is remote — it already shields the user
  *       • known tracker domains + unambiguous tracker path/query are BLOCKED
  *       • everything unknown falls through to INSPECT (load-time size probe)
  *   - matchesTrackerDomain() exact + subdomain matching
@@ -68,7 +68,7 @@ test('classifyUrl: empty / non-http / unparseable input is skipped', () => {
 });
 
 test('classifyUrl: a provider legitimate proxy is allowed (outranks block)', () => {
-  // Gmail proxies remote images through googleusercontent - already shielding.
+  // Gmail proxies remote images through googleusercontent — already shielding.
   // The allowlist matches the full proxy host and its subdomains (host === p ||
   // host.endsWith('.' + p)), so derive a real entry rather than guess.
   const proxy = gmail.legitimateProxies[0];
@@ -136,7 +136,7 @@ test('defaultSettings: protection on globally and per provider', () => {
   const s = defaultSettings();
   eq(s.globalEnabled, true);
   eq(s.providers.gmail, true, 'gmail on by default');
-  eq(Object.keys(s.providers).length, PROVIDER_CONFIG.length, 'one toggle per provider - cannot drift');
+  eq(Object.keys(s.providers).length, PROVIDER_CONFIG.length, 'one toggle per provider — cannot drift');
 });
 
 test('normalizeSettings: coerces partial/invalid input, defaulting missing toggles on', () => {
@@ -193,7 +193,7 @@ test('extractEmbeddedUrl: fragment (Gmail), encoded query (Proton), path carry',
 });
 
 test('classifyUrl: Gmail-proxied TRACKER pixels are blocked (fragment decode)', () => {
-  // ci3 is on Gmail's legitimateProxies list - the embedded check must run FIRST.
+  // ci3 is on Gmail's legitimateProxies list — the embedded check must run FIRST.
   eq(classifyUrl('https://ci3.googleusercontent.com/meips/OPQ=s0-d-e1-ft#https://mailtrack.io/trace/mail/a.gif', gmail),
     'block', 'known tracker domain behind the listed proxy');
   // ci6 shard is NOT on the list; decode still catches the tracker.
@@ -205,7 +205,7 @@ test('classifyUrl: legitimate proxied images still load (no false positives)', (
   // A real photo behind the Gmail proxy stays allowed.
   eq(classifyUrl('https://ci3.googleusercontent.com/meips/LEGIT#https://example.com/cat-photo.jpg', gmail),
     'allow', 'listed proxy + clean embedded target');
-  // Unlisted shard + clean target falls through to inspect/skip - never block.
+  // Unlisted shard + clean target falls through to inspect/skip — never block.
   const c = classifyUrl('https://ci6.googleusercontent.com/meips/LEGIT#https://example.com/cat-photo.jpg', gmail);
   assert(c !== 'block', 'clean embedded target on unlisted shard is not blocked (got ' + c + ')');
 });

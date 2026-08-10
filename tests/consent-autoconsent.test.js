@@ -1,4 +1,4 @@
-/* PawsOff - consent-rules-engine (autoconsent layer) unit tests.
+/* PawsOff — consent-rules-engine (autoconsent layer) unit tests.
  *
  * Exercises PawsOff's OWN DSL interpreter against a tiny hand-rolled fake DOM
  * (no jsdom). Covers: array selector chains that pierce shadow DOM + same-origin
@@ -184,7 +184,7 @@ test('full rule: detect -> opt out -> verified via cookieContains', async () => 
 
 test('NEVER_MATCH pay-wall guard stands down without clicking', async () => {
   const doc = makeDoc();
-  const wall = append(doc, E('div', { id: 'wall', text: 'Subscribe to read - or accept all cookies' }));
+  const wall = append(doc, E('div', { id: 'wall', text: 'Subscribe to read — or accept all cookies' }));
   const rej = append(wall, E('button', { id: 'reject', text: 'Reject' }));
   const eng = engineFor(doc, { neverMatch: [/subscribe/i] });
   const rule = {

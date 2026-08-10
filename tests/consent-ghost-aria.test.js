@@ -1,9 +1,9 @@
-/* PawsOff - icon-only / aria-labelled consent buttons.
+/* PawsOff — icon-only / aria-labelled consent buttons.
  *
  * heuristicLabel and btnText fold aria-label/title/alt into the label surface
  * so icon-only buttons are classified, but still go through the same
  * classifyLabel → looksAccept veto + subscribe-wall guard as every other
- * label - no separate click path. Asserts: aria/title/alt "accept" is vetoed,
+ * label — no separate click path. Asserts: aria/title/alt "accept" is vetoed,
  * "reject" is accepted, and a subscribe label stays untouchable either way.
  */
 'use strict';

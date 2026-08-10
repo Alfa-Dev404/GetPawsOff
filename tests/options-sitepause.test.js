@@ -1,4 +1,4 @@
-/* PawsOff - settings-page per-site pause helpers (options.js).
+/* PawsOff — settings-page per-site pause helpers (options.js).
  *
  * The popup can pause PawsOff on the CURRENT site ("Unbreak this site"); these
  * helpers give the settings page parity by letting you pause sites by typing a
@@ -18,16 +18,18 @@ const O = loadOptions().internals || {};
 const {
   hashHost,
   normDomain,
+  siteHash,
   normalizeSiteMap,
   addSiteHost,
   removeSiteHost,
   sortedSiteHosts,
+  setSitePaused,
   ALLOW_KEY,
   CG_SITES,
 } = O;
 
 test('sitepause: the test hook exposes the per-site helpers + keys', () => {
-  ['hashHost', 'normDomain', 'normalizeSiteMap', 'addSiteHost', 'removeSiteHost', 'sortedSiteHosts']
+  ['hashHost', 'normDomain', 'normalizeSiteMap', 'addSiteHost', 'removeSiteHost', 'sortedSiteHosts', 'setSitePaused']
     .forEach((k) => assert(typeof O[k] === 'function', k + ' is a function'));
   eq(ALLOW_KEY, '__pawsOff_allowlist', 'shared allow-list key');
   eq(CG_SITES, '__pawsOff_consentGhost_sites', 'companion map key');
@@ -57,32 +59,76 @@ test('normalizeSiteMap: returns a clean {v:1,hosts} and drops invalid entries', 
   const st = normalizeSiteMap({ hosts: { 'Example.com': 5, 'bad domain': 9, 'x.com': 0, 'y.com': 'nope' } });
   eq(st.v, 1);
   eq(Object.keys(st.hosts).length, 1, 'only the one valid, positively-timestamped host survives');
-  eq(st.hosts['example.com'], 5, 'normalized + timestamp kept');
+  eq(st.hosts[hashHost('example.com')], 5, 'legacy plaintext is migrated to a hash');
+  assert(!JSON.stringify(st).includes('example.com'), 'normalized map stores no plaintext hostname');
   eq(normalizeSiteMap(null).hosts && Object.keys(normalizeSiteMap(null).hosts).length, 0, 'garbage → empty');
 });
 
-test('addSiteHost: adds a normalized host without mutating the input', () => {
-  const before = { v: 1, hosts: { 'a.com': 1 } };
+test('addSiteHost: adds a hashed host without mutating the input', () => {
+  const aHash = hashHost('a.com');
+  const bHash = hashHost('b.com');
+  const before = { v: 1, hosts: { [aHash]: 1 } };
   const after = addSiteHost(before, 'https://www.B.com/');
   assert(after !== before, 'returns a fresh object');
   eq(Object.keys(before.hosts).length, 1, 'input untouched');
-  assert(after.hosts['b.com'] > 0, 'normalized host added with a timestamp');
-  assert(after.hosts['a.com'] === 1, 'existing host preserved');
-  eq(addSiteHost(before, 'garbage value').hosts['a.com'], 1, 'invalid input is a no-op add');
+  assert(after.hosts[bHash] > 0, 'normalized host hash added with a timestamp');
+  assert(after.hosts[aHash] === 1, 'existing hash preserved');
+  assert(!JSON.stringify(after).includes('b.com'), 'plaintext input is not retained');
+  eq(addSiteHost(before, 'garbage value').hosts[aHash], 1, 'invalid input is a no-op add');
   assert(!('' in addSiteHost(before, 'garbage value').hosts), 'no empty-key entry created');
 });
 
-test('removeSiteHost: removes a host (normalizing first) without mutation', () => {
-  const before = { v: 1, hosts: { 'a.com': 1, 'b.com': 2 } };
-  const after = removeSiteHost(before, 'https://www.A.com');
+test('removeSiteHost: removes by hash without mutation or plaintext recovery', () => {
+  const aHash = hashHost('a.com');
+  const bHash = hashHost('b.com');
+  const before = { v: 1, hosts: { [aHash]: 1, [bHash]: 2 } };
+  const after = removeSiteHost(before, siteHash(aHash));
   assert(after !== before, 'fresh object');
   eq(Object.keys(before.hosts).length, 2, 'input untouched');
-  assert(!('a.com' in after.hosts), 'normalized host removed');
-  assert('b.com' in after.hosts, 'others kept');
+  assert(!(aHash in after.hosts), 'hash removed');
+  assert(bHash in after.hosts, 'others kept');
+  eq(siteHash(aHash), aHash, 'existing hash is accepted as the removal key');
 });
 
 test('sortedSiteHosts: newest-first by timestamp', () => {
-  const list = sortedSiteHosts({ v: 1, hosts: { 'old.com': 100, 'new.com': 300, 'mid.com': 200 } });
-  eq(list.join(','), 'new.com,mid.com,old.com', 'sorted newest-first');
+  const oldHash = hashHost('old.com');
+  const newHash = hashHost('new.com');
+  const midHash = hashHost('mid.com');
+  const list = sortedSiteHosts({ v: 1, hosts: { [oldHash]: 100, [newHash]: 300, [midHash]: 200 } });
+  eq(list.join(','), [newHash, midHash, oldHash].join(','), 'hashes sorted newest-first');
   eq(sortedSiteHosts(null).length, 0, 'empty map → empty list');
+});
+
+test('site pause storage commits only after background DNR success', async () => {
+  const failed = loadOptions({
+    sendMessage(_message, callback) { callback({ ok: false }); },
+  });
+  eq(await failed.internals.setSitePaused('example.com', true), false);
+  assert(!failed.getStore()[ALLOW_KEY], 'failed DNR pause leaves the allow-list untouched');
+
+  const succeeded = loadOptions({
+    sendMessage(_message, callback) { callback({ ok: true }); },
+  });
+  eq(await succeeded.internals.setSitePaused('example.com', true), true);
+  const stored = succeeded.getStore()[ALLOW_KEY];
+  assert(stored.sites[hashHost('example.com')].paused > 0, 'successful DNR pause is persisted');
+
+  const existing = { v: 1, sites: { [hashHost('example.com')]: { paused: 10, domains: {} } } };
+  const failedUnpause = loadOptions({
+    initialStore: { [ALLOW_KEY]: existing },
+    sendMessage(_message, callback) { callback({ ok: false }); },
+  });
+  eq(await failedUnpause.internals.setSitePaused(hashHost('example.com'), false), false);
+  eq(failedUnpause.getStore()[ALLOW_KEY].sites[hashHost('example.com')].paused, 10);
+
+  const successfulUnpause = loadOptions({
+    initialStore: { [ALLOW_KEY]: existing },
+    sendMessage(_message, callback) { callback({ ok: true }); },
+  });
+  eq(await successfulUnpause.internals.setSitePaused(hashHost('example.com'), false), true);
+  eq(
+    successfulUnpause.getStore()[ALLOW_KEY].sites[hashHost('example.com')].paused,
+    0,
+    'successful DNR unpause persists the unpaused state',
+  );
 });

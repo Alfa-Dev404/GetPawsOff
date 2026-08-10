@@ -1,4 +1,4 @@
-/* PawsOff - regression tests for the popup headline stats strip.
+/* PawsOff — regression tests for the popup headline stats strip.
  *
  * Covers the new per-site headline logic. The "Blocked" stat now sums real-time
  * DNR requests for the current tab + DOM/pixel tier blocks from state.catches.
@@ -16,7 +16,7 @@ const { loadPopup } = require('./harness/sandbox');
 const P = loadPopup().internals || {};
 
 // Restore the shared popup state so one test's mutations can't leak into the
-// next - even when an assertion throws (hence finally, not a trailing reset).
+// next — even when an assertion throws (hence finally, not a trailing reset).
 function resetState() {
   const s = P.getState();
   s._tabDnrBlocked = 0;
@@ -59,15 +59,15 @@ test('computeHeadline: Blocked sums real-time network + DOM tiers for current si
 
 test('computeHeadline: DNR-sourced catches are not double-counted', () => {
   // Real DNR records are tagged source:'dnr' (no `network` flag). They must be
-  // excluded from the DOM tally - they're already in the real-time _tabDnrBlocked
-  // count - otherwise Blocked/Data-saved inflate.
+  // excluded from the DOM tally — they're already in the real-time _tabDnrBlocked
+  // count — otherwise Blocked/Data-saved inflate.
   const state = P.getState();
   try {
     state._tabDnrBlocked = 5;
     state.catches = [
-      { feature: 'tracker', source: 'dnr' }, // network block - must NOT add to DOM tally
+      { feature: 'tracker', source: 'dnr' }, // network block — must NOT add to DOM tally
       { feature: 'tracker', source: 'dnr' },
-      { feature: 'tracker' }                  // genuine DOM block - counts
+      { feature: 'tracker' }                  // genuine DOM block — counts
     ];
     const h = P.computeHeadline();
     eq(h.blocked, 6, 'real-time (5) + 1 DOM block; the two source:dnr records are excluded');

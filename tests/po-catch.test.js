@@ -1,9 +1,9 @@
-/* PawsOff - Tier-1 unit tests for the shared catch recorder (po-catch.js).
+/* PawsOff — Tier-1 unit tests for the shared catch recorder (po-catch.js).
  *
  * po-catch is loaded first in every feature content script and is what feeds the
  * popup's "Today's catch". Two things matter and both are tested here:
  *   1. PRIVACY (the brand promise): the visited site is recorded ONLY as a
- *      one-way FNV-1a digest - never a plaintext host/URL - and nothing is ever
+ *      one-way FNV-1a digest — never a plaintext host/URL — and nothing is ever
  *      transmitted. We assert the page hostname never appears in a written
  *      record and that originHash is the canonical digest.
  *   2. The convenience wrappers (recordTracker/Banner/Wall/Clause) produce the
@@ -12,7 +12,7 @@
  *
  * The harness loads the REAL shipping file with a callback-style in-memory
  * chrome.storage; record() is synchronous under that stub so getStore() reflects
- * writes immediately. No source edit - po-catch exposes window.PawsOffCatch.
+ * writes immediately. No source edit — po-catch exposes window.PawsOffCatch.
  */
 'use strict';
 
@@ -73,7 +73,7 @@ test('record: writes under the catch prefix with ts, feature, and a HASHED origi
   eq(one.originHash, fnv('news.example.com'), 'origin stored as the canonical digest');
 });
 
-test('record: PRIVACY - the plaintext hostname never appears in the record', () => {
+test('record: PRIVACY — the plaintext hostname never appears in the record', () => {
   const { one } = catches((api) => api.record({ feature: 'banner' }), { hostname: 'secret-site.example.org' });
   assert(JSON.stringify(one).indexOf('secret-site.example.org') === -1, 'no plaintext host leaks into storage');
 });

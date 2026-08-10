@@ -1,10 +1,10 @@
-/* PawsOff - ConsentGhost scan generation-guard (the double-click race fix).
+/* PawsOff — ConsentGhost scan generation-guard (the double-click race fix).
  *
  * scanAndReject() is async: it awaits the autoconsent layer and per-framework
  * step engines BEFORE it clicks. The old in-flight lock was a bare boolean
  * (`_scanning`) that resetForNavigation() force-cleared. If an await resolved
  * AFTER a client-side navigation reset, the orphaned scan could resume and click
- * on the freshly-navigated page while a NEW scan was also running - a double
+ * on the freshly-navigated page while a NEW scan was also running — a double
  * click (e.g. on pushState-spam consent walls like repubblica.it).
  *
  * The fix replaces that boolean with a monotonic GENERATION guard: a scan
@@ -43,7 +43,7 @@ test('scanguard: a scan started AFTER the reset owns the current generation', ()
   assert(g.isCurrent(b), 'scan B owns the current generation');
 });
 
-test('scanguard: models the double-click fix - resumed scan A bails, scan B proceeds', () => {
+test('scanguard: models the double-click fix — resumed scan A bails, scan B proceeds', () => {
   // A: _scanning=true, captured gen ; navigation invalidates ; B: new scan.
   // When A resumes from its await, the guard must tell it to bail before click.
   const g = makeScanGuard();

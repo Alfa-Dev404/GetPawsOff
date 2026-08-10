@@ -1,4 +1,4 @@
-/* PawsOff - unit tests for the OBSERVE-ONLY prevalence learner.
+/* PawsOff — unit tests for the OBSERVE-ONLY prevalence learner.
  *
  * These pin the privacy + correctness invariants that the upcoming Complex
  * Method refactor of record()/spotted() must NOT change:
@@ -86,6 +86,21 @@ test('spotted: dedupes, drops first/same-owner, and sorts by score desc', async 
   eq(list[1].domain, 'small.com');
   assert(list[0].score >= list[1].score, 'sorted by score desc');
   eq(list[0].verdict, 'block');
+  eq(list[0].domainHash, NS.hashHost('big.com'), 'live result carries the persisted hash key');
+  const labels = await NS.resolveSpots(list.map((spot) => spot.domainHash));
+  eq(labels[list[0].domainHash], 'big.com', 'live memory resolves a radar label');
+});
+
+test('hash collisions stand down memory-only domain resolution', async () => {
+  const { NS } = loadLearner();
+  const first = 'd1v2jhnw.com';
+  const second = 'd164wo2a.com';
+  const key = NS.hashHost(first);
+  eq(NS.hashHost(second), key, 'fixture exercises an actual FNV-1a/32 collision');
+  await NS.record('a.com', [first]);
+  await NS.record('b.com', [second]);
+  const labels = await NS.resolveSpots([key]);
+  assert(!labels[key], 'ambiguous hash never resolves to either hostname');
 });
 
 test('compact: prunes sightings older than the TTL', async () => {
@@ -96,6 +111,8 @@ test('compact: prunes sightings older than the TTL', async () => {
   entry.s[fp] = today() - 200; // older than SITE_TTL_DAYS (180)
   await NS.compact();
   assert(!getStore()[SNITCH_KEY][NS.hashHost('old.com')], 'stale tracker pruned');
+  const labels = await NS.resolveSpots([NS.hashHost('old.com')]);
+  assert(!labels[NS.hashHost('old.com')], 'memory-only label pruned with its tracker');
 });
 
 test('getStats: aggregates verdict counts and ranks the worst first', async () => {
@@ -110,6 +127,41 @@ test('getStats: aggregates verdict counts and ranks the worst first', async () =
   eq(stats.wouldBlock, 1);
   eq(stats.observing, 1);
   eq(stats.top[0].domain, NS.hashHost('evil.com')); // storage is hash-only
+});
+
+test('size estimate ignores malformed persisted observations', async () => {
+  const { NS, getStore } = loadLearner();
+  getStore().__pawsOff_pv_sizes = {
+    [NS.hashHost('valid.example')]: { total: 120, count: 3 },
+    [NS.hashHost('nan.example')]: { total: NaN, count: 2 },
+    [NS.hashHost('negative.example')]: { total: -10, count: 2 },
+    [NS.hashHost('fractional.example')]: { total: 10, count: 1.5 },
+    [NS.hashHost('zero.example')]: { total: 10, count: 0 },
+  };
+  const estimate = await NS.getSizeEstimate();
+  eq(estimate.avgBytes, 40);
+  eq(estimate.domainCount, 1);
+  eq(estimate.totalObservations, 3);
+});
+
+test('recordSizes repairs malformed existing accumulators before adding', async () => {
+  for (const malformed of [
+    'broken',
+    { total: NaN, count: 2 },
+    { total: 20, count: 1.5 },
+    { total: -10, count: 2 },
+    { total: 20, count: 0 },
+    { total: 20, count: -1 },
+  ]) {
+    const { NS, getStore } = loadLearner();
+    const key = NS.hashHost('tracker.example');
+    getStore().__pawsOff_pv_sizes = { [key]: malformed };
+    await NS.recordSizes({ 'tracker.example': 40 });
+    const repaired = getStore().__pawsOff_pv_sizes[key];
+    eq(repaired.total, 40);
+    eq(repaired.count, 1);
+    eq(repaired.avg, 40);
+  }
 });
 
 test('reset: clears all learned state', async () => {

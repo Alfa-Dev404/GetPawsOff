@@ -1,4 +1,4 @@
-/* PawsOff - unit tests for the background allow-list → DNR allow rules. */
+/* PawsOff — unit tests for the background allow-list → DNR allow rules. */
 'use strict';
 const { test, assert, eq } = require('./harness/framework');
 const { loadBackground } = require('./harness/sandbox');
@@ -73,6 +73,27 @@ test('allow-rules: unpauseSite removes only', async () => {
   const call = chrome.declarativeNetRequest._calls.pop();
   eq(call.removeRuleIds[0], I.sitePauseRuleId('news.example.com'));
   eq(call.addRules.length, 0);
+});
+
+test('allow-rules: hash-only unpause removes the persisted pause mapping', async () => {
+  const { I, chrome } = bg();
+  await I.handleAllowMessage({ op: 'pauseSite', site: 'news.example.com' });
+  chrome.declarativeNetRequest._calls.pop();
+  const siteHash = I.keyForHost('news.example.com');
+  const res = await I.handleAllowMessage({ op: 'unpauseSiteHash', siteHash });
+  eq(res.ok, true);
+  const call = chrome.declarativeNetRequest._calls.pop();
+  eq(call.removeRuleIds[0], I.sitePauseRuleId('news.example.com'));
+  eq(call.addRules.length, 0);
+});
+
+test('allow-rules: hash-only unpause rejects malformed and unknown hashes', async () => {
+  const { I, chrome } = bg();
+  let res = await I.handleAllowMessage({ op: 'unpauseSiteHash', siteHash: 'news.example.com' });
+  eq(res.ok, false);
+  res = await I.handleAllowMessage({ op: 'unpauseSiteHash', siteHash: 'h:12345678' });
+  eq(res.ok, false);
+  eq(chrome.declarativeNetRequest._calls.length, 0);
 });
 
 test('allow-rules: allowDomain then blockDomain target the same id', async () => {

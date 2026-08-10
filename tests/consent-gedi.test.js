@@ -1,4 +1,4 @@
-/* PawsOff - GEDI (Sourcepoint) own consent rule unit tests.
+/* PawsOff — GEDI (Sourcepoint) own consent rule unit tests.
  *
  * Exercises src/content/pawsoff-consent-rules.js (PawsOff-authored, NOT
  * autoconsent) against the shared engine + a tiny fake DOM. Covers: the

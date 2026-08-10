@@ -1,18 +1,17 @@
-/* PawsOff - EasyPrivacy DELTA feed: unit tests for the pure logic (v1.0).
+/* PawsOff — EasyPrivacy DELTA feed: unit tests for the pure logic (v1.0).
  *
  * The delta feed is a signed, live top-up of tracker domains applied as a
- * small, quota-bounded set of DYNAMIC DNR rules - for trackers that emerge
+ * small, quota-bounded set of DYNAMIC DNR rules — for trackers that emerge
  * BETWEEN refreshes of the bundled static ruleset (which can only ever be
  * updated via an ordinary extension release, never a live fetch). This file
  * covers the PURE functions only: schema validation, budget math, and rule
  * planning. Live chrome.declarativeNetRequest behaviour (actually applying a
  * rule, priority ordering against real DNR state) is an E2E concern.
  *
- * DORMANT BY DESIGN, same as the prevalence enforcer: __pawsOff_ep_delta_enabled
- * defaults false and no shipped UI flips it - these tests pin the SAFETY
- * properties (budget respected, id band collision-free, dedup against the
- * bundled list, shadow mode applies nothing) that must hold before anyone
- * ever turns this on.
+ * The conservative, signed feed is active by default and has a shipped opt-out.
+ * These tests pin the SAFETY properties (budget respected, id band
+ * collision-free, strict domain validation, dedup against the bundled list,
+ * and shadow mode applying nothing).
  */
 'use strict';
 const path = require('path');
@@ -40,8 +39,21 @@ const {
 } = I;
 
 // Enforcer TESTAPI is available via plain require() (module.exports = TESTAPI
-// when loaded outside the SW sandbox) - see tests/prevalence-enforcer.test.js.
+// when loaded outside the SW sandbox) — see tests/prevalence-enforcer.test.js.
 const E = require(path.join(__dirname, '..', 'src', 'learn', 'prevalence-enforcer.js'));
+
+function deltaConfig(overrides) {
+  return {
+    schemaVersion: 1,
+    configVersion: '20260714000000',
+    source: 'easyprivacy',
+    sourceVersion: '20260714000000',
+    sourceLicense: 'GPL-3.0-or-later OR CC-BY-SA-3.0-or-later',
+    attribution: 'EasyPrivacy fixture',
+    domains: [],
+    ...(overrides || {}),
+  };
+}
 
 test('easyprivacy-delta: the guarded test hook exposes the pure helpers', () => {
   ['validateDeltaConfig', 'computeDeltaBudget', 'planDeltaRules'].forEach((k) => {
@@ -74,23 +86,33 @@ test('DELTA_PRIORITY stays below the user allow-list priority (2), same as the e
 
 // ── validateDeltaConfig ────────────────────────────────────────────────────
 test('validateDeltaConfig: accepts a well-formed feed, rejects everything else', () => {
-  assert(validateDeltaConfig({
-    schemaVersion: 1, configVersion: '2026-07-02.1',
+  assert(validateDeltaConfig(deltaConfig({
     domains: [{ domain: 'newtracker.example' }, { domain: 'sneaky.io', resourceTypes: ['ping'] }],
-  }), 'valid feed accepted');
+  })), 'valid feed accepted');
   assert(!validateDeltaConfig(null), 'null rejected');
   assert(!validateDeltaConfig('not an object'), 'string rejected');
-  assert(!validateDeltaConfig({ schemaVersion: 2, configVersion: '1', domains: [] }), 'wrong schema version rejected');
-  assert(!validateDeltaConfig({ schemaVersion: 1, configVersion: 5, domains: [] }), 'non-string configVersion rejected');
-  assert(!validateDeltaConfig({ schemaVersion: 1, configVersion: '1', domains: 'nope' }), 'domains must be an array');
-  assert(!validateDeltaConfig({ schemaVersion: 1, configVersion: '1', domains: [{ domain: '' }] }), 'empty domain string rejected');
-  assert(!validateDeltaConfig({ schemaVersion: 1, configVersion: '1', domains: [{}] }), 'missing domain field rejected');
-  assert(!validateDeltaConfig({ schemaVersion: 1, configVersion: '1', domains: [{ domain: 'x.com', resourceTypes: 'ping' }] }),
+  assert(!validateDeltaConfig(deltaConfig({ schemaVersion: 2 })), 'wrong schema version rejected');
+  assert(!validateDeltaConfig(deltaConfig({ configVersion: 5 })), 'non-string configVersion rejected');
+  assert(!validateDeltaConfig(deltaConfig({ configVersion: 'future' })), 'non-canonical configVersion rejected');
+  assert(!validateDeltaConfig(deltaConfig({ domains: 'nope' })), 'domains must be an array');
+  assert(!validateDeltaConfig(deltaConfig({ domains: [{ domain: '' }] })), 'empty domain string rejected');
+  assert(!validateDeltaConfig(deltaConfig({ domains: [{}] })), 'missing domain field rejected');
+  ['Tracker.com', 'https://tracker.com', 'tracker.com/path', '*.tracker.com', '-tracker.com', 'tracker..com'].forEach((domain) => {
+    assert(!validateDeltaConfig(deltaConfig({ domains: [{ domain }] })), `unsafe domain rejected: ${domain}`);
+  });
+  assert(!validateDeltaConfig(deltaConfig({
+    domains: Array.from({ length: MAX_DELTA_RULES + 1 }, (_, i) => ({ domain: `t${i}.example` })),
+  })), 'feed cannot exceed the dynamic-rule self cap');
+  assert(!validateDeltaConfig(deltaConfig({ domains: [{ domain: 'x.com', resourceTypes: 'ping' }] })),
     'resourceTypes must be an array, not a string');
-  assert(validateDeltaConfig({ schemaVersion: 1, configVersion: '1', domains: [] }), 'empty domains list is still valid (nothing to add)');
+  assert(validateDeltaConfig(deltaConfig()), 'empty domains list is still valid (nothing to add)');
+  assert(!validateDeltaConfig(deltaConfig({ action: 'redirect' })), 'unknown top-level fields rejected');
+  assert(!validateDeltaConfig(deltaConfig({
+    domains: [{ domain: 'x.com', action: 'redirect' }],
+  })), 'unknown item fields rejected');
 });
 
-// ── resourceTypes CEILING - the signed feed may pick, never expand, the set
+// ── resourceTypes CEILING — the signed feed may pick, never expand, the set
 //    of blockable resource types. Without this, feed content alone would
 //    decide whether a domain can hit main_frame/sub_frame/websocket/media,
 //    defeating the "never auto-blocks a frame/payment/video load" guarantee
@@ -98,35 +120,33 @@ test('validateDeltaConfig: accepts a well-formed feed, rejects everything else',
 test('validateDeltaConfig: rejects the WHOLE config if any domain smuggles an out-of-bounds resourceType', () => {
   const smuggled = ['main_frame', 'sub_frame', 'websocket', 'media', 'object', 'csp_report', 'other'];
   for (const t of smuggled) {
-    assert(!validateDeltaConfig({
-      schemaVersion: 1, configVersion: '1',
+    assert(!validateDeltaConfig(deltaConfig({
       domains: [{ domain: 'fine.com' }, { domain: 'evil.com', resourceTypes: [t] }],
-    }), 'rejects resourceTypes containing ' + t);
+    })), 'rejects resourceTypes containing ' + t);
   }
-  // Mixing one allowed + one disallowed type in the SAME array still rejects -
+  // Mixing one allowed + one disallowed type in the SAME array still rejects —
   // partial legitimacy does not launder the disallowed entry through.
-  assert(!validateDeltaConfig({
-    schemaVersion: 1, configVersion: '1',
+  assert(!validateDeltaConfig(deltaConfig({
     domains: [{ domain: 'x.com', resourceTypes: ['ping', 'sub_frame'] }],
-  }), 'one bad type in an otherwise-fine array still rejects the config');
-  assert(!validateDeltaConfig({
-    schemaVersion: 1, configVersion: '1', domains: [{ domain: 'x.com', resourceTypes: [] }],
-  }), 'empty resourceTypes array rejected (ambiguous - omit the field for the default instead)');
+  })), 'one bad type in an otherwise-fine array still rejects the config');
+  assert(!validateDeltaConfig(deltaConfig({
+    domains: [{ domain: 'x.com', resourceTypes: [] }],
+  })), 'empty resourceTypes array rejected (ambiguous — omit the field for the default instead)');
 });
 test('validateDeltaConfig: accepts every type actually in the allow-list', () => {
   for (const t of Array.from(DELTA_ALLOWED_RESOURCE_TYPES)) {
-    assert(validateDeltaConfig({
-      schemaVersion: 1, configVersion: '1', domains: [{ domain: 'x.com', resourceTypes: [t] }],
-    }), t + ' is allowed');
+    assert(validateDeltaConfig(deltaConfig({
+      domains: [{ domain: 'x.com', resourceTypes: [t] }],
+    })), t + ' is allowed');
   }
 });
 
-// ── computeDeltaBudget - same shared-30k-cap math as the enforcer's, kept
+// ── computeDeltaBudget — same shared-30k-cap math as the enforcer's, kept
 //    independently so neither dormant system can destabilise the other ──────
 test('computeDeltaBudget: subtracts headroom + other rules from the shared cap', () => {
   eq(computeDeltaBudget({ maxDynamic: 30000, headroom: 1000, otherRuleCount: 0 }), 2000); // capped by MAX_DELTA_RULES
   eq(computeDeltaBudget({ maxDynamic: 30000, headroom: 1000, otherRuleCount: 0, selfCap: 100000 }), 10000); // capped by span
-  // available (9000) now binds instead of spanCap (10000) or selfCap (100000) -
+  // available (9000) now binds instead of spanCap (10000) or selfCap (100000) —
   // proves otherRuleCount genuinely shrinks the budget, not just along for the ride.
   eq(computeDeltaBudget({ maxDynamic: 15000, headroom: 1000, otherRuleCount: 5000, selfCap: 100000 }), 9000);
 });
@@ -158,7 +178,7 @@ test('planDeltaRules: an ALLOWED per-domain resourceTypes override is honoured',
   eq(addRules[0].condition.resourceTypes.join(','), 'script,ping');
 });
 
-test('planDeltaRules: defense-in-depth - an out-of-bounds override falls back to the safe default, never through', () => {
+test('planDeltaRules: defense-in-depth — an out-of-bounds override falls back to the safe default, never through', () => {
   // validateDeltaConfig should already reject this config upstream, but
   // planDeltaRules is independently callable and must not trust its input.
   const { addRules } = planDeltaRules(
@@ -226,21 +246,21 @@ test('planDeltaRules: empty input produces an empty plan, not a throw', () => {
 //    never swallowed as ok:true (CodeRabbit finding, 2026-07-03) ────────────
 // Both the "disabled/master-off" and "shadow" branches clear the delta band
 // via updateDynamicRules before returning. If that call throws, the failure
-// must propagate to the outer catch (ok:false) - reporting ok:true while a
+// must propagate to the outer catch (ok:false) — reporting ok:true while a
 // removal silently failed would misrepresent "protection stood down" as true
 // when old block rules could still be live.
 test('syncEasyPrivacyDeltaRules: a DNR removal failure while disabled is reported, not swallowed', async () => {
   const { internals: I, chrome } = loadBackground();
+  chrome.storage.local.set({ __pawsOff_ep_delta_enabled: false });
   chrome.declarativeNetRequest.getDynamicRules = () => Promise.resolve([{ id: 20005 }]); // a stale delta rule
   chrome.declarativeNetRequest.updateDynamicRules = () => Promise.reject(new Error('quota exceeded'));
-  // DELTA_ENABLED_KEY unset -> defaults to disabled -> takes the removal path.
   const res = await I.syncEasyPrivacyDeltaRules();
   eq(res.ok, false);
 });
 
 test('syncEasyPrivacyDeltaRules: a DNR removal failure entering shadow mode is reported, not swallowed', async () => {
   const { internals: I, chrome } = loadBackground();
-  chrome.storage.local.set({ __pawsOff_ep_delta_enabled: true }); // shadow defaults true when enabled
+  chrome.storage.local.set({ __pawsOff_ep_delta_enabled: true, __pawsOff_ep_delta_shadow: true });
   chrome.declarativeNetRequest.getDynamicRules = () => Promise.resolve([{ id: 20005 }]);
   chrome.declarativeNetRequest.updateDynamicRules = () => Promise.reject(new Error('quota exceeded'));
   const res = await I.syncEasyPrivacyDeltaRules();
@@ -249,7 +269,44 @@ test('syncEasyPrivacyDeltaRules: a DNR removal failure entering shadow mode is r
 
 test('syncEasyPrivacyDeltaRules: succeeds normally when DNR calls succeed (sanity)', async () => {
   const { internals: I, chrome } = loadBackground();
-  const res = await I.syncEasyPrivacyDeltaRules(); // disabled by default, nothing to remove
+  const res = await I.syncEasyPrivacyDeltaRules(); // enabled by default; empty cache means zero rules
+  eq(res.ok, true);
+  eq(res.enabled, true);
+  eq(res.shadow, false);
+  eq(res.applied, 0);
+});
+
+test('syncEasyPrivacyDeltaRules: Trackers off removes stale signed delta rules', async () => {
+  const { internals: I, chrome } = loadBackground();
+  await chrome.storage.local.set({ __pawsOff_pixelBlock_settings: { globalEnabled: false } });
+  chrome.declarativeNetRequest.getDynamicRules = () => Promise.resolve([{ id: 20005 }]);
+  const res = await I.syncEasyPrivacyDeltaRules();
   eq(res.ok, true);
   eq(res.enabled, false);
+  eq(chrome.declarativeNetRequest._calls.length, 1);
+  eq(chrome.declarativeNetRequest._calls[0].removeRuleIds[0], 20005);
+});
+
+test('syncEasyPrivacyDeltaRules: a trigger during reconciliation schedules a final state pass', async () => {
+  const { internals: I, chrome } = loadBackground();
+  let updates = 0;
+  let releaseFirst;
+  let markFirstStarted;
+  const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
+  chrome.declarativeNetRequest.updateDynamicRules = async () => {
+    updates += 1;
+    if (updates === 1) {
+      markFirstStarted();
+      await new Promise((resolve) => { releaseFirst = resolve; });
+    }
+  };
+  const firstPending = I.syncEasyPrivacyDeltaRules();
+  await firstStarted;
+  const secondPending = I.syncEasyPrivacyDeltaRules();
+  eq(updates, 1, 'second pass waits for the in-flight reconciliation');
+  releaseFirst();
+  const [first, second] = await Promise.all([firstPending, secondPending]);
+  eq(first.ok, true);
+  eq(second.ok, true);
+  eq(updates, 2, 'pending trigger is reconciled after the in-flight pass');
 });

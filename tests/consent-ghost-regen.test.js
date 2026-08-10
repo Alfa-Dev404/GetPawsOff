@@ -1,7 +1,7 @@
-/* PawsOff - ConsentGhost banner-REGENERATION breaker.
+/* PawsOff — ConsentGhost banner-REGENERATION breaker.
  *
  * Regression coverage for the repubblica.it / focus.de (contentpass) loop: the
- * CMP does NOT reload the page - it re-INJECTS a fresh banner after each
+ * CMP does NOT reload the page — it re-INJECTS a fresh banner after each
  * dismissal and fires a pushState that runs resetForNavigation(), wiping the
  * sessionStorage CLICK budget every cycle. The async chrome.storage reload guard
  * races and never accumulates under a sub-second loop, so we'd reject → new

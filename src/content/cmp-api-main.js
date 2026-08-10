@@ -1,7 +1,7 @@
 // cmp-api-main.js, PawsOff (ConsentGhost CMP API tier)
 //
 // Runs in the PAGE's MAIN world ("world": "MAIN" in manifest.json) to call CMP
-// JS APIs directly - rejects consent programmatically, independent of DOM
+// JS APIs directly — rejects consent programmatically, independent of DOM
 // structure or cross-origin iframes. Highest-reliability tier; falls back to
 // consent-ghost.js's selector click and heuristic scan (isolated world, same
 // frame) if no CMP API matches. On success, dispatches a CustomEvent on
@@ -27,7 +27,7 @@
   'use strict';
 
   // ── Coordination state ───────────────────────────────────────────────────
-  // Kept in-closure, not on window - a page-visible global would let sites
+  // Kept in-closure, not on window — a page-visible global would let sites
   // fingerprint the extension or tamper with state.
   let _cmpApiConfirmed = false;  // Tier A positive read-back only → HARD stop
   let _signalDispatched = false; // signal() fires at most once (first tier wins)
@@ -44,7 +44,7 @@
   function signal(cmpName) {
     if (_signalDispatched) return;
     _signalDispatched = true;
-    // No window.* marker - page-visible, would fingerprint the extension.
+    // No window.* marker — page-visible, would fingerprint the extension.
     try {
       document.dispatchEvent(
         new CustomEvent('pawsoff:cmp:rejected', {
@@ -57,7 +57,7 @@
   }
 
   /**
-   * Invoke obj[method](...args) without throwing. Returns true iff invoked -
+   * Invoke obj[method](...args) without throwing. Returns true iff invoked —
    * "invoked" is not "applied", a method can silently no-op, so this return
    * value alone never drives a signal (see runProbe).
    */
@@ -75,7 +75,7 @@
   function stopAll() { return _cmpApiConfirmed || _signalDispatched || _cmpGiveUp; }
 
   /**
-   * Probe runner - the single place that decides when to signal.
+   * Probe runner — the single place that decides when to signal.
    *
    * spec = { name, ready(), apply(), confirm()?, deferSignal?, budget?, interval? }
    *
@@ -84,7 +84,7 @@
    * Tier A (confirm): ready → apply once → poll confirm() → signal only on
    * confirm()===true. 'abort' or budget-elapsed → no signal, DOM tier runs instead.
    *
-   * setTimeout is fine here - content scripts run in the page process, not the
+   * setTimeout is fine here — content scripts run in the page process, not the
    * evictable service worker.
    */
   function runProbe(spec) {
@@ -124,7 +124,7 @@
     if (!tcData || typeof tcData !== 'object') return false;
     const purpose = tcData.purpose;
     if (!purpose || typeof purpose !== 'object') return true;
-    // Requires no granted consent AND no asserted legitimate interest - a CMP
+    // Requires no granted consent AND no asserted legitimate interest — a CMP
     // can keep tracking on LI grounds even with consent off.
     const maps = [purpose.consents, purpose.legitimateInterests];
     for (let m = 0; m < maps.length; m++) {
@@ -176,7 +176,7 @@
   }
 
   // ── Early-out watchdog ───────────────────────────────────────────────────
-  // Most pages run no CMP at all - watch for any known CMP global within a
+  // Most pages run no CMP at all — watch for any known CMP global within a
   // short grace window; if none appears, set the give-up flag so every probe
   // stops at its next tick instead of polling its full budget for nothing.
   const CMP_GLOBALS = [
@@ -344,10 +344,10 @@
   // AppConsent, and Didomi implement a proprietary setConsent extension on
   // their top-frame __tcfapi stub. Apply it, then read back via the standard
   // getTCData and only signal when no purpose consent remains. Readiness pings
-  // until cmpStatus === 'loaded'. gdprApplies === false aborts (no signal) -
+  // until cmpStatus === 'loaded'. gdprApplies === false aborts (no signal) —
   // GDPR doesn't apply, so the DOM tier handles any visible banner instead.
   // The reject payload also clears purpose legitimate interests (LI is
-  // opt-out; consent-only reject leaves it granted) - strictly more rejection,
+  // opt-out; consent-only reject leaves it granted) — strictly more rejection,
   // never less, so it can't weaken the tier's success condition.
   let _tcfLoaded = false;
   const _tcf = { result: null }; // null=pending | true | false | 'abort'
@@ -358,7 +358,7 @@
   const TCF_PURPOSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
   const TCF_LI_PURPOSES = [2, 7, 8, 9, 10, 11];
 
-  // Pure: reject-all payload for the proprietary __tcfapi('setConsent') call -
+  // Pure: reject-all payload for the proprietary __tcfapi('setConsent') call —
   // clears consent for all 11 purposes and legitimate interest for the
   // LI-eligible ones. vendor.* stays empty; the GVL is open-ended and not
   // enumerated here.
@@ -405,7 +405,7 @@
   // ── 12. IAB GPP (Global Privacy Platform) ────────────────────────────────
   // Multi-jurisdiction standard; the reject command is proprietary with no
   // standard cross-vendor read-back, so this is best-effort and never signals
-  // - the DOM tier remains responsible for dismissing any banner.
+  // — the DOM tier remains responsible for dismissing any banner.
   runProbe({
     name: 'GPP',
     budget: 5000,
@@ -430,7 +430,7 @@
   // ── 13. CCPA / US Privacy (IAB USP 1.0) ──────────────────────────────────
   // window.__uspapi opt-out; '1YYN' = CCPA applies, opted out of sale and
   // sharing (see uspConfirmed()). A background data-rights call, not a banner
-  // dismissal - never signals "handled"; the DOM tier still runs.
+  // dismissal — never signals "handled"; the DOM tier still runs.
   runProbe({
     name: 'USP',
     budget: 3000,

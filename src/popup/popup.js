@@ -25,17 +25,21 @@
   // Per-site pause lives in the allow-list (ALLOW_KEY) and is enforced at the
   // network (DNR) + DOM tiers.
   var RADAR_PREFIX      = '__pawsOff_radar_';
+  var PV_ENABLED        = '__pawsOff_pv_enforce_enabled';
+  var PV_SHADOW         = '__pawsOff_pv_enforce_shadow';
+  var PV_META           = '__pawsOff_pv_enforce_meta';
 
   // Per-site allow-list: { v:1, sites:{ [originHash]:{ paused, domains } } }.
   // The shared model lives in src/lib/po-allow.js (window.PawsOffAllow); the
   // popup falls back to local pure helpers when that global isn't present.
   var ALLOW_KEY = '__pawsOff_allowlist';
   var ALLOW = (typeof window !== 'undefined' && window.PawsOffAllow) ? window.PawsOffAllow : null;
+  var ADAPTIVE = (typeof window !== 'undefined' && window.PawsOffAdaptiveMode) ? window.PawsOffAdaptiveMode : null;
 
   // feature flags mirror the same storage keys the content scripts read.
   var FEATS = ['banner', 'tracker', 'terms'];
 
-  var state = { originHash: null, host: '', filter: 'all', catches: [], allow: { v: 1, sites: {} }, features: { banner: true, tracker: true, terms: true }, _lastAll: {}, _learnedAvgKB: 0, _tabDnrBlocked: 0 };
+  var state = { originHash: null, host: '', filter: 'all', catches: [], allow: { v: 1, sites: {} }, features: { banner: true, tracker: true, terms: true }, radarExpanded: false, _radarLabels: {}, _radarResolveKey: '', _radarResolveAt: 0, _lastAll: {}, _learnedAvgKB: 0, _tabDnrBlocked: 0 };
 
   // ── storage helpers ──
   function getAll() {
@@ -84,7 +88,7 @@
   // Human bandwidth estimate, uses REAL learned average transfer size per
   // third-party request, observed from the Performance API across browsing.
   // Falls back to 0 (no fake number) until enough data is learned.
-  var FALLBACK_AVG_KB = 0;  // no fake estimate - show 0 until we have real data
+  var FALLBACK_AVG_KB = 0;  // no fake estimate — show 0 until we have real data
   function formatSaved(kb) {
     if (!(kb > 0)) return '0 KB';
     if (kb >= 1024) return '~' + (kb / 1024).toFixed(1) + ' MB';
@@ -271,7 +275,7 @@
     if (dom && dom.indexOf('.') >= 0) return dom.replace(/^www\./, '');
     return 'Tracker';
   }
-  // Coarse type badge, or '' when unknown - never guess a category.
+  // Coarse type badge, or '' when unknown — never guess a category.
   function trackerType(e) {
     var m = trackerMatch(e);
     if (m) return m[2];
@@ -463,15 +467,24 @@
     return true;
   }
 
+  function guardMode(all) {
+    if (!all || all[MASTER_KEY] === false) return 'paused';
+    return FEATS.every(function (feat) { return featureEnabled(all, feat); }) ? 'active' : 'custom';
+  }
+
   function renderGuard(all) {
     var button = el('guard-status');
     var dot = el('guard-dot');
     var label = el('guard-text');
     if (!button || !label || !dot) return;
-    var everyOn = FEATS.every(function (feat) { return featureEnabled(all, feat); });
-    button.classList.toggle('is-paused', !everyOn);
-    dot.className = everyOn ? 'guard-dot' : 'guard-dot guard-dot--paused';
-    label.textContent = everyOn ? 'Active' : 'Paused';
+    var mode = guardMode(all);
+    button.dataset.mode = mode;
+    button.classList.toggle('is-paused', mode === 'paused');
+    button.classList.toggle('is-custom', mode === 'custom');
+    var app = el('popup-app');
+    if (app) app.classList.toggle('is-paused', mode === 'paused');
+    dot.className = 'guard-dot';
+    label.textContent = mode === 'active' ? 'Active' : (mode === 'custom' ? 'Custom' : 'Paused');
   }
 
   // ── per-site counts and headline values ──
@@ -488,8 +501,28 @@
     setText('stat-saved', h.saved);
     renderDonut(); // same data feeds the chart, so they always agree
   }
+  // Lifetime counters, written by the content scripts and background as they
+  // act. Everything above this line is scoped to the current site; these are
+  // the running totals, so the label says so explicitly.
+  // NET_TOTAL (DNR network tier) and PB_TOTAL (DOM/pixel tier) are disjoint by
+  // construction, so summing them does not double-count.
+  function plural(n, one, many) {
+    return n.toLocaleString() + ' ' + (n === 1 ? one : many);
+  }
+  function allTimeSummary(all) {
+    var source = all || {};
+    var trackers = num(source[NET_TOTAL]) + num(source[PB_TOTAL]);
+    var banners = num(source[CG_TOTAL]);
+    var terms = num(source[TS_TOTAL]);
+    if (!trackers && !banners && !terms) return 'All time — counting locally';
+    return 'All time — ' + [
+      plural(trackers, 'tracker', 'trackers'),
+      plural(banners, 'banner', 'banners'),
+      plural(terms, 'terms flag', 'terms flags')
+    ].join(' · ');
+  }
   function renderAllTime(all) {
-    void all;
+    setText('stat-lifetime', allTimeSummary(all || state._lastAll));
   }
 
   function renderToggles(all) {
@@ -523,6 +556,10 @@
       ts.enabled = on;
       await setKeys({ [TS_SETTINGS]: ts });
     }
+    // Re-enabling any individual feature must also lift the global master
+    // pause. Otherwise all pills can read "on" while network protection stays
+    // disabled in the service worker.
+    if (on) await setKeys({ [MASTER_KEY]: true });
   }
 
   async function setGuard(on) {
@@ -603,7 +640,7 @@
     if (!rows.length) {
       var empty = document.createElement('li');
       empty.className = 'tracker-empty';
-      empty.textContent = 'Nothing blocked here yet.';
+      empty.textContent = 'No catches match this view yet.';
       feed.appendChild(empty);
       return;
     }
@@ -700,14 +737,99 @@
 
   // ── radar (OBSERVE-ONLY "spotted on this site", never counted as blocked) ──
   function radarVerdictLabel(v) {
-    if (v === 'block') return 'Tracker';
-    if (v === 'cookieblock') return 'Cookie tracker';
-    return 'Watching';
+    if (v === 'block') return 'High prevalence';
+    if (v === 'cookieblock') return 'Limit cookies';
+    return 'Learning';
   }
   function radarVerdictClass(v) {
     if (v === 'block') return 'rv-track';
     if (v === 'cookieblock') return 'rv-cookie';
     return 'rv-watch';
+  }
+  function adaptiveMode(all) {
+    if (all && all[MASTER_KEY] === false) return 'paused';
+    if (!ADAPTIVE || typeof ADAPTIVE.mode !== 'function') return 'standard';
+    return ADAPTIVE.mode({
+      enabled: !!all && all[PV_ENABLED] === true,
+      shadow: all && all[PV_SHADOW],
+    });
+  }
+  function adaptiveSummary(all) {
+    var mode = adaptiveMode(all);
+    var meta = (all && all[PV_META]) || {};
+    if (mode === 'paused') return 'Protection is paused; adaptive rules are inactive.';
+    if (mode === 'preview') {
+      return (Number(meta.wouldBlock) || 0) + ' would block · ' +
+        (Number(meta.wouldCookieStrip) || 0) + ' would limit cookies';
+    }
+    if (mode === 'adaptive') {
+      return (Number(meta.blocked) || 0) + ' blocked · ' +
+        (Number(meta.cookieStripped) || 0) + ' cookie-limited';
+    }
+    return 'Observed locally; adaptive rules are off.';
+  }
+  var RADAR_COLLAPSED_ROWS = 5;
+  function visibleRadarSpots(spotted, expanded) {
+    var rows = Array.isArray(spotted) ? spotted : [];
+    return expanded ? rows.slice() : rows.slice(0, RADAR_COLLAPSED_ROWS);
+  }
+  function radarSpotLabel(spot, labels) {
+    var key = spot && typeof spot.domainHash === 'string' ? spot.domainHash : '';
+    var label = key && labels && labels[key];
+    if (typeof label === 'string' && label) return label.replace(/^www\./, '');
+    return key ? 'Third party ' + key.slice(-4).toUpperCase() : 'Third party';
+  }
+  function createRadarRow(spot) {
+    var row = document.createElement('div'); row.className = 'rrow';
+    var body = document.createElement('div'); body.className = 'rbody';
+    var name = document.createElement('span'); name.className = 'rnm';
+    name.textContent = radarSpotLabel(spot, state._radarLabels);
+    var meta = document.createElement('span'); meta.className = 'rmeta';
+    meta.textContent = spot.sites > 1 ? ('seen on ' + spot.sites + ' sites') : 'first sighting';
+    body.appendChild(name); body.appendChild(meta);
+    var chip = document.createElement('span');
+    chip.className = 'rchip ' + radarVerdictClass(spot.verdict);
+    chip.textContent = radarVerdictLabel(spot.verdict);
+    row.appendChild(body); row.appendChild(chip);
+    return row;
+  }
+  function renderRadarRows(list, spotted) {
+    list.textContent = '';
+    list.classList.toggle('is-expanded', state.radarExpanded);
+    visibleRadarSpots(spotted, state.radarExpanded).forEach(function (spot) {
+      list.appendChild(createRadarRow(spot));
+    });
+  }
+  function renderRadarDisclosure(total) {
+    var more = el('radar-more');
+    if (!more) return;
+    var remaining = total - RADAR_COLLAPSED_ROWS;
+    more.hidden = remaining <= 0;
+    more.setAttribute('aria-expanded', state.radarExpanded ? 'true' : 'false');
+    more.textContent = state.radarExpanded ? 'Show fewer −' : '+ ' + remaining + ' more';
+  }
+  function refreshRadarLabels(spotted) {
+    var hashes = (Array.isArray(spotted) ? spotted : [])
+      .map(function (spot) { return spot && spot.domainHash; })
+      .filter(function (key) { return /^h:[0-9a-f]{8}$/.test(key || ''); });
+    if (!hashes.length) return;
+    var requestKey = hashes.join(',');
+    var now = Date.now();
+    if (requestKey === state._radarResolveKey && now - state._radarResolveAt < 1000) return;
+    state._radarResolveKey = requestKey;
+    state._radarResolveAt = now;
+    msgBg({ type: 'pawsoff_prevalence_resolveSpots', hashes: hashes }).then(function (response) {
+      if (requestKey !== state._radarResolveKey) return;
+      var labels = response && response.ok && response.labels;
+      if (!labels || typeof labels !== 'object') return;
+      var next = {};
+      hashes.forEach(function (key) {
+        var label = labels[key];
+        if (typeof label === 'string' && hashHost(label) === key) next[key] = label;
+      });
+      state._radarLabels = next;
+      renderRadar(state._lastAll || {});
+    });
   }
   function renderRadar(all) {
     var wrap = el('radar');
@@ -716,29 +838,19 @@
     var rec = state.originHash ? all[RADAR_PREFIX + state.originHash] : null;
     var spotted = (rec && Array.isArray(rec.spotted)) ? rec.spotted : [];
     // Hide the panel when the Trackers feature is paused or nothing was spotted.
-    if (!spotted.length || !featureEnabled(all, 'tracker')) { wrap.style.display = 'none'; return; }
-    wrap.style.display = 'block';
-    setText('radar-count', spotted.length);
-    list.textContent = '';
-    spotted.slice(0, 12).forEach(function (s) {
-      var row = document.createElement('div'); row.className = 'rrow';
-      var body = document.createElement('div'); body.className = 'rbody';
-      var nm = document.createElement('span'); nm.className = 'rnm';
-      nm.textContent = (s.domain || '').replace(/^www\./, '') || 'third party';
-      var meta = document.createElement('span'); meta.className = 'rmeta';
-      meta.textContent = (s.sites && s.sites > 1) ? ('seen on ' + s.sites + ' sites') : 'first sighting';
-      body.appendChild(nm); body.appendChild(meta);
-      var chip = document.createElement('span');
-      chip.className = 'rchip ' + radarVerdictClass(s.verdict);
-      chip.textContent = radarVerdictLabel(s.verdict);
-      row.appendChild(body); row.appendChild(chip);
-      list.appendChild(row);
-    });
-    var more = el('radar-more');
-    if (more) {
-      if (spotted.length > 12) { more.style.display = 'block'; more.textContent = '+ ' + (spotted.length - 12) + ' more watching'; }
-      else more.style.display = 'none';
+    if (!spotted.length || guardMode(all) === 'paused' || !featureEnabled(all, 'tracker')) {
+      state.radarExpanded = false;
+      wrap.hidden = true;
+      return;
     }
+    wrap.hidden = false;
+    var mode = adaptiveMode(all);
+    setText('radar-mode', mode === 'adaptive' ? 'Adaptive' : (mode === 'preview' ? 'Preview' : 'Standard'));
+    setText('radar-status', adaptiveSummary(all));
+    setText('radar-count', spotted.length);
+    renderRadarRows(list, spotted);
+    renderRadarDisclosure(spotted.length);
+    refreshRadarLabels(spotted);
   }
 
   // ── wiring ──
@@ -754,15 +866,27 @@
     }
   }
 
+  function wireRadarDisclosure() {
+    var more = el('radar-more');
+    if (!more) return;
+    onActivate(more, function () {
+      state.radarExpanded = !state.radarExpanded;
+      renderRadar(state._lastAll || {});
+    });
+  }
+
   function wire() {
     var guard = el('guard-status');
     if (guard) onActivate(guard, async function () {
-      var turnOn = guard.classList.contains('is-paused');
+      var turnOn = guard.dataset.mode !== 'active';
       await setGuard(turnOn);
       renderToggles(state._lastAll || {});
       renderFeed();
       renderFilters();
+      renderRadar(state._lastAll || {});
     });
+
+    wireRadarDisclosure();
 
     // Pause: choosing a duration pauses; the same button resumes when paused.
     async function doPause(mins) {
@@ -810,7 +934,7 @@
         }
       });
       // Clicking ANY other control (a feature pill, a filter chip, Reset...)
-      // while the menu is open must close it too - otherwise it stays visibly
+      // while the menu is open must close it too — otherwise it stays visibly
       // stuck open once focus leaves it (Escape only helps if focus is inside).
       document.addEventListener('click', function (ev) {
         if (pauseMenu.hidden) return;
@@ -830,11 +954,12 @@
         renderToggles(state._lastAll);
         renderFeed();
         renderFilters();
+        renderRadar(state._lastAll);
       });
     });
 
     // Anonymous report: mailto: needs a registered OS/browser mail handler,
-    // which many desktop setups lack, so this covers both paths - copy the
+    // which many desktop setups lack, so this covers both paths — copy the
     // report to the clipboard (always works) and also try to open the draft.
     var report = el('btn-report');
     if (report) onActivate(report, function () {
@@ -855,7 +980,7 @@
           report.textContent = 'Copied for ' + REPORT_EMAIL;
         }, function () { /* clipboard denied → mailto attempt below still runs */ });
       } catch (_) { /* silent */ }
-      // 2) mailto via a real, user-activated anchor click - the standard way
+      // 2) mailto via a real, user-activated anchor click — the standard way
       // to trigger a protocol handler from a page; a no-op if no mail handler
       // is registered, so this never leaves a dead tab behind.
       try {
@@ -994,7 +1119,7 @@
         // and this re-render shows "Pause on this site" again.
         try { setInterval(function () { pullTabStats(); renderUnbreak(); }, 1000); } catch (_) {}
       }
-    } catch (_) { /* silent - never throw visibly */ }
+    } catch (_) { /* silent — never throw visibly */ }
   }
 
   // ── Test-only export ──────────────────────────────────────────────────────
@@ -1008,7 +1133,11 @@
         num: num,
         formatSaved: formatSaved,
         computeHeadline: computeHeadline,
+        allTimeSummary: allTimeSummary,
         NET_TOTAL: NET_TOTAL,
+        PB_TOTAL: PB_TOTAL,
+        CG_TOTAL: CG_TOTAL,
+        TS_TOTAL: TS_TOTAL,
         ago: ago,
         catColor: catColor,
         actClass: actClass,
@@ -1017,6 +1146,14 @@
         loadCatches: loadCatches,
         radarVerdictLabel: radarVerdictLabel,
         radarVerdictClass: radarVerdictClass,
+        adaptiveMode: adaptiveMode,
+        adaptiveSummary: adaptiveSummary,
+        visibleRadarSpots: visibleRadarSpots,
+        radarSpotLabel: radarSpotLabel,
+        refreshRadarLabels: refreshRadarLabels,
+        guardMode: guardMode,
+        setGuard: setGuard,
+        persistFeat: persistFeat,
         getState: function () { return state; },
         CATCH_PREFIX: CATCH_PREFIX,
         ALLOW_KEY: ALLOW_KEY,

@@ -1,4 +1,4 @@
-/* PawsOff - "detected but couldn't reject" banner accounting.
+/* PawsOff — "detected but couldn't reject" banner accounting.
  *
  * Bug: the popup "Banners" stat showed 0 even when a banner was plainly on
  * screen, because only a CONFIRMED reject was recorded. The classic case is a
@@ -6,7 +6,7 @@
  * iframe, so the page frame detects the wrapper but can't click it.
  *
  * Fix: po-catch.recordBannerSeen() records a banner with seen:true; the popup
- * counts it (so the field isn't 0) but labels it "Detected" - NEVER "Rejected",
+ * counts it (so the field isn't 0) but labels it "Detected" — NEVER "Rejected",
  * so we never claim a block we didn't make.
  */
 'use strict';

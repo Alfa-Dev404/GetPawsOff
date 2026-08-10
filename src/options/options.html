@@ -6,30 +6,38 @@
   <title>GetPawsOff Settings</title>
   <link rel="stylesheet" href="../styles/po-ui.css">
   <link rel="stylesheet" href="../styles/po-dark.css">
-  <style>
-    body { max-width: 760px; margin: 0 auto; padding: 28px 20px 56px; }
-    header.po-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-    header.po-top .word { font-weight: 900; font-size: 22px; }
-    header.po-top .word .off { color: var(--po-accent); }
-    section { margin-top: 28px; }
-    section > h2 { margin: 0 0 14px; }
-    .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  </style>
+  <link rel="stylesheet" href="../styles/options.css">
 </head>
 <body>
   <header class="po-top">
     <img class="logo-img" src="../../icons/icon-squircle.svg" alt="" aria-hidden="true">
     <span class="word">GetPaws<span class="off">Off</span> Settings</span>
   </header>
-  <p class="po-muted" style="margin-top:0">Everything below is stored locally on your device. Nothing syncs to a server.</p>
+  <p class="po-muted options-intro">Everything below is stored locally on your device. Nothing syncs to a server.</p>
+
+  <div class="promise-rail" role="list" aria-label="Privacy guarantees">
+    <span class="promise-capsule" role="listitem">Local-first</span>
+    <span class="promise-capsule" role="listitem">Signed updates</span>
+    <span class="promise-capsule" role="listitem">Fail-open</span>
+    <span class="promise-capsule" role="listitem">No telemetry</span>
+  </div>
+
+  <nav class="options-nav" aria-label="Settings sections">
+    <a href="#consent">Consent</a>
+    <a href="#site-recovery">Paused sites</a>
+    <a href="#trackers">Trackers</a>
+    <a href="#local-radar">Local radar</a>
+    <a href="#terms">Terms</a>
+    <a href="#activity-log">Activity</a>
+  </nav>
 
   <!-- ConsentGhost -->
-  <section>
+  <section id="consent">
     <div class="sec-head">
-      <span class="po-sticker">ConsentGhost</span>
-      <label class="po-toggle"><input type="checkbox" id="cg-enabled" checked>
-        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
-      </label>
+      <h2 class="po-sticker">ConsentGhost</h2>
+      <div class="section-actions"><span class="section-capsule">Automatic</span><label class="po-toggle"><input type="checkbox" id="cg-enabled" checked aria-label="Enable ConsentGhost">
+          <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+        </label></div>
     </div>
     <div class="po-card po-mt16">
       <p class="po-sub">Automatically rejects cookie banners across <span id="cg-count">several</span> major consent frameworks, including OneTrust, Cookiebot, Didomi, and Sourcepoint. Works in 35 languages.</p>
@@ -37,13 +45,13 @@
   </section>
 
   <!-- Paused sites -->
-  <section>
-    <div class="sec-head"><span class="po-sticker">Paused sites</span></div>
+  <section id="site-recovery">
+    <div class="sec-head"><h2 class="po-sticker">Paused sites</h2><span class="section-capsule">Recovery</span></div>
     <div class="po-card po-mt16">
-      <p class="po-sub">GetPawsOff is fully paused on these sites, the same as “Unbreak this site” in the popup. Use this when our blocking breaks a page you trust. Stored locally; only the domains you type here are kept.</p>
-      <div class="po-row po-mt8" style="gap:8px">
-        <input id="cg-sites-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="example.com" class="po-input" style="flex:1" />
-        <button class="po-btn" id="cg-sites-add">Add</button>
+      <p class="po-sub">GetPawsOff is fully paused on these sites, the same as “Unbreak this site” in the popup. Use this when our blocking breaks a page you trust. Site names are converted to one-way local hashes and are not kept in plaintext.</p>
+      <div class="po-row po-mt8 site-entry">
+        <input id="cg-sites-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="example.com" class="po-input site-input" aria-label="Site domain" />
+        <button class="po-btn" id="cg-sites-add" type="button">Add</button>
       </div>
       <div class="po-divider"></div>
       <div class="po-list" id="cg-sites-list"><!-- rows injected by options.js --></div>
@@ -51,36 +59,75 @@
   </section>
 
   <!-- PixelBlock -->
-  <section>
+  <section id="trackers">
     <div class="sec-head">
-      <span class="po-sticker" style="background:var(--po-accent-2)">PixelBlock</span>
-      <label class="po-toggle"><input type="checkbox" id="pb-enabled" checked>
-        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
-      </label>
+      <h2 class="po-sticker sticker-teal">PixelBlock</h2>
+      <div class="section-actions"><span class="section-capsule">Email pixels</span><label class="po-toggle"><input type="checkbox" id="pb-enabled" checked aria-label="Enable PixelBlock">
+          <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+        </label></div>
     </div>
     <p class="po-sub po-mt8">Block tracking pixels per email provider:</p>
     <div class="po-list po-mt8" id="pb-providers"><!-- rows injected by options.js --></div>
   </section>
 
-  <!-- ToS Shield -->
-  <section>
+  <!-- Local adaptive tracker protection -->
+  <section id="local-radar">
     <div class="sec-head">
-      <span class="po-sticker" style="background:var(--po-go)">ToS Shield</span>
-      <label class="po-toggle"><input type="checkbox" id="ts-enabled" checked>
-        <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
-      </label>
+      <h2 class="po-sticker adaptive-sticker">Local radar</h2>
+      <span class="section-capsule">Device-only</span>
     </div>
-    <p class="po-sub po-mt8">Choose which clause types to flag:</p>
+    <div class="po-card po-mt16 adaptive-card">
+      <h3 class="adaptive-title">Choose how local learning is used</h3>
+      <p class="po-sub">Domains are learned only from sites you visit and remain on this device. Standard is the safe default; Preview calculates rules without applying them.</p>
+      <div class="maintained-feed">
+        <div>
+          <strong>Maintained list updates</strong>
+          <p id="ep-delta-status" class="po-sub" aria-live="polite">Checking the signed update feed…</p>
+        </div>
+        <label class="po-toggle"><input type="checkbox" id="ep-delta-enabled" checked aria-label="Use signed EasyPrivacy list updates">
+          <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+        </label>
+      </div>
+      <div class="adaptive-modes" role="radiogroup" aria-label="Adaptive tracker protection mode">
+        <label class="adaptive-mode">
+          <input type="radio" name="pv-mode" value="standard" checked>
+          <span><strong>Standard</strong><small>Use maintained blocklists. Learn locally, add no adaptive rules.</small></span>
+        </label>
+        <label class="adaptive-mode recommended">
+          <input type="radio" name="pv-mode" value="preview">
+          <span><strong>Preview <em>Recommended</em></strong><small>Show what local learning would block, without changing requests.</small></span>
+        </label>
+        <label class="adaptive-mode">
+          <input type="radio" name="pv-mode" value="adaptive">
+          <span><strong>Adaptive</strong><small>Apply conservative local rules after 10 sites and 14 days. Site pause always wins.</small></span>
+        </label>
+      </div>
+      <div class="adaptive-footer">
+        <p id="pv-status" class="po-sub adaptive-status" aria-live="polite">Loading local radar status…</p>
+        <button class="po-btn" id="pv-sync" type="button">Recalculate</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ToS Shield -->
+  <section id="terms">
+    <div class="sec-head">
+      <h2 class="po-sticker sticker-green">ToS Shield</h2>
+      <div class="section-actions"><span class="section-capsule">Exact phrases</span><label class="po-toggle"><input type="checkbox" id="ts-enabled" checked aria-label="Enable ToS Shield">
+          <span class="track"><span class="thumb"><svg viewBox="0 0 64 64" fill="var(--po-ink)"><ellipse cx="32" cy="42" rx="15" ry="12"/><circle cx="14" cy="26" r="6.5"/><circle cx="26" cy="17" r="6.5"/><circle cx="38" cy="17" r="6.5"/><circle cx="50" cy="26" r="6.5"/></svg></span></span>
+        </label></div>
+    </div>
+    <p class="po-sub po-mt8">Choose which clause types to flag. Only the matched risk phrases are highlighted; the panel keeps the full clause for context.</p>
     <div class="po-list po-mt8" id="ts-categories"><!-- rows injected by options.js --></div>
   </section>
 
   <!-- Activity -->
-  <section>
-    <div class="sec-head"><span class="po-sticker" style="background:var(--po-warn);color:var(--po-ink);-webkit-text-stroke:0;text-shadow:none">Activity</span></div>
+  <section id="activity-log">
+    <div class="sec-head"><h2 class="po-sticker sticker-amber">Activity</h2><span class="section-capsule">Local log</span></div>
     <div class="po-card po-mt16">
-      <div class="po-row" style="justify-content:space-between">
-        <p class="po-sub" style="margin:0">Recent local activity (never leaves your device).</p>
-        <button class="po-btn" id="clear-logs">Clear log</button>
+      <div class="po-row activity-head">
+        <p class="po-sub activity-copy">Recent local activity (never leaves your device).</p>
+        <button class="po-btn" id="clear-logs" type="button">Clear log</button>
       </div>
       <div class="po-divider"></div>
       <div id="activity" class="po-sub">Loading…</div>
@@ -90,6 +137,7 @@
   <p class="po-foot po-center po-mt16">GetPawsOff stores no data off your device.</p>
 
   <script src="../lib/po-allow.js"></script>
+  <script src="../lib/adaptive-mode.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

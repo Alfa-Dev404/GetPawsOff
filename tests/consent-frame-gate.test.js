@@ -1,4 +1,4 @@
-/* PawsOff - sub-frame relevance gate (perf Change 2).
+/* PawsOff — sub-frame relevance gate (perf Change 2).
  *
  * The broad consent script injects into EVERY frame (all_frames:true). Empty ad
  * iframes must not pay for the regex rebuild + scan + MutationObserver. init()

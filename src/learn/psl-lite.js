@@ -3,7 +3,7 @@
  * Used by the observe-only Prevalence tier to group hostnames into their
  * registrable domain so we can tell first-party from third-party.
  *
- * Not the full Public Suffix List - a curated set of common multi-label
+ * Not the full Public Suffix List — a curated set of common multi-label
  * suffixes (co.uk, com.au, ...) plus a few platform ones (github.io,
  * blogspot.com, ...). Swap MULTI for a generated full-PSL copy if accuracy
  * matters more than bundle size; until then it degrades to the last two
