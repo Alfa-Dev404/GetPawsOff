@@ -1,0 +1,25 @@
+/*
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+/release-manifest.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+/release-manifest.json.sig
+  Cache-Control: public, max-age=0, must-revalidate
+
+/releases/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/consent-ghost/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/tos-shield/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/pixel-block/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/easyprivacy-delta/*
+  Cache-Control: public, max-age=3600, must-revalidate
