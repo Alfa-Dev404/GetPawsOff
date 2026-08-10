@@ -20,8 +20,15 @@ name: Publish signed config
 #   - EasyPrivacy delta (easyprivacy-delta/domains.json) — conservative exact-
 #     domain additions not covered by the bundled static ruleset. Path/scoped/
 #     frame/media rules are intentionally excluded from the live top-up.
-#   - ToS pattern and PixelBlock selector feeds are not fabricated here; their
-#     legacy endpoints remain absent until schema-specific builders exist.
+#   - ToS patterns (tos-shield/patterns.json) and PixelBlock selectors
+#     (pixel-block/pixel-config.json) — the two endpoints background.js has
+#     requested since launch and got a 404 on every time. Neither has an upstream
+#     project to convert: they are generated from our OWN shipping content
+#     scripts (DEFAULT_CONFIG in tos-shield.js, PROVIDER_CONFIG in
+#     pixel-block.js) so the published feed and the offline fallback cannot
+#     drift. Editing either content script triggers a publish. This is what makes
+#     a clause-wording fix or a webmail selector fix reach installed 0.1.0
+#     clients on the next daily refresh instead of waiting for a Store release.
 #
 # REQUIRED GitHub repo configuration before this workflow can succeed:
 #   Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
@@ -47,8 +54,15 @@ on:
       - 'tools/easyprivacy-to-delta.js'
       - 'tools/sign-file.mjs'
       - 'tools/tosdr-to-grades.js'
+      - 'tools/tos-shield-to-patterns.js'
+      - 'tools/pixelblock-to-config.js'
       - '_headers'
       - 'src/data/**'
+      # The ToS vocabulary and PixelBlock provider table are read straight out
+      # of these shipping content scripts, so editing one is a publish trigger.
+      - 'src/content/tos-shield.js'
+      - 'src/content/pixel-block.js'
+      - 'tests/harness/sandbox.js'
       - 'src/learn/psl-lite.js'
       - 'src/rules/easyprivacy-domains.json'
       - '.github/workflows/publish-config.yml'
