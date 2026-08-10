@@ -1,7 +1,6 @@
 /* Dark popup styling for PawsOff "Today's catch".
- * Token-first: every color below is a --popup-* custom property, bridged onto
- * Pico CSS variables (vendor/pico.min.css loads first) so the two systems agree.
- * Fixed palette on purpose: the popup must not inherit page/theme tones. */
+ * Token-first and dependency-free. Fixed palette on purpose: the popup must
+ * not inherit page/theme tones. */
 
 :root,
 [data-theme="dark"] {
@@ -28,15 +27,6 @@
   --dn-banner: #9d84e8;
   --dn-terms: #f5c518;
 
-  /* ── Pico bridge: keep vendored Pico on the same palette ── */
-  --pico-background-color: var(--popup-bg);
-  --pico-color: var(--popup-ink);
-  --pico-muted-color: var(--popup-muted);
-  --pico-primary: var(--popup-accent);
-  --pico-primary-background: var(--popup-accent);
-  --pico-primary-border: var(--popup-edge);
-  --pico-border-radius: 14px;
-  --pico-font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -65,6 +55,12 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button {
+  appearance: none;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .popup-shell {
@@ -98,6 +94,12 @@ textarea {
   display: block;
   width: 100%;
   height: 100%;
+  transition: filter 0.18s ease, opacity 0.18s ease;
+}
+
+.popup-shell.is-paused .brand-mark img {
+  filter: grayscale(1);
+  opacity: 0.62;
 }
 
 .header-copy {
@@ -173,9 +175,64 @@ textarea {
   color: var(--popup-ink);
 }
 
+.guard-pill.is-custom {
+  background: var(--popup-warn);
+  color: #14100c;
+}
+
 .guard-pill.is-paused .guard-dot {
   background: rgba(242, 237, 227, 0.55);
   box-shadow: none;
+}
+
+.guard-pill.is-custom .guard-dot {
+  background: #624c00;
+  box-shadow: 0 0 0 4px rgba(98, 76, 0, 0.22);
+}
+
+.trust-rail {
+  display: flex;
+  gap: 6px;
+  margin: 8px 10px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.trust-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.trust-capsule,
+.section-capsule,
+.scope-capsule {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--popup-line);
+  border-radius: 999px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.trust-capsule {
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--popup-panel);
+  color: var(--popup-muted);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.capsule-dot,
+.feat-dot {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--popup-go);
+}
+
+.capsule-dot {
+  width: 6px;
+  height: 6px;
 }
 
 /* ── activity donut ── */
@@ -321,6 +378,18 @@ textarea {
   color: var(--popup-muted);
 }
 
+/* Running totals under the current-site strip. Deliberately quieter than
+   .stat-value so the per-site numbers stay the primary read. */
+.stat-lifetime {
+  margin: 7px 10px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--popup-muted);
+}
+
 /* ── per-feature pills ── */
 .feature-row {
   display: grid;
@@ -330,6 +399,10 @@ textarea {
 }
 
 .feat-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 9px 8px;
   border: var(--popup-border);
   border-radius: 999px;
@@ -344,6 +417,12 @@ textarea {
   transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
+.feat-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--popup-edge);
+}
+
 .feat-pill:hover {
   transform: translate(-1px, -1px);
   box-shadow: 4px 4px 0 0 var(--popup-edge);
@@ -356,6 +435,10 @@ textarea {
   text-decoration-thickness: 2px;
 }
 
+.feat-pill.is-off .feat-dot {
+  background: var(--popup-muted);
+}
+
 .filters-row {
   margin: 10px 10px 0;
   padding: 11px 12px 8px;
@@ -365,6 +448,167 @@ textarea {
   background: var(--popup-panel);
 }
 
+.feed-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.section-capsule,
+.scope-capsule {
+  padding: 4px 8px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-capsule {
+  background: var(--popup-ink);
+  color: var(--popup-card);
+}
+
+.scope-capsule {
+  background: var(--popup-card);
+  color: var(--popup-muted);
+}
+
+/* ── local tracker radar ── */
+.radar-shell {
+  margin: 10px 10px 0;
+  padding: 13px 14px 10px;
+  border: var(--popup-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #202d27 0%, var(--popup-panel) 100%);
+}
+
+.radar-shell[hidden] {
+  display: none;
+}
+
+.radar-head,
+.rrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.radar-head {
+  justify-content: space-between;
+}
+
+.radar-head h2 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--popup-ink);
+}
+
+.radar-count,
+.radar-mode,
+.rchip {
+  border: 1.5px solid var(--popup-edge);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.radar-count {
+  display: inline-grid;
+  min-width: 22px;
+  margin-left: 4px;
+  padding: 1px 6px;
+  place-items: center;
+  background: var(--popup-card);
+  font-size: 10px;
+}
+
+.radar-mode {
+  padding: 5px 9px;
+  background: var(--popup-accent-2);
+  color: #08130c;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.radar-status {
+  margin: 6px 0 0;
+  color: var(--popup-muted);
+  font-size: 10.5px;
+}
+
+.radar-more {
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 7px 8px;
+  border: 1px dashed var(--popup-line);
+  border-radius: 10px;
+  background: var(--popup-card);
+  color: var(--popup-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.radar-more:hover,
+.radar-more:focus-visible {
+  border-color: var(--popup-accent-2);
+  color: var(--popup-ink);
+}
+
+.radar-more[hidden] {
+  display: none;
+}
+
+.radar-list {
+  margin-top: 8px;
+  border-top: 1px solid var(--popup-line);
+}
+
+.radar-list.is-expanded {
+  max-height: 248px;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.rrow {
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--popup-line);
+}
+
+.rbody {
+  min-width: 0;
+  display: grid;
+}
+
+.rnm {
+  overflow: hidden;
+  color: var(--popup-ink);
+  font-size: 11.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rmeta {
+  color: var(--popup-muted);
+  font-size: 9.5px;
+}
+
+.rchip {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  color: #14100c;
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rchip.rv-track { background: var(--popup-accent); }
+.rchip.rv-cookie { background: var(--popup-warn); }
+.rchip.rv-watch { background: var(--popup-accent-2); }
+
 .filters {
   display: flex;
   gap: 8px;
@@ -373,13 +617,15 @@ textarea {
 }
 
 .filters::-webkit-scrollbar,
-.tracker-list::-webkit-scrollbar {
+.tracker-list::-webkit-scrollbar,
+.radar-list::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 .filters::-webkit-scrollbar-thumb,
-.tracker-list::-webkit-scrollbar-thumb {
+.tracker-list::-webkit-scrollbar-thumb,
+.radar-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(242, 237, 227, 0.28);
 }
@@ -649,23 +895,28 @@ textarea {
 }
 
 .text-link {
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: 5px 8px;
+  border: 1px solid var(--popup-line);
+  border-radius: 999px;
+  background: var(--popup-panel);
   color: var(--popup-accent);
+  font-size: 10px;
   font-weight: 800;
   cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease;
 }
 
 .text-link:hover {
-  text-decoration: underline;
+  border-color: var(--popup-accent);
+  transform: translateY(-1px);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .filter-chip,
   .cta-button,
   .feat-pill,
-  .pause-menu button {
+  .pause-menu button,
+  .text-link {
     transition: none;
   }
 }

@@ -1,4 +1,4 @@
-/* PawsOff - ConsentGhost reload-loop circuit breaker.
+/* PawsOff — ConsentGhost reload-loop circuit breaker.
  *
  * Regression coverage for the corriere.it / Sourcepoint hang: a CMP
  * "Preferences/Manage" opener that NAVIGATES the iframe (instead of opening an
@@ -26,7 +26,7 @@ function makeSession() {
   };
 }
 
-// A storage stub whose every access throws - simulates a sandboxed / partitioned
+// A storage stub whose every access throws — simulates a sandboxed / partitioned
 // frame where `sessionStorage` raises SecurityError.
 function makeThrowingSession() {
   return {

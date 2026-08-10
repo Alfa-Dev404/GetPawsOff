@@ -1,4 +1,4 @@
-/* PawsOff - unit tests for the per-site allow-list model (src/lib/po-allow.js). */
+/* PawsOff — unit tests for the per-site allow-list model (src/lib/po-allow.js). */
 'use strict';
 const { test, assert, eq } = require('./harness/framework');
 const { loadAllow } = require('./harness/sandbox');
@@ -150,7 +150,7 @@ test('po-allow: isAllowed follows pause expiry (content scripts resume alone)', 
   assert(A.isPaused(live, 'h:a'), 'paused now');
   assert(A.isAllowed(live, 'h:a', 'doubleclick.net'), 'paused site lets everything through');
   assert(A.isAllowed(live, 'h:a', 'some-random-tracker.example'), 'not limited to a specific domain');
-  // Expired timed pause: isAllowed reverts to the per-domain-only decision -
+  // Expired timed pause: isAllowed reverts to the per-domain-only decision —
   // an untouched domain is no longer let through automatically.
   const expired = A.setPaused(A.emptyState(), 'h:a', true, now - 1);
   assert(!A.isPaused(expired, 'h:a'), 'expired: not paused');
@@ -177,7 +177,7 @@ test('po-allow: unpausing clears pausedUntil; bad pausedUntil is sanitized', () 
   st = A.setPaused(st, 'h:a', false);
   assert(!A.isPaused(st, 'h:a'), 'unpaused');
   // A pausedUntil field that IS present but corrupted (string, not a legacy
-  // missing-field case) must NOT collapse to indefinite - that would silently
+  // missing-field case) must NOT collapse to indefinite — that would silently
   // turn a broken timed pause into a permanent one. It must read as already
   // expired, so protection comes back instead of staying off forever.
   const junk = A.normalizeState({ v: 1, sites: { 'h:b': { paused: 5, pausedUntil: 'soon', domains: {} } } });

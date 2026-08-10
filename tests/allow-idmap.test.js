@@ -1,4 +1,4 @@
-/* PawsOff - regression: pause/allow DNR rule-id allocation must be collision-free.
+/* PawsOff — regression: pause/allow DNR rule-id allocation must be collision-free.
  * Guards against a hash-collision bug where two paused sites could share one
  * rule id and silently clobber each other's pause. The persisted allocator
  * guarantees each site a stable, unique id.
@@ -44,7 +44,7 @@ test('allocateRuleId: ignores corrupt/out-of-band persisted ids (self-heals)', (
   assert(id !== 999999, 'did not reuse the corrupt out-of-band id');
 });
 
-test('allow-rules: >20 paused sites - no id collision, every site keeps its rule', async () => {
+test('allow-rules: >20 paused sites — no id collision, every site keeps its rule', async () => {
   const { I, chrome } = bg();
   const N = 25;
   const ids = [];
@@ -75,7 +75,7 @@ test('allow-rules: two sites sharing a preferred slot get DIFFERENT ids (the exa
     if (seen[pref] !== undefined) { a = seen[pref]; b = host; } else seen[pref] = host;
   }
   assert(a && b, 'found a colliding preferred-slot pair');
-  eq(I.sitePauseRuleId(a), I.sitePauseRuleId(b), 'same preferred slot - old code WOULD collide');
+  eq(I.sitePauseRuleId(a), I.sitePauseRuleId(b), 'same preferred slot — old code WOULD collide');
 
   await I.handleAllowMessage({ op: 'pauseSite', site: a });
   const idA = lastCall(chrome).addRules[0].id;

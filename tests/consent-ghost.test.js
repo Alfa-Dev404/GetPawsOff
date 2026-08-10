@@ -1,4 +1,4 @@
-/* PawsOff - Tier-1 unit tests for Consent Autopilot (consent-ghost.js).
+/* PawsOff — Tier-1 unit tests for Consent Autopilot (consent-ghost.js).
  *
  * Covers the PURE, side-effect-free core of the content script:
  *   - phrase → regex compilation (escapeRe, phrasesToRegexes) and the anchored,
@@ -37,9 +37,12 @@ const {
   looksAccept,
   looksPreferences,
   isAcceptLabel,
+  isUnsafeRoleAction,
+  isConsentRoleTarget,
   btnText,
   heuristicLabel,
   normalizeRemoteConfig,
+  shouldStandDownAfterRoleResult,
   REJECT_PHRASES_BY_LANG,
   ACCEPT_PHRASES_BY_LANG,
   PREF_PHRASES_BY_LANG,
@@ -53,6 +56,23 @@ function el(text, attrs) {
     innerText: text || '',
     textContent: text || '',
     getAttribute(name) { return Object.prototype.hasOwnProperty.call(a, name) ? a[name] : null; },
+  };
+}
+
+function v2Config(name, selectors) {
+  return {
+    schemaVersion: 2,
+    frameworks: [{
+      name,
+      selectors: {
+        containers: ['#cmp'],
+        directReject: ['#reject'],
+        openPreferences: [],
+        save: [],
+        completion: ['#cmp'],
+        ...(selectors || {}),
+      },
+    }],
   };
 }
 
@@ -133,7 +153,7 @@ test('looksAccept: "Accept All Cookies" reads as ACCEPT (longest-hit veto)', () 
 
 test('classifier: a pay-or-consent subscribe wall is untouchable (neither)', () => {
   // "subscribe" alone, and the French "refuser et s'abonner" which literally
-  // contains a reject word - both must classify as NEITHER reject nor accept.
+  // contains a reject word — both must classify as NEITHER reject nor accept.
   assert(!looksReject('subscribe'), 'subscribe is not a free reject');
   assert(!looksAccept('subscribe'), 'subscribe is not an accept either');
   assert(!looksReject("refuser et s'abonner"), 'paywall reject-word does not trigger a click');
@@ -165,7 +185,43 @@ test('isAcceptLabel: vetoes accept buttons, allows reject + empty (icon) buttons
   assert(!isAcceptLabel(el('')), 'icon-only (empty label) is trusted, not vetoed');
 });
 
-// ── normalizeRemoteConfig - the remote-config trust boundary ──────────────
+test('isUnsafeRoleAction: role selectors cannot click Save or Confirm controls', () => {
+  assert(isUnsafeRoleAction(el('Save choices')), 'standalone Save is forbidden');
+  assert(isUnsafeRoleAction(el('Confirm preferences')), 'Confirm is forbidden');
+  assert(isUnsafeRoleAction(el('Accept all')), 'Accept remains forbidden');
+  assert(!isUnsafeRoleAction(el('Reject all')), 'explicit reject remains eligible');
+});
+
+test('isUnsafeRoleAction: hidden identifiers cannot disguise unsafe actions', () => {
+  const disguisedSave = el('Manage preferences');
+  disguisedSave.id = 'save-and-accept';
+  assert(isUnsafeRoleAction(disguisedSave), 'save action in the id is forbidden');
+
+  const disguisedAccept = el('Privacy options');
+  disguisedAccept.className = 'accept-all-button';
+  assert(isUnsafeRoleAction(disguisedAccept), 'accept action in the class is forbidden');
+
+  const separatedConfirm = el('Reject all');
+  separatedConfirm.id = 'confirm-action';
+  assert(isUnsafeRoleAction(separatedConfirm), 'hyphenated confirm identifiers are forbidden');
+
+  const separatedSave = el('Reject all');
+  separatedSave.className = 'save_button';
+  assert(isUnsafeRoleAction(separatedSave), 'underscored save identifiers are forbidden');
+});
+
+test('isConsentRoleTarget: requires positive evidence for each declared action', () => {
+  assert(isConsentRoleTarget(el('Reject all'), 'directReject'), 'reject label proves reject role');
+  assert(isConsentRoleTarget(el('', { 'data-testid': 'reject-all' }), 'directReject'), 'semantic identifier proves reject role');
+  assert(isConsentRoleTarget(el('Manage choices'), 'openPreferences'), 'manage label proves preferences role');
+  assert(!isConsentRoleTarget(el('Continue'), 'directReject'), 'neutral target is not clicked');
+  assert(!isConsentRoleTarget(el('Delete account'), 'directReject'), 'unrelated destructive target is not clicked');
+  assert(!isConsentRoleTarget(el('Accept all'), 'directReject'), 'accept target is not clicked');
+  assert(!isConsentRoleTarget(el('Reject and delete account'), 'directReject'), 'composite destructive action is not clicked');
+  assert(!isConsentRoleTarget(el('Ablehnen und speichern'), 'directReject'), 'localized reject-and-save action is not clicked');
+});
+
+// ── normalizeRemoteConfig — the remote-config trust boundary ──────────────
 test('normalizeRemoteConfig: accepts a valid v1 config and filters bad selectors', () => {
   const out = normalizeRemoteConfig({
     schemaVersion: 1,
@@ -177,10 +233,113 @@ test('normalizeRemoteConfig: accepts a valid v1 config and filters bad selectors
   eq(out[0].pierceShadow, true);
 });
 
+test('normalizeRemoteConfig: rejects XPath and executable selector syntax', () => {
+  eq(normalizeRemoteConfig({
+    schemaVersion: 1,
+    frameworks: [{
+      name: 'Unsafe',
+      containerSelector: 'xpath///div[@id="cmp"]',
+      rejectSelectors: ['#reject'],
+    }],
+  }), null, 'XPath container is rejected');
+  eq(normalizeRemoteConfig({
+    schemaVersion: 1,
+    frameworks: [{ name: 'Real XPath', containerSelector: '//div[@id="cmp"]', rejectSelectors: ['#reject'] }],
+  }), null, 'real XPath container is rejected');
+  eq(normalizeRemoteConfig({
+    schemaVersion: 1,
+    frameworks: [{ name: 'Unsafe reject', containerSelector: '#cmp', rejectSelectors: ['javascript:reject()'] }],
+  }), null, 'executable reject selector is rejected');
+  const previousQuerySelector = loaded.document.querySelector;
+  loaded.document.querySelector = (selector) => {
+    if (selector === 'button[') throw new Error('invalid selector');
+    return null;
+  };
+  try {
+    eq(normalizeRemoteConfig({
+      schemaVersion: 1,
+      frameworks: [{ name: 'Malformed CSS', containerSelector: '#cmp', rejectSelectors: ['button['] }],
+    }), null, 'malformed CSS reject selector is rejected');
+  } finally {
+    loaded.document.querySelector = previousQuerySelector;
+  }
+});
+
+test('normalizeRemoteConfig: v1 and v2 retain validated shadow selector chains', () => {
+  const v1 = normalizeRemoteConfig({
+    schemaVersion: 1,
+    frameworks: [{
+      name: 'ShadowV1',
+      containerSelector: '#host >>> #cmp',
+      rejectSelectors: ['#host >>> #reject'],
+    }],
+  });
+  eq(v1[0].containerSelector, '#host >>> #cmp');
+  eq(v1[0].rejectSelectors[0], '#host >>> #reject');
+
+  const v2 = normalizeRemoteConfig({
+    schemaVersion: 2,
+    frameworks: [{
+      name: 'ShadowV2',
+      selectors: {
+        containers: ['#host >>> #cmp', '#other-host >>> #cmp'],
+        directReject: ['#host >>> #reject'],
+        openPreferences: [],
+        save: [],
+        completion: [],
+      },
+    }],
+  });
+  eq(v2[0].rejectSelectors[0], '#host >>> #reject');
+  eq(v2[0].containerSelectors.join('|'), '#host >>> #cmp|#other-host >>> #cmp');
+});
+
 test('normalizeRemoteConfig: rejects wrong schema / non-array frameworks (→ null)', () => {
-  eq(normalizeRemoteConfig({ schemaVersion: 2, frameworks: [] }), null, 'wrong schemaVersion');
+  eq(normalizeRemoteConfig({ schemaVersion: 9, frameworks: [] }), null, 'wrong schemaVersion');
   eq(normalizeRemoteConfig({ schemaVersion: 1, frameworks: 'nope' }), null, 'frameworks must be an array');
   eq(normalizeRemoteConfig(null), null, 'null payload');
+});
+
+test('normalizeRemoteConfig: v2 adopts constrained roles into the fixed local flow', () => {
+  const out = normalizeRemoteConfig(v2Config('SafeCmp', { openPreferences: ['#manage'] }));
+  assert(out && out.length === 1, 'v2 framework accepted');
+  eq(out[0].rejectSelectors[0], '#reject');
+  eq(out[0].roleFlow.openPreferences[0], '#manage');
+  assert(!('save' in out[0].roleFlow), 'separate save is not an executable role');
+  assert(!('steps' in out[0]), 'no executable action sequence created');
+});
+
+test('normalizeRemoteConfig: v2 rejects a remotely supplied save role', () => {
+  eq(normalizeRemoteConfig(v2Config('UnsafeSave', { save: ['#save'] })), null);
+});
+
+test('normalizeRemoteConfig: v2 completion proof keeps container hints first', () => {
+  const completion = Array.from({ length: 16 }, (_, index) => '.done-' + index);
+  const out = normalizeRemoteConfig(v2Config('BoundedCmp', { completion }));
+  eq(out[0].roleFlow.completion.length, 16, 'completion proof stays bounded');
+  eq(out[0].roleFlow.completion[0], '#cmp', 'container is never sliced out');
+});
+
+test('normalizeRemoteConfig: v2 truncates oversized completion hints after adding containers', () => {
+  const completion = Array.from({ length: 40 }, (_, index) => '.done-' + index);
+  const out = normalizeRemoteConfig(v2Config('OversizedCmp', { completion }));
+  eq(out[0].roleFlow.completion.length, 16);
+  eq(out[0].roleFlow.completion[0], '#cmp');
+  eq(out[0].roleFlow.completion[15], '.done-14');
+});
+
+test('role flow: any unverified action requires a full automation stand-down', () => {
+  assert(shouldStandDownAfterRoleResult({ acted: true, completed: false }), 'unverified action stands down');
+  assert(!shouldStandDownAfterRoleResult({ acted: false, completed: false }), 'no action may continue scanning');
+  assert(!shouldStandDownAfterRoleResult({ acted: true, completed: true }), 'verified completion uses success path');
+});
+
+test('normalizeRemoteConfig: v2 needs explicit container and reject roles', () => {
+  eq(
+    normalizeRemoteConfig(v2Config('NoReject', { directReject: [] })),
+    null,
+    'save/preferences-only remote rule cannot act',
+  );
 });
 
 test('normalizeRemoteConfig: skips disabled / structurally-invalid entries', () => {
@@ -201,7 +360,7 @@ test('normalizeRemoteConfig: NEVER adopts a remote action-steps engine (MV3 poli
     frameworks: [{ name: 'Evil', containerSelector: '.e', rejectSelectors: ['.r'], steps: [{ action: 'click', selector: '.anything' }] }],
   });
   assert(out && out.length === 1, 'framework still usable');
-  assert(!('steps' in out[0]), 'remote steps engine is stripped - no remotely-controlled behavior');
+  assert(!('steps' in out[0]), 'remote steps engine is stripped — no remotely-controlled behavior');
 });
 
 // ── bundled config sanity ──────────────────────────────────────────
@@ -216,7 +375,7 @@ test('BUNDLED_CONSENT_CONFIG: every entry is structurally well-formed', () => {
 });
 
 // A "hide"/"close" API call dismisses the notice UI without confirming the
-// user rejected tracking - Didomi's actual behavior on a bare dismiss varies
+// user rejected tracking — Didomi's actual behavior on a bare dismiss varies
 // by publisher config, so it must never be treated as a verified reject
 // (CodeRabbit finding, 2026-07-03: [onclick*="Didomi.notice.hide"] was
 // removed from Didomi's rejectSelectors for exactly this reason).

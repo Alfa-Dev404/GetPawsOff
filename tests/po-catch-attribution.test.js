@@ -1,4 +1,4 @@
-/* PawsOff - iframe attribution for po-catch.js.
+/* PawsOff — iframe attribution for po-catch.js.
  *
  * Regression coverage for the Sourcepoint / cross-origin CMP iframe bug: a
  * banner destroyed inside a 3rd-party iframe (privacy-mgmt.com) must be
@@ -24,10 +24,10 @@ const PO_CATCH = path.resolve(__dirname, '..', 'src', 'lib', 'po-catch.js');
 const CATCH_PREFIX = '__pawsOff_catch_';
 
 // Run po-catch.js in a simulated frame. opts:
-//   topFrame      - boolean, is this the top window?
-//   hostname      - this frame's own hostname
-//   ancestorOrigins - array of ancestor origin strings (Chrome semantics), or undefined
-//   sendResp      - response the background stub returns for pawsoff_topOriginHash
+//   topFrame      — boolean, is this the top window?
+//   hostname      — this frame's own hostname
+//   ancestorOrigins — array of ancestor origin strings (Chrome semantics), or undefined
+//   sendResp      — response the background stub returns for pawsoff_topOriginHash
 function runPoCatch(opts) {
   const o = opts || {};
   let store = {};
@@ -138,7 +138,7 @@ test('po-catch: explicit caller originHash always wins', () => {
 test('background: topOriginHashFromSender derives top hash from trusted sender.tab.url', () => {
   const { internals } = loadBackground();
   const got = internals.topOriginHashFromSender({ tab: { url: 'https://site.example.org/some/page?q=1' } });
-  eq(got, internals.fnvHash('site.example.org'), 'hash matches top-level host');
+  eq(got, internals.hashHost('site.example.org'), 'hash matches top-level host');
 });
 
 test('background: topOriginHashFromSender returns null when no tab url (spoof-safe)', () => {

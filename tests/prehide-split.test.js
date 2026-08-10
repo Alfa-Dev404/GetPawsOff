@@ -1,4 +1,4 @@
-/* PawsOff - prehide/engine split (perf Change 3).
+/* PawsOff — prehide/engine split (perf Change 3).
  *
  * consent-prehide.js runs at document_start and owns flash suppression with an
  * UNCONDITIONAL watchdog; the engine (document_idle) reveals early via the shared
@@ -19,7 +19,7 @@ test('prehide: injects a <style> and exposes the reveal hook', () => {
     'watchdog scheduled at PREHIDE_MAX_MS');
 });
 
-test('prehide: (ii) gated sub-frame / no engine - watchdog still reveals', () => {
+test('prehide: (ii) gated sub-frame / no engine — watchdog still reveals', () => {
   const p = loadConsentPrehide();
   eq(p.document.documentElement._kids.length, 1);
   p.scheduled[0].fn();                       // engine never loads; only the watchdog fires
@@ -40,7 +40,7 @@ test('prehide: (iii) double-reveal is idempotent (watchdog + hook)', () => {
   eq(p.document.documentElement._kids.length, 0, 'still removed exactly once, no throw');
 });
 
-test('prehide: SYNC CONTRACT - selector set equals the engine BUNDLED set', () => {
+test('prehide: SYNC CONTRACT — selector set equals the engine BUNDLED set', () => {
   const prehide = loadConsentPrehide().internals.CONTAINER_SELECTORS;
   const bundled = loadConsentGhost().internals.BUNDLED_CONSENT_CONFIG.map((f) => f.containerSelector);
   eq(JSON.stringify(prehide), JSON.stringify(bundled),

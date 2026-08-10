@@ -1,9 +1,9 @@
-/* PawsOff - ToS Shield guarded-vocab recall tests.
+/* PawsOff — ToS Shield guarded-vocab recall tests.
  *
  * Measures the DELTA the guarded vocabulary additions make on a small labelled
  * clause corpus (real-world EU + US phrasings). "Before" is the same shipping
  * config with only the added tokens stripped, isolating exactly what those
- * tokens contribute - not an unrelated baseline.
+ * tokens contribute — not an unrelated baseline.
  *
  * The additions are anchor-gated (anchor + object must co-occur in one
  * clause), so they lift recall on missed clauses without reintroducing false
@@ -95,7 +95,7 @@ test('vocab: guarded additions lift recall with no new false positives', () => {
   assert(after.recall > before.recall, 'recall improved (' + before.recall + ' -> ' + after.recall + ')');
   eq(after.recall, 1, 'every labelled adverse clause now flags; remaining misses=' + JSON.stringify(after.misses));
   eq(after.fpCount, 0, 'no benign clause mis-flagged; false-positives=' + JSON.stringify(after.falsePos));
-  eq(before.fpCount, 0, 'corpus precision was already clean - vocab did not trade FN for FP');
+  eq(before.fpCount, 0, 'corpus precision was already clean — vocab did not trade FN for FP');
 });
 
 test('vocab: "communicate … to third parties" now flags third_party_sharing', () => {

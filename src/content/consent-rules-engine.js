@@ -8,7 +8,7 @@
  * and same-origin iframes.
  *
  * Licensing: original PawsOff code, not a port of autoconsent's engine and
- * not a derivative of the MPL-2.0 vendored data in ./vendor/ - it only reads
+ * not a derivative of the MPL-2.0 vendored data in ./vendor/ — it only reads
  * that data (rules + phrase banks) at runtime. Keep it that way.
  *
  * Every side-effecting dependency (document, window, the circuit-breaker

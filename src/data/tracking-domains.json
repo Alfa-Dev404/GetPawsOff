@@ -1,5 +1,5 @@
 {
-  "$comment": "PawsOff PixelBlock - canonical email-tracker domain blocklist. SINGLE SOURCE OF TRUTH. Edit ONLY this file, then run `node scripts/generate-domains.js` to propagate the TRACKING_DOMAINS array into background.js (network/DNR layer) and pixel-block.js (DOM fallback layer). Run `node scripts/generate-domains.js --check` in CI to fail the build if those files have drifted from this source.",
+  "$comment": "PawsOff PixelBlock — canonical email-tracker domain blocklist. SINGLE SOURCE OF TRUTH. Edit ONLY this file, then run `node scripts/generate-domains.js` to propagate the TRACKING_DOMAINS array into background.js (network/DNR layer) and pixel-block.js (DOM fallback layer). Run `node scripts/generate-domains.js --check` in CI to fail the build if those files have drifted from this source.",
   "version": "2026.06.07",
   "domains": [
     "mailtrack.io",

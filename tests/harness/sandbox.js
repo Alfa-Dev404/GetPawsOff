@@ -1,4 +1,4 @@
-/* PawsOff - test sandbox for the local prevalence tier.
+/* PawsOff — test sandbox for the local prevalence tier.
  *
  * Loads the REAL shipping files into a fresh `vm` context so tests exercise the
  * code that actually ships, not a copy.
@@ -63,9 +63,18 @@ function makeChrome() {
     },
   };
   const noopListener = { addListener() {} };
+  // Capturing stub so tests can prove the free extension registers no external
+  // website bridge.
+  const onMessageExternal = { _fns: [], addListener(fn) { this._fns.push(fn); } };
   const chrome = {
     storage: { local },
-    runtime: { id: 'pawsoff-test', onMessage: noopListener, onInstalled: noopListener, onStartup: noopListener },
+    runtime: {
+      id: 'pawsoff-test',
+      onMessage: noopListener,
+      onMessageExternal,
+      onInstalled: noopListener,
+      onStartup: noopListener,
+    },
     alarms: { create() {}, onAlarm: noopListener },
   };
   return { chrome, getStore: () => store };
@@ -83,9 +92,72 @@ function loadLearner() {
   return { NS: root.__pawsOff_prevalence, PSL: root.PawsOffPSL, getStore, root };
 }
 
+function loadEnforcer() {
+  let store = {};
+  const messageListeners = [];
+  const alarmListeners = [];
+  const storageListeners = [];
+  const alarmCreates = [];
+  let dynamicReads = 0;
+  const chrome = {
+    storage: {
+      local: {
+        get(keys) {
+          if (keys === null) return Promise.resolve({ ...store });
+          const out = {};
+          const list = Array.isArray(keys) ? keys : [keys];
+          list.forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(store, key)) out[key] = store[key];
+          });
+          return Promise.resolve(out);
+        },
+        set(payload) { Object.assign(store, payload); return Promise.resolve(); },
+        remove(keys) {
+          (Array.isArray(keys) ? keys : [keys]).forEach((key) => { delete store[key]; });
+          return Promise.resolve();
+        },
+      },
+      onChanged: { addListener(listener) { storageListeners.push(listener); } },
+    },
+    runtime: {
+      id: 'pawsoff-test',
+      onMessage: { addListener(listener) { messageListeners.push(listener); } },
+      onInstalled: { addListener() {} },
+      onStartup: { addListener() {} },
+    },
+    alarms: {
+      create(name, options) { alarmCreates.push({ name, options }); },
+      onAlarm: { addListener(listener) { alarmListeners.push(listener); } },
+    },
+    declarativeNetRequest: {
+      getDynamicRules() { dynamicReads += 1; return Promise.resolve([]); },
+      getSessionRules() { return Promise.resolve([]); },
+      updateDynamicRules() { return Promise.resolve(); },
+    },
+  };
+  const root = { __pawsOff_TEST: true, chrome };
+  const sandbox = { self: root, chrome, console };
+  vm.createContext(sandbox);
+  for (const file of ['psl-lite.js', 'prevalence-enforcer.js']) {
+    const code = fs.readFileSync(path.join(LEARN_DIR, file), 'utf8');
+    vm.runInContext(code, sandbox, { filename: file });
+  }
+  return {
+    internals: root.__pawsOff_enforcerInternals,
+    chrome,
+    messageListeners,
+    alarmListeners,
+    storageListeners,
+    alarmCreates,
+    getDynamicReads: () => dynamicReads,
+    getStore: () => store,
+  };
+}
+
 // ── Collector: callback-style chrome.storage.local stub ─────────────────────
 function makeCollectorChrome(initialStore) {
   let store = initialStore || {};
+  const messages = [];
   const local = {
     get(keys, cb) {
       const out = {};
@@ -113,36 +185,88 @@ function makeCollectorChrome(initialStore) {
   };
   const chrome = {
     storage: { local },
-    runtime: { id: 'pawsoff-test', lastError: null, sendMessage() {} },
+    runtime: {
+      id: 'pawsoff-test',
+      lastError: null,
+      sendMessage(message, callback) {
+        messages.push(message);
+        if (typeof callback === 'function') callback({ ok: true, spotted: [] });
+      },
+    },
   };
-  return { chrome, getStore: () => store };
+  return { chrome, getStore: () => store, messages };
 }
 
-function loadCollector() {
-  // Force the master switch OFF so begin() (PerformanceObserver, timers,
-  // listeners) never runs during the test; the test hook still fires first.
+function loadCollector(options) {
+  const o = options || {};
+  // Most tests force the master switch OFF so begin() never runs. Lifecycle
+  // tests opt in and receive captured timers/listeners instead.
   const initialStore = {};
-  initialStore[MASTER_KEY] = false;
-  const { chrome, getStore } = makeCollectorChrome(initialStore);
+  initialStore[MASTER_KEY] = o.enabled === true;
+  const { chrome, getStore, messages } = makeCollectorChrome(initialStore);
 
+  const timers = [];
+  const windowListeners = {};
+  const documentListeners = {};
   const win = {};
   win.top = win; // pass the `window.top !== window` top-frame guard
   win.__pawsOff_TEST = true; // unlock the guarded test-export hook
-  win.addEventListener = function () {};
+  win.addEventListener = function (type, listener) { windowListeners[type] = listener; };
   const location = { protocol: 'https:', hostname: 'example.com', href: 'https://example.com/' };
-  const document = { addEventListener() {}, visibilityState: 'visible' };
-  const sandbox = { self: win, window: win, location, document, chrome, console, URL };
+  const document = {
+    addEventListener(type, listener) { documentListeners[type] = listener; },
+    visibilityState: 'visible',
+  };
+  function FakePerformanceObserver() {}
+  FakePerformanceObserver.prototype.observe = function () {};
+  FakePerformanceObserver.prototype.disconnect = function () {};
+  const sandbox = {
+    self: win,
+    window: win,
+    location,
+    document,
+    chrome,
+    console,
+    URL,
+    performance: { getEntriesByType() { return []; } },
+    PerformanceObserver: FakePerformanceObserver,
+    setTimeout(listener, delay) {
+      timers.push({ listener, delay });
+      return timers.length;
+    },
+  };
   vm.createContext(sandbox);
+  const pslCode = fs.readFileSync(path.join(LEARN_DIR, 'psl-lite.js'), 'utf8');
+  vm.runInContext(pslCode, sandbox, { filename: 'psl-lite.js' });
   const code = fs.readFileSync(path.join(LEARN_DIR, 'prevalence-collector.js'), 'utf8');
   vm.runInContext(code, sandbox, { filename: 'prevalence-collector.js' });
-  return { internals: win.__pawsOff_collectorInternals, getStore, win };
+  return {
+    internals: win.__pawsOff_collectorInternals,
+    getStore,
+    win,
+    document,
+    messages,
+    timers,
+    windowListeners,
+    documentListeners,
+  };
 }
 
 // ── Background service worker: promise-style chrome + SW globals ──────────
-function loadBackground() {
+function loadBackground(options) {
+  const o = options || {};
   const { chrome, getStore } = makeChrome();
-  // background.js also registers a storage.onChanged listener.
-  chrome.storage.onChanged = { addListener() {} };
+  // Capture storage.onChanged so tests can exercise the real event path
+  // without making every local.set call implicitly trigger background work.
+  const storageChangeListeners = [];
+  chrome.storage.onChanged = { addListener(fn) { storageChangeListeners.push(fn); } };
+  // Capture alarm listeners too, so tests can drive the periodic refresh path.
+  const alarmListeners = [];
+  chrome.alarms = {
+    _creates: [],
+    create(name, opts) { this._creates.push({ name, options: opts }); },
+    onAlarm: { addListener(fn) { alarmListeners.push(fn); } },
+  };
   // Capturing declarativeNetRequest stub so allow/DNR rule writes can be asserted.
   chrome.declarativeNetRequest = {
     _calls: [],
@@ -150,6 +274,7 @@ function loadBackground() {
     getDynamicRules() { return Promise.resolve([]); },
   };
   const root = {};
+  const fetchAttempts = [];
   root.__pawsOff_TEST = true; // unlock the guarded test-export hook
   // background.js has no DOM; it needs the SW globals atob + TextEncoder (used
   // by base64ToBytes / signature verify). importScripts() is undefined here and
@@ -162,22 +287,55 @@ function loadBackground() {
     console,
     atob: global.atob,
     TextEncoder: global.TextEncoder,
-    // Never expose the real network stack to code under test - a stray fetch must
+    TextDecoder: global.TextDecoder,
+    Uint8Array: global.Uint8Array,
+    Date: o.Date || global.Date,
+    // Never expose the real network stack to code under test — a stray fetch must
     // fail loudly, not silently hit the network. (Top-level fetch only runs in
     // callbacks that don't fire under test; this just hard-guarantees it.)
-    fetch: function () { return Promise.reject(new Error('network disabled in background test sandbox')); },
+    fetch: function (url) {
+      fetchAttempts.push(String(url));
+      return Promise.reject(new Error('network disabled in background test sandbox'));
+    },
     URL: global.URL, // real MV3 service workers expose the URL global
   };
   vm.createContext(sandbox);
+  // Same order background.js importScripts them: release-feed defines the
+  // signedFeed dep the signed-config client gates every release fetch on.
+  const releaseFeed = fs.readFileSync(path.join(BG_DIR, 'release-feed.js'), 'utf8');
+  vm.runInContext(releaseFeed, sandbox, { filename: 'release-feed.js' });
+  const boundedResponse = fs.readFileSync(path.join(BG_DIR, 'bounded-response.js'), 'utf8');
+  vm.runInContext(boundedResponse, sandbox, { filename: 'bounded-response.js' });
+  const configValidation = fs.readFileSync(path.join(BG_DIR, 'config-validation.js'), 'utf8');
+  vm.runInContext(configValidation, sandbox, { filename: 'config-validation.js' });
+  const signedConfigClient = fs.readFileSync(path.join(BG_DIR, 'signed-config-client.js'), 'utf8');
+  vm.runInContext(signedConfigClient, sandbox, { filename: 'signed-config-client.js' });
   const code = fs.readFileSync(path.join(BG_DIR, 'background.js'), 'utf8');
   vm.runInContext(code, sandbox, { filename: 'background.js' });
-  return { internals: root.__pawsOff_backgroundInternals, getStore, root, chrome };
+  return {
+    internals: root.__pawsOff_backgroundInternals,
+    getStore,
+    root,
+    chrome,
+    emitStorageChange(changes, area) {
+      return Promise.all(storageChangeListeners.map((fn) => Promise.resolve().then(
+        () => fn(changes, area || 'local'),
+      )));
+    },
+    fetchAttempts,
+    fireAlarm(name) {
+      alarmListeners.forEach((fn) => fn({ name }));
+      // Alarm handlers are sync fire-and-forget; drain the microtask queue so
+      // the async refresh work they kick off has run before assertions.
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    },
+  };
 }
 
 // ── ConsentGhost: content-script DOM + timer stubs + Jest-style module hook ──
 // consent-ghost.js already ships a CommonJS test-export (module.exports.__test)
 // intended for Jest. We satisfy it by injecting a `module` object into the vm
-// context - NO source edit required. init() is async, so it defers every DOM /
+// context — NO source edit required. init() is async, so it defers every DOM /
 // observer / scan side effect to microtasks that never run before the file's
 // synchronous export block executes; the inert stubs below keep those deferred
 // calls harmless anyway. `htmlLang` / `navLang` drive detectLangs() so language
@@ -277,7 +435,7 @@ function loadConsentGhost(opts) {
 // Both files use the SAME pattern as consent-ghost.js: an async init() that
 // defers all DOM/observer/scan work to microtasks, plus a CommonJS
 // `module.exports.__test` hook at the very end. We satisfy that hook by
-// injecting a `module` object - NO source edit. Default hostname 'example.com'
+// injecting a `module` object — NO source edit. Default hostname 'example.com'
 // is not a webmail/ToS host, so init() detects no provider and returns early;
 // the pure helpers are still exported. `atob` is provided for tos-shield's
 // base64ToBytes.
@@ -294,6 +452,8 @@ function _runContentScript(fileName, opts) {
 
   const win = {};
   win.top = win;
+  win.crypto = require('node:crypto').webcrypto;
+  win.TextEncoder = TextEncoder;
   win.addEventListener = function () {};
   win.removeEventListener = function () {};
   const location = { protocol: 'https:', hostname, href: 'https://' + hostname + '/', pathname: '/', hash: '', search: '' };
@@ -323,9 +483,17 @@ function _runContentScript(fileName, opts) {
     setTimeout: function () { return 0; },
     clearTimeout: function () {},
     atob: global.atob,
+    crypto: win.crypto,
+    TextEncoder,
     module: moduleShim,
   };
   vm.createContext(sandbox);
+  if (fileName === 'tos-shield.js') {
+    for (const dependency of ['tos-shield-core.js', 'tos-shield-panel.js']) {
+      const dependencyCode = fs.readFileSync(path.join(CONTENT_DIR, dependency), 'utf8');
+      vm.runInContext(dependencyCode, sandbox, { filename: dependency });
+    }
+  }
   const code = fs.readFileSync(path.join(CONTENT_DIR, fileName), 'utf8');
   vm.runInContext(code, sandbox, { filename: fileName });
   const internals = (moduleShim.exports && moduleShim.exports.__test) || {};
@@ -436,7 +604,7 @@ function loadCmpApiMain(opts) {
   const code = fs.readFileSync(path.join(CONTENT_DIR, 'cmp-api-main.js'), 'utf8');
   vm.runInContext(code, sandbox, { filename: 'cmp-api-main.js' });
   // Derive `done` from the dispatched signal event (detail.cmp) rather than a
-  // page-visible window marker - cmp-api-main no longer leaks one to the page.
+  // page-visible window marker — cmp-api-main no longer leaks one to the page.
   return { events, win, done: events.length ? events[events.length - 1].detail.cmp : undefined };
 }
 
@@ -467,24 +635,26 @@ function loadCmpApiMainInternals() {
 
 // ── Extension-page IIFEs (popup.js / options.js) ───────────────────────────
 // Both end with `document.addEventListener('DOMContentLoaded', init)`, so init()
-// (and ALL DOM/storage work) never runs under test - only the synchronous const/
+// (and ALL DOM/storage work) never runs under test — only the synchronous const/
 // function defs and the injected-`module` __test export execute. We satisfy the
 // hook by injecting `module`, exactly like the content scripts.
-function _runPageScript(dir, fileName) {
+function _runPageScript(dir, fileName, options) {
+  const o = options || {};
   const moduleShim = { exports: {} };
   const win = {};
   win.addEventListener = function () {};
-  const documentObj = {
+  const documentObj = o.document || {
     addEventListener() {},
     getElementById() { return null; },
     querySelector() { return null; },
     querySelectorAll() { return []; },
     createElement() { return { style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, setAttribute() {} }; },
   };
-  const { chrome } = makeCollectorChrome({});
+  const { chrome, getStore } = makeCollectorChrome(o.initialStore || {});
   chrome.storage.onChanged = { addListener() {} };
   chrome.tabs = { query() {}, reload() {} };
   chrome.runtime.openOptionsPage = function () {};
+  if (typeof o.sendMessage === 'function') chrome.runtime.sendMessage = o.sendMessage;
   const sandbox = {
     self: win,
     window: win,
@@ -498,15 +668,19 @@ function _runPageScript(dir, fileName) {
     module: moduleShim,
   };
   vm.createContext(sandbox);
+  const adaptiveCode = fs.readFileSync(path.join(LIB_DIR, 'adaptive-mode.js'), 'utf8');
+  vm.runInContext(adaptiveCode, sandbox, { filename: 'adaptive-mode.js' });
+  moduleShim.exports = {};
   const code = fs.readFileSync(path.join(dir, fileName), 'utf8');
   vm.runInContext(code, sandbox, { filename: fileName });
-  return { internals: (moduleShim.exports && moduleShim.exports.__test) || {}, win, document: documentObj };
+  return { internals: (moduleShim.exports && moduleShim.exports.__test) || {}, win, document: documentObj, getStore };
 }
-function loadPopup() { return _runPageScript(POPUP_DIR, 'popup.js'); }
-function loadOptions() { return _runPageScript(OPTIONS_DIR, 'options.js'); }
+function loadPopup(options) { return _runPageScript(POPUP_DIR, 'popup.js', options); }
+function loadOptions(options) { return _runPageScript(OPTIONS_DIR, 'options.js', options); }
 
 module.exports = {
   loadLearner,
+  loadEnforcer,
   loadCollector,
   loadBackground,
   loadConsentGhost,

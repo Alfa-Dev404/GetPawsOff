@@ -1,11 +1,11 @@
-/* PawsOff - privacy regression: the observe-only learner must NEVER persist a
+/* PawsOff — privacy regression: the observe-only learner must NEVER persist a
  * plaintext browsing host as a storage KEY (CLAUDE.md #5: "sites keyed by
  * hashHost, never plaintext").
  *
  * The user's first-party sites (their browsing history) are stored ONLY as
  * hashed keys. The tracker's own registrable domain is public infrastructure,
  * not the user's history, and is kept as a VALUE (entry.d) so the popup radar +
- * enforcer can still name it - but it never appears as a key, and no first-party
+ * enforcer can still name it — but it never appears as a key, and no first-party
  * host appears anywhere.
  */
 'use strict';
@@ -52,7 +52,7 @@ test('privacy: every learner storage KEY is a hashHost digest, never plaintext',
     assert(!allKeys.has(host), 'no plaintext host as a key: ' + host);
   }
 
-  // Strongest check: NO plaintext host appears ANYWHERE in the serialized store -
+  // Strongest check: NO plaintext host appears ANYWHERE in the serialized store —
   // not as a key, not as a value (no entry.d, no leaked first party).
   const serialized = JSON.stringify(snitch) + JSON.stringify(sizes);
   for (const host of plaintextHosts) {

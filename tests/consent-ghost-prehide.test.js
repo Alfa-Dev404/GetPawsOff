@@ -1,4 +1,4 @@
-/* PawsOff - Step-3 tests for the pre-paint flash-suppression (prehide) layer in
+/* PawsOff — Step-3 tests for the pre-paint flash-suppression (prehide) layer in
  * consent-ghost.js.
  *
  * Prehide injects a <style> at document_start that hides ONLY vetted named-CMP
@@ -77,7 +77,7 @@ test('watchdog reveal: firing the scheduled timer removes the style (no-CMP case
   let scheduled = null;
   t.installPrehide(html, '#x{visibility:hidden!important}', (fn, ms) => { scheduled = { fn, ms }; });
   eq(html.kids.length, 1);
-  scheduled.fn();                       // the watchdog fires - no success signal involved
+  scheduled.fn();                       // the watchdog fires — no success signal involved
   eq(html.kids.length, 0, 'style raised by the unconditional watchdog');
 });
 
@@ -95,7 +95,7 @@ test('reveal is idempotent and scheduler-throw reveals immediately (never orphan
 test('disabled site: init standdown reveals the prehide style', async () => {
   // Default load presets __pawsOff_consentGhost_disabled=true. boot() installs the
   // prehide on documentElement; init() resolves the (async) disabled flag and its
-  // protectionPaused() branch must reveal - independent of the watchdog (no-op
+  // protectionPaused() branch must reveal — independent of the watchdog (no-op
   // setTimeout here, so only the disabled branch can have removed it).
   const loaded = loadConsentGhost();
   eq(loaded.document.documentElement._kids.length, 1, 'prehide installed at document_start');
@@ -162,7 +162,7 @@ test('prehidden banner is still rejected by scanAndReject (revealed, not skipped
   assert(prehideActive(), 'prehide is active at document_start (banner would read invisible)');
   await flush();
   await flush();
-  eq(clicks, 1, 'reject button was clicked - container not skipped by our own prehide');
+  eq(clicks, 1, 'reject button was clicked — container not skipped by our own prehide');
   eq(loaded.win.__pawsOff_consentGhost_handled, true, 'page marked handled (rejected)');
   assert(!prehideActive(), 'prehide revealed during the reject');
 });

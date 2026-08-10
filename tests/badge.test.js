@@ -1,8 +1,8 @@
-/* PawsOff - per-tab "trackers blocked" toolbar badge (pure logic).
+/* PawsOff — per-tab "trackers blocked" toolbar badge (pure logic).
  *
  * The badge shows a DISTINCT-blocked count for the current page (dedup key = the
  * DNR rule id today; a per-domain key is a build-time follow-up). Same blocked
- * entry counted once, 0 hidden, huge counts capped. The chrome.action /
+ * entry counted once, 0 visible, huge counts capped. The chrome.action /
  * tab-lifecycle wiring is an E2E concern; here we pin the pure count + text logic.
  */
 'use strict';
@@ -13,7 +13,7 @@ function bg() { const { internals } = loadBackground(); return internals; }
 
 test('badgeText: 0 is the visible baseline, normal counts render, huge counts cap at 99+', () => {
   const I = bg();
-  eq(I.badgeText(0), '0');     // baseline "0" - sits there and ticks up on detection
+  eq(I.badgeText(0), '0');     // baseline "0" — sits there and ticks up on detection
   eq(I.badgeText(-3), '0');    // never negative, floors to "0"
   eq(I.badgeText(1), '1');
   eq(I.badgeText(4), '4');      // the "it's working" number
@@ -48,7 +48,7 @@ test('dedupKeyForRule: rules of one tracker company collapse to a single count',
   const I = bg();
   // byId[ruleId] = index into d; -1 = unmapped (path/query rule with no domain).
   // rules 10,11,12 → doubleclick.net (idx 0); rule 20 → criteo.com (idx 1);
-  // rule 30 unmapped; rule 99 out of range. Keys are OPAQUE indices ('d'+idx) -
+  // rule 30 unmapped; rule 99 out of range. Keys are OPAQUE indices ('d'+idx) —
   // never the domain string, which for first-party EasyPrivacy rules could be
   // the visited page's own host (hash-only privacy rule).
   const idMap = { d: ['doubleclick.net', 'criteo.com'], byId: [] };
@@ -73,7 +73,7 @@ test('blockedKeyForUrl: counts only OUR tracker domains, as OPAQUE index keys', 
   const I = bg();
   const idx = new Map([['doubleclick.net', 0], ['criteo.com', 1]]);
   const getBase = (h) => h.split('.').slice(-2).join('.'); // toy eTLD+1 for the test
-  // a blocked tracker subdomain collapses to its base domain's index - the
+  // a blocked tracker subdomain collapses to its base domain's index — the
   // domain string itself is discarded (hash-only privacy rule).
   eq(I.blockedKeyForUrl('https://stats.g.doubleclick.net/j/collect?x=1', idx, getBase), 'd0');
   eq(I.blockedKeyForUrl('https://criteo.com/px.gif', idx, getBase), 'd1');
@@ -96,7 +96,7 @@ test('badge tiers cannot double-count: webRequest + reconcile emit the same key'
   I.addTrackers(map, 3, [I.blockedKeyForUrl('https://ad.doubleclick.net/i.js', idx, getBase)]);
   // …then the reconcile poll reports the same block via its rule id.
   I.addTrackers(map, 3, [I.dedupKeyForRule(idMap, 10)]);
-  eq(map.get(3).size, 1); // one tracker, one count - regardless of which tier saw it
+  eq(map.get(3).size, 1); // one tracker, one count — regardless of which tier saw it
 });
 
 test('dedupKeyForRule: fails open to per-rule when the map is missing/empty', () => {
@@ -109,7 +109,7 @@ test('dedupKeyForRule: fails open to per-rule when the map is missing/empty', ()
 test('bumpBlockedReqs: counts every blocked REQUEST per tab (popup stats feed)', () => {
   const I = bg();
   const m = new Map();
-  // 3 blocked requests on tab 1 - even from the SAME tracker - count as 3
+  // 3 blocked requests on tab 1 — even from the SAME tracker — count as 3
   // (the popup's Blocked/Data-saved use requests; the badge uses distinct).
   eq(I.bumpBlockedReqs(m, 1), 1);
   eq(I.bumpBlockedReqs(m, 1), 2);
@@ -136,5 +136,14 @@ test('tabEpoch/bumpTabEpoch: per-tab navigation generation, fences stale async w
   // The pattern callers use: capture epoch before an await, compare after.
   const before = I.tabEpoch(1);
   I.bumpTabEpoch(1); // simulates a navigation happening mid-await
-  eq(I.tabEpoch(1) === before, false); // stale - caller should discard its result
+  eq(I.tabEpoch(1) === before, false); // stale — caller should discard its result
+});
+
+test('matched DNR events must belong to the tab current page', () => {
+  const I = bg();
+  I.bumpTabEpoch(9, 5000);
+  assert(!I.matchBelongsToCurrentPage({ tabId: 9, timeStamp: 4999 }), 'old-page match discarded');
+  assert(I.matchBelongsToCurrentPage({ tabId: 9, timeStamp: 5000 }), 'current navigation match retained');
+  assert(!I.matchBelongsToCurrentPage({ tabId: 9 }), 'timestamp-free tab match cannot be attributed');
+  assert(I.matchBelongsToCurrentPage({ tabId: -1, timeStamp: 1 }), 'global matches are unaffected');
 });

@@ -1,4 +1,4 @@
-/* PawsOff, Prevalence Learner - observe-only, service-worker side.
+/* PawsOff, Prevalence Learner — observe-only, service-worker side.
  *
  * A Privacy Badger-style local learner, re-derived from the method only
  * (clean-room, no Privacy Badger code). A third party showing up across many
@@ -13,12 +13,12 @@
  * site-critical domains, and bounded storage (per-tracker site cap + global
  * cap + TTL decay).
  *
- * Observe-only - this file scores, never blocks/cookieblocks/redirects, and
+ * Observe-only — this file scores, never blocks/cookieblocks/redirects, and
  * writes no declarativeNetRequest rule. Enforcement lives elsewhere.
  *
  * Requires self.PawsOffPSL; background.js loads psl-lite.js first via
  * importScripts. Self-registers its own message + alarm listeners
- * (additive - doesn't disturb the main router).
+ * (additive — doesn't disturb the main router).
  */
 'use strict';
 (function (root) {
@@ -48,7 +48,7 @@
 
   // One-way FNV-1a/32 host digest, byte-identical to the collector/po-catch/
   // popup copies (pinned by tests/hashhost-consistency.test.js). Everything
-  // the learner persists - tracker and first-party alike - is hashed, never
+  // the learner persists — tracker and first-party alike — is hashed, never
   // plaintext. The popup radar still shows real tracker names because
   // spotted() derives them live from the page, not from storage.
   function hashHost(host) {
@@ -63,7 +63,7 @@
   }
   function isHashKey(k) { return typeof k === 'string' && /^h:[0-9a-f]{8}$/.test(k); }
   // A legacy plaintext-keyed store predates hashing; since this is observe-only
-  // data we just discard it rather than re-key - the learner rebuilds from scratch.
+  // data we just discard it rather than re-key — the learner rebuilds from scratch.
   function migrateHashedKeys(raw) {
     if (!raw || typeof raw !== 'object') return { data: {}, changed: false };
     var keys = Object.keys(raw);
@@ -122,7 +122,29 @@
   // ── Serialized mutation queue (no read-modify-write races in the SW) ───────
   var _cache = null;            // in-memory snitch map (rehydrated on demand)
   var _sizeCache = null;        // in-memory per-domain size map { domain: { total, count } }
+  var _domainLabels = {};       // hash -> domain, memory-only for the live popup/DNR join
   var _chain = Promise.resolve();
+
+  function rememberDomain(base) {
+    var key = hashHost(base);
+    if (!key) return key;
+    if (!Object.prototype.hasOwnProperty.call(_domainLabels, key)) {
+      _domainLabels[key] = base;
+    } else if (_domainLabels[key] !== base) {
+      _domainLabels[key] = null;
+    }
+    return key;
+  }
+
+  function resolveSpots(hashes) {
+    var labels = {};
+    if (!Array.isArray(hashes)) return Promise.resolve(labels);
+    for (var i = 0; i < hashes.length; i++) {
+      var key = hashes[i];
+      if (isHashKey(key) && typeof _domainLabels[key] === 'string') labels[key] = _domainLabels[key];
+    }
+    return Promise.resolve(labels);
+  }
 
   function load() {
     if (_cache) return Promise.resolve(_cache);
@@ -174,6 +196,54 @@
     return !!firstPartyHost && Array.isArray(hostList) && hostList.length > 0;
   }
 
+  function reportableTrackerBase(host, fpBase, seen) {
+    var tracker = baseOf(host);
+    if (!tracker) return null;
+    if (tracker === fpBase) return null;
+    if (sameOwner(tracker, fpBase)) return null;
+    if (seen.has(tracker)) return null;
+    seen.add(tracker);
+    return tracker;
+  }
+
+  function capTrackerSites(entry) {
+    var siteKeys = Object.keys(entry.s);
+    if (siteKeys.length <= MAX_SITES_PER_TRACKER) return;
+    siteKeys.sort(function (a, b) { return entry.s[a] - entry.s[b]; });
+    var dropN = siteKeys.length - MAX_SITES_PER_TRACKER;
+    for (var i = 0; i < dropN; i++) delete entry.s[siteKeys[i]];
+  }
+
+  function recordTrackerSighting(snitch, tracker, fpKey, t) {
+    var trackerKey = rememberDomain(tracker);
+    if (!trackerKey) return;
+    var entry = snitch[trackerKey];
+    if (!entry) entry = snitch[trackerKey] = { s: {}, first: t, last: t };
+    entry.s[fpKey] = t;
+    entry.last = t;
+    capTrackerSites(entry);
+  }
+
+  function capTrackers(snitch, t) {
+    var keys = Object.keys(snitch);
+    if (keys.length <= MAX_TRACKERS) return;
+    keys.sort(function (a, b) { return scoreEntry(snitch[a], t) - scoreEntry(snitch[b], t); });
+    var drop = keys.length - MAX_TRACKERS;
+    for (var i = 0; i < drop; i++) {
+      delete snitch[keys[i]];
+      delete _domainLabels[keys[i]];
+    }
+  }
+
+  function recordHostList(snitch, hostList, context) {
+    var seen = new Set();
+    for (var i = 0; i < hostList.length; i++) {
+      var tracker = reportableTrackerBase(hostList[i], context.fpBase, seen);
+      if (tracker) recordTrackerSighting(snitch, tracker, context.fpKey, context.t);
+    }
+    capTrackers(snitch, context.t);
+  }
+
   function record(firstPartyHost, hostList) {
     return enqueue(function () {
       if (!hasReportableHosts(firstPartyHost, hostList)) return Promise.resolve();
@@ -183,34 +253,7 @@
       var fpKey = hashHost(fpBase);
       if (!fpKey) return Promise.resolve();
       return load().then(function (snitch) {
-        var seen = new Set();
-        for (var i = 0; i < hostList.length; i++) {
-          var tBase = baseOf(hostList[i]);
-          if (!tBase || tBase === fpBase) continue;     // first-party
-          if (sameOwner(tBase, fpBase)) continue;       // same-owner first-party set
-          if (seen.has(tBase)) continue;                // dedupe within this page
-          seen.add(tBase);
-          var tKey = hashHost(tBase);                   // hashed KEY (no plaintext)
-          if (!tKey) continue;
-          var entry = snitch[tKey];
-          if (!entry) { entry = snitch[tKey] = { s: {}, first: t, last: t }; }
-          entry.s[fpKey] = t;                            // hashed first-party site KEY
-          entry.last = t;
-          // cap distinct sites per tracker -- drop the oldest sightings
-          var siteKeys = Object.keys(entry.s);
-          if (siteKeys.length > MAX_SITES_PER_TRACKER) {
-            siteKeys.sort(function (a, b) { return entry.s[a] - entry.s[b]; });
-            var dropN = siteKeys.length - MAX_SITES_PER_TRACKER;
-            for (var d = 0; d < dropN; d++) delete entry.s[siteKeys[d]];
-          }
-        }
-        // global cap -- evict lowest-score trackers if oversized
-        var keys = Object.keys(snitch);
-        if (keys.length > MAX_TRACKERS) {
-          keys.sort(function (a, b) { return scoreEntry(snitch[a], t) - scoreEntry(snitch[b], t); });
-          var gDrop = keys.length - MAX_TRACKERS;
-          for (var g = 0; g < gDrop; g++) delete snitch[keys[g]];
-        }
+        recordHostList(snitch, hostList, { fpBase: fpBase, fpKey: fpKey, t: t });
         return save();
       });
     });
@@ -239,48 +282,69 @@
     return enqueue(function () {
       if (!hostSizes || typeof hostSizes !== 'object') return Promise.resolve();
       return loadSizes().then(function (sizes) {
-        for (var host in hostSizes) {
-          if (!Object.prototype.hasOwnProperty.call(hostSizes, host)) continue;
-          var bytes = hostSizes[host];
-          if (typeof bytes !== 'number' || bytes <= 0) continue;
-          var tBase = baseOf(host);
-          if (!tBase) continue;
-          var tKey = hashHost(tBase); // hashed KEY; size aggregate ignores identity
-          if (!tKey) continue;
-          var entry = sizes[tKey];
-          if (!entry) { entry = sizes[tKey] = { total: 0, count: 0 }; }
-          entry.total += bytes;
-          entry.count += 1;
-          entry.avg = Math.round(entry.total / entry.count);
-        }
-        // Cap learned domains to MAX_TRACKERS (reuse the same bound)
-        var keys = Object.keys(sizes);
-        if (keys.length > MAX_TRACKERS) {
-          keys.sort(function (a, b) { return (sizes[a].count || 0) - (sizes[b].count || 0); });
-          var drop = keys.length - MAX_TRACKERS;
-          for (var i = 0; i < drop; i++) delete sizes[keys[i]];
-        }
+        recordSizeEntries(sizes, hostSizes);
+        capSizeEntries(sizes);
         // save() already includes _sizeCache in the payload
         return save();
       });
     });
   }
 
+  function recordSizeEntry(sizes, host, bytes) {
+    if (!Number.isFinite(bytes)) return;
+    if (bytes <= 0) return;
+    var tracker = baseOf(host);
+    if (!tracker) return;
+    var trackerKey = hashHost(tracker);
+    if (!trackerKey) return;
+    var entry = sizes[trackerKey];
+    if (!validSizeAccumulator(entry)) entry = sizes[trackerKey] = { total: 0, count: 0 };
+    entry.total += bytes;
+    entry.count += 1;
+    entry.avg = Math.round(entry.total / entry.count);
+  }
+
+  function validSizeAccumulator(entry) {
+    if (!entry || typeof entry !== 'object') return false;
+    if (!Number.isFinite(entry.total) || entry.total < 0) return false;
+    if (!Number.isInteger(entry.count) || entry.count < 0) return false;
+    return entry.count > 0 || entry.total === 0;
+  }
+
+  function recordSizeEntries(sizes, hostSizes) {
+    Object.keys(hostSizes).forEach(function (host) {
+      recordSizeEntry(sizes, host, hostSizes[host]);
+    });
+  }
+
+  function capSizeEntries(sizes) {
+    var keys = Object.keys(sizes);
+    if (keys.length <= MAX_TRACKERS) return;
+    keys.sort(function (a, b) { return (sizes[a].count || 0) - (sizes[b].count || 0); });
+    var drop = keys.length - MAX_TRACKERS;
+    for (var i = 0; i < drop; i++) delete sizes[keys[i]];
+  }
+
   // Return the overall average bytes per blocked third-party request, computed
   // from all learned domains. Returns { avgBytes, domainCount, totalObservations }
   // so the popup can show honest data with confidence metadata. Falls back to
   // null when no data has been learned yet.
+  function validSizeObservation(entry) {
+    if (!entry) return false;
+    if (!Number.isFinite(entry.total) || entry.total <= 0) return false;
+    return Number.isInteger(entry.count) && entry.count > 0;
+  }
+
   function getSizeEstimate() {
     return loadSizes().then(function (sizes) {
       var totalBytes = 0, totalCount = 0, domainCount = 0;
-      for (var domain in sizes) {
-        if (!Object.prototype.hasOwnProperty.call(sizes, domain)) continue;
+      Object.keys(sizes).forEach(function (domain) {
         var e = sizes[domain];
-        if (!e || !e.total || !e.count) continue;
+        if (!validSizeObservation(e)) return;
         totalBytes += e.total;
         totalCount += e.count;
         domainCount++;
-      }
+      });
       if (totalCount === 0) return null;
       return {
         avgBytes: Math.round(totalBytes / totalCount),
@@ -291,58 +355,75 @@
   }
 
   // ── Daily decay / compaction ───────────────────────────────────────────────
+  function pruneExpiredSites(sites, t) {
+    Object.keys(sites).forEach(function (site) {
+      if (t - sites[site] > SITE_TTL_DAYS) delete sites[site];
+    });
+  }
+
+  function compactTracker(snitch, tracker, t) {
+    var entry = snitch[tracker];
+    var sites = entry.s || {};
+    pruneExpiredSites(sites, t);
+    if (Object.keys(sites).length) return;
+    delete snitch[tracker];
+    delete _domainLabels[tracker];
+  }
+
+  function compactSnitch(snitch, t) {
+    Object.keys(snitch).forEach(function (tracker) { compactTracker(snitch, tracker, t); });
+  }
+
   function compact() {
     return enqueue(function () {
       var t = today();
       return load().then(function (snitch) {
-        for (var tracker in snitch) {
-          if (!Object.prototype.hasOwnProperty.call(snitch, tracker)) continue;
-          var entry = snitch[tracker];
-          var sites = entry.s || {};
-          for (var site in sites) {
-            if (!Object.prototype.hasOwnProperty.call(sites, site)) continue;
-            if (t - sites[site] > SITE_TTL_DAYS) delete sites[site];
-          }
-          if (Object.keys(sites).length === 0) delete snitch[tracker];
-        }
+        compactSnitch(snitch, t);
         return save();
       });
     });
   }
 
   // ── Read APIs (for popup / options / diagnostics / SW console) ─────────────
+  function statsRow(tracker, entry, t) {
+    var score = scoreEntry(entry, t);
+    return {
+      domain: tracker,
+      score: Math.round(score * 100) / 100,
+      sites: Object.keys(entry.s || {}).length,
+      verdict: verdictWith(isYellowKey(tracker), score),
+      ageDays: (typeof entry.first === 'number') ? Math.max(0, t - entry.first) : 0
+    };
+  }
+
+  function countVerdict(counts, verdict) {
+    if (verdict === 'block') counts.block += 1;
+    else if (verdict === 'cookieblock') counts.cookie += 1;
+    else if (verdict === 'observing') counts.observe += 1;
+  }
+
+  function rowsAndCounts(snitch, t) {
+    var result = { rows: [], counts: { block: 0, cookie: 0, observe: 0 } };
+    Object.keys(snitch).forEach(function (tracker) {
+      var row = statsRow(tracker, snitch[tracker], t);
+      countVerdict(result.counts, row.verdict);
+      result.rows.push(row);
+    });
+    result.rows.sort(function (a, b) { return b.score - a.score; });
+    return result;
+  }
+
   function getStats(topN) {
     var t = today();
     return load().then(function (snitch) {
-      var blockCount = 0, cookieCount = 0, observeCount = 0;
-      var rows = [];
-      for (var tracker in snitch) {
-        if (!Object.prototype.hasOwnProperty.call(snitch, tracker)) continue;
-        var entry = snitch[tracker];
-        var score = scoreEntry(entry, t);
-        // tracker is the HASHED key; use the hashed yellowlist for the downgrade.
-        var v = verdictWith(isYellowKey(tracker), score);
-        if (v === 'block') blockCount++;
-        else if (v === 'cookieblock') cookieCount++;
-        else if (v === 'observing') observeCount++;
-        rows.push({
-          domain: tracker,                             // hashed key (no plaintext stored)
-          score: Math.round(score * 100) / 100,
-          sites: Object.keys(entry.s || {}).length,
-          verdict: v,
-          // Age in days since first sighting: the enforcer's minimum-observation
-          // gate needs it (a young "prevalent" domain may just be a new CDN).
-          ageDays: (typeof entry.first === 'number') ? Math.max(0, t - entry.first) : 0
-        });
-      }
-      rows.sort(function (a, b) { return b.score - a.score; });
+      var summary = rowsAndCounts(snitch, t);
       return {
         mode: 'observe-only',
-        totalTrackers: rows.length,
-        wouldBlock: blockCount,
-        wouldCookieblock: cookieCount,
-        observing: observeCount,
-        top: rows.slice(0, topN || 25)
+        totalTrackers: summary.rows.length,
+        wouldBlock: summary.counts.block,
+        wouldCookieblock: summary.counts.cookie,
+        observing: summary.counts.observe,
+        top: summary.rows.slice(0, topN || 25)
       };
     });
   }
@@ -358,34 +439,51 @@
   // Trackers SPOTTED on a given page right now (observe-only snapshot for the
   // popup's per-site Radar panel). Returns the deduped third-party base domains
   // with their current cross-site score + verdict. Records nothing here.
+  function spottableBase(host, fpBase, seen) {
+    var tracker = baseOf(host);
+    if (!tracker) return null;
+    if (tracker === fpBase) return null;
+    if (sameOwner(tracker, fpBase)) return null;
+    if (seen[tracker]) return null;
+    seen[tracker] = 1;
+    return tracker;
+  }
+
+  function spotRow(snitch, tracker, t) {
+    var trackerKey = rememberDomain(tracker);
+    var entry = snitch[trackerKey];
+    var score = entry ? scoreEntry(entry, t) : 0;
+    return {
+      domain: tracker,
+      domainHash: trackerKey,
+      score: Math.round(score * 100) / 100,
+      sites: entry ? Object.keys(entry.s || {}).length : 0,
+      verdict: verdictFor(tracker, score)
+    };
+  }
+
+  function spottedRows(snitch, hostList, fpBase, t) {
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < hostList.length; i++) {
+      var tracker = spottableBase(hostList[i], fpBase, seen);
+      if (tracker) out.push(spotRow(snitch, tracker, t));
+    }
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out;
+  }
+
   function spotted(firstPartyHost, hostList) {
     var t = today();
     var fpBase = baseOf(firstPartyHost);
     return load().then(function (snitch) {
-      var out = [];
-      if (!fpBase || !Array.isArray(hostList)) return out;
-      var seen = {};
-      for (var i = 0; i < hostList.length; i++) {
-        var tBase = baseOf(hostList[i]);
-        if (!tBase || tBase === fpBase) continue;     // first-party
-        if (sameOwner(tBase, fpBase)) continue;       // same-owner first-party set
-        if (seen[tBase]) continue;                    // dedupe within this page
-        seen[tBase] = 1;
-        var entry = snitch[hashHost(tBase)];
-        var score = entry ? scoreEntry(entry, t) : 0;
-        out.push({
-          domain: tBase,
-          score: Math.round(score * 100) / 100,
-          sites: entry ? Object.keys(entry.s || {}).length : 0,
-          verdict: verdictFor(tBase, score)
-        });
-      }
-      out.sort(function (a, b) { return b.score - a.score; });
-      return out;
+      if (!fpBase || !Array.isArray(hostList)) return [];
+      return spottedRows(snitch, hostList, fpBase, t);
     });
   }
   function reset() {
     _cache = {};
+    _domainLabels = {};
     return chrome.storage.local.remove([SNITCH_KEY, META_KEY])
       .then(function () { return { ok: true }; })
       .catch(function () { return { ok: false }; });
@@ -397,6 +495,7 @@
   NS.getStats = getStats;
   NS.getVerdict = getVerdict;
   NS.spotted = spotted;
+  NS.resolveSpots = resolveSpots;
   NS.getSizeEstimate = getSizeEstimate;
   NS.reset = reset;
   NS.hashHost = hashHost; // exposed so callers/tests can derive the hashed storage keys
@@ -428,6 +527,12 @@
             getVerdict(message.host).then(
               function (v) { try { sendResponse({ ok: true, verdict: v }); } catch (_) {} },
               function () { try { sendResponse({ ok: false, verdict: null }); } catch (_) {} }
+            );
+            return true;
+          case 'pawsoff_prevalence_resolveSpots':
+            resolveSpots(message.hashes).then(
+              function (labels) { try { sendResponse({ ok: true, labels: labels }); } catch (_) {} },
+              function () { try { sendResponse({ ok: false, labels: {} }); } catch (_) {} }
             );
             return true;
           case 'pawsoff_prevalence_reset':

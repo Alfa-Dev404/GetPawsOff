@@ -1,10 +1,10 @@
-// pixel-block.js, PawsOff - Multi-provider email tracking-pixel protection.
+// pixel-block.js, PawsOff — Multi-provider email tracking-pixel protection.
 //
 // Finds tracking pixels (usually 1x1 transparent images) inside opened emails
 // and stops them phoning home. Two layers:
-//   PRIMARY  - declarativeNetRequest blocks known tracker domains at the
+//   PRIMARY  — declarativeNetRequest blocks known tracker domains at the
 //              network level (request never leaves the browser).
-//   FALLBACK - DOM rewriting swaps the src of suspected pixels for a local
+//   FALLBACK — DOM rewriting swaps the src of suspected pixels for a local
 //              transparent data URI; catches unknown senders DNR can't know
 //              about, and is the source of per-block stats DNR can't give us.
 //
@@ -28,7 +28,7 @@
 //   https://mail.tutanota.com/*    https://www.icloud.com/mail*
 //
 //   content_scripts entry needs "all_frames": true for same-origin email
-//   iframes; does NOT help cross-origin iframes (iCloud - see iframeLimited).
+//   iframes; does NOT help cross-origin iframes (iCloud — see iframeLimited).
 //
 // ─── MANIFEST declarativeNetRequest REQUIRED ───────────────────────────────
 //   Content scripts can't call the DNR API directly, so PixelBlock builds
@@ -111,7 +111,7 @@
       emailBodySelectors: ['.ii.gt', '.a3s.aiL', '[data-message-id] .ii'],
       excludeSelectors: ['.aeH', '.G-atb', '.gb_', '[id=":0"]'],
       // Gmail proxies remote images through googleusercontent (server-side,
-      // already IP-shielding) - never block these.
+      // already IP-shielding) — never block these.
       legitimateProxies: [
         'mail-attachment.googleusercontent.com',
         'ci3.googleusercontent.com',
@@ -192,7 +192,7 @@
       name: 'iCloud Mail',
       id: 'icloud',
       hosts: ['www.icloud.com'],
-      // iCloud renders email in a cross-origin sandboxed iframe - unreachable
+      // iCloud renders email in a cross-origin sandboxed iframe — unreachable
       // by a content script or all_frames injection. Detect the host, skip
       // scanning, surface the limitation via getStats().
       emailBodySelectors: [],
@@ -215,7 +215,7 @@
     allowOriginHash: null,           // FNV digest of this frame's host, for allow lookups
   };
 
-  // Isolated-world WeakSets, not data-pawsoff-* DOM attributes - attributes
+  // Isolated-world WeakSets, not data-pawsoff-* DOM attributes — attributes
   // would announce "this user runs PawsOff" to the page and any other
   // installed extension. WeakSets are invisible to the page and
   // garbage-collect with the element.
@@ -260,7 +260,7 @@
   }
 
   // ───────────────────────────────────────────────────────────────────────
-  //  Allow-list gate (DOM tier), mirrors the network-tier DNR allow rules -
+  //  Allow-list gate (DOM tier), mirrors the network-tier DNR allow rules —
   //  un-breaking a site or allowing a domain in the popup stops this frame
   //  from neutralizing it too. DNR stays authoritative; this is best-effort.
   // ───────────────────────────────────────────────────────────────────────
@@ -313,7 +313,7 @@
   }
 
   /**
-   * One-way FNV-1a/32 digest of a hostname for local log de-identification -
+   * One-way FNV-1a/32 digest of a hostname for local log de-identification —
    * so the event log can't be read back as a plaintext site list. Never
    * transmitted; a privacy de-identifier, not a security primitive.
    * @param {string} host
@@ -385,7 +385,7 @@
   function providerSupportsDnr() {
     return !!state.provider && !state.provider.iframeLimited;
   }
-  /** Ask the background to register this provider's DNR rule (top frame only -
+  /** Ask the background to register this provider's DNR rule (top frame only —
    *  rules are extension-global, one registration is enough). */
   function registerDnr() {
     try {
@@ -401,7 +401,7 @@
           removeRuleIds: [rule.id], // replace any stale rule with the same id
         },
         (resp) => {
-          // Only mark registered once confirmed - a dropped message must not
+          // Only mark registered once confirmed — a dropped message must not
           // make us believe DNR is active when only the DOM tier is running.
           if (chrome.runtime.lastError || !resp || !resp.ok) return;
           state.dnrRegistered = true;
@@ -699,7 +699,7 @@
    *   'skip'    → not network-relevant (data:, non-http(s), unparseable)
    *   'block'   → known tracker / unambiguous endpoint; rewrite before it fires
    *   'inspect' → unknown / weak signal; let it load, confirm via 1x1 size check
-   * data: URIs are 'skip' - inline, no network request, blocking buys nothing.
+   * data: URIs are 'skip' — inline, no network request, blocking buys nothing.
    * @param {string|null} rawUrl
    * @param {Object} provider
    * @returns {'allow'|'skip'|'block'|'inspect'}
@@ -719,8 +719,8 @@
    *   fragment (Gmail):   ci3.googleusercontent.com/meips/<opaque>#https://t.io/x.gif
    *   query    (Proton):  mail.proton.me/api/core/v4/images?Url=https%3A%2F%2Ft.io%2Fx.gif
    *   path     (generic): proxy.host/<opaque>/https://t.io/x.gif
-   * A tracker stays a tracker behind a proxy - the proxy still pings it at
-   * open time - so callers must classify the embedded target too.
+   * A tracker stays a tracker behind a proxy — the proxy still pings it at
+   * open time — so callers must classify the embedded target too.
    * @param {string|null} rawUrl
    * @returns {string} embedded absolute URL, or ''
    */
@@ -833,7 +833,7 @@
   }
 
   /**
-   * Per-element record of the original src/srcset/data-src we replaced -
+   * Per-element record of the original src/srcset/data-src we replaced —
    * isolated-world WeakMap, never written to the page DOM. These values can
    * carry subscriber tokens; a `data-pawsoff-original-*` attribute would leak
    * them to the page and to any other installed extension's content script.
@@ -1001,8 +1001,8 @@
             const usedForLayout = rect.width > 2 || rect.height > 2; // stretched spacer
             const weak = hasWeakTrackerSignal(cur);
             const thirdParty = host && host !== location.hostname;
-            if (usedForLayout && !weak) return;     // genuine spacer - leave it
-            if (!weak && !thirdParty) return;       // no corroboration - leave it
+            if (usedForLayout && !weak) return;     // genuine spacer — leave it
+            if (!weak && !thirdParty) return;       // no corroboration — leave it
             neutralize(img, 'src', cur);
             _blocked.add(img);
             logBlockEvent(provider, 1, host ? [host] : []);
@@ -1085,7 +1085,7 @@
   /**
    * Start the MutationObserver. Webmail opens emails without a page reload,
    * so watch document.body for added nodes and scan any email body that
-   * appears. No teardown timer - stays alive for the tab's full life,
+   * appears. No teardown timer — stays alive for the tab's full life,
    * disconnected only on explicit disable (standDown) or navigation reset.
    */
   /** MutationObserver yields all node types; we only scan element nodes. */
@@ -1166,7 +1166,7 @@
 
   /**
    * Stop observing. Already-blocked images stay blocked (restoring them is a
-   * future "reveal" feature) - a user who just disabled protection mid-email
+   * future "reveal" feature) — a user who just disabled protection mid-email
    * wouldn't want trackers to suddenly fire. Re-enabling re-arms via reevaluate().
    */
   function standDown() {

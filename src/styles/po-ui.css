@@ -1,10 +1,10 @@
-/* po-ui.css - PawsOff shared design system.
+/* po-ui.css — PawsOff shared design system.
  *
  * Visual language: graph-paper surface, black-outlined cards with hard offset
  * shadows, sticker headings, bright accent pops, and a paw-print motif.
  *
  * THEMEABLE: every colour is a CSS custom property in :root. To match a future
- * website, change the ~8 tokens in the THEME block - nothing else.
+ * website, change the ~8 tokens in the THEME block — nothing else.
  *
  * CSP-CLEAN: no @import, no remote fonts, no CDN. System font stack only. All
  * behaviour lives in linked .js (no inline handlers). Safe under
@@ -45,7 +45,7 @@ html, body {
   font-family: var(--po-font);
   color: var(--po-ink);
   background-color: var(--po-paper);
-  /* graph-paper grid drawn purely in CSS - no image asset */
+  /* graph-paper grid drawn purely in CSS — no image asset */
   background-image:
     linear-gradient(var(--po-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--po-grid) 1px, transparent 1px);
@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
 }
 
-/* sticker title - white letters, black outline, hard shadow, on an accent slab,
+/* sticker title — white letters, black outline, hard shadow, on an accent slab,
    slightly rotated. The "WORKFLOW" look. */
 .po-sticker {
   display: inline-block;
@@ -155,7 +155,7 @@ a:hover { text-decoration: underline; }
   transition: transform .08s ease, box-shadow .08s ease;
 }
 
-/* text input - was previously hand-styled inline on the options page */
+/* text input — was previously hand-styled inline on the options page */
 .po-input {
   padding: 8px 10px; border: var(--po-border); border-radius: var(--po-radius-sm);
   background: var(--po-surface); color: var(--po-ink); font: inherit;

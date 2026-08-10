@@ -1,4 +1,4 @@
-/* PawsOff - Tier-1 behavioural tests for the programmatic CMP rejecter
+/* PawsOff — Tier-1 behavioural tests for the programmatic CMP rejecter
  * (cmp-api-main.js), ConsentGhost's highest-reliability consent tier.
  *
  * This script runs in the page's MAIN world and calls each CMP's own JS API to
@@ -123,7 +123,7 @@ test('multiple CMPs present: only the first tier acts, exactly one event', () =>
   eq(r.done, 'OneTrust', 'tier order: OneTrust wins');
   eq(otReject.count, 1, 'OneTrust acted');
   eq(cbDecline.count, 0, 'lower tier guarded out once handled');
-  eq(r.events.length, 1, 'exactly one signal - no double-act');
+  eq(r.events.length, 1, 'exactly one signal — no double-act');
 });
 
 // ── Step-1 hardening: confirmation gating (no "didn't throw" = success) ──────
@@ -137,7 +137,7 @@ test('GPP present: opt-out is attempted but NEVER signals (no read-back)', () =>
   const r = loadCmpApiMain({ globals: { __gpp: gpp } });
   eq(setConsentCalled, 1, 'GPP reject attempted');
   assert(!r.done, 'GPP must not mark the page handled');
-  eq(r.events.length, 0, 'no signal - GPP has no confirmable read-back');
+  eq(r.events.length, 0, 'no signal — GPP has no confirmable read-back');
 });
 
 test('USP present: setUSPData opt-out is sent but NEVER signals (data call)', () => {
@@ -160,7 +160,7 @@ test('TCF: setConsent issued all-purposes-false, but NO signal before confirm', 
   const setc = calls.find((c) => c.cmd === 'setConsent');
   assert(setc, 'setConsent was issued');
   for (let i = 1; i <= 10; i++) eq(setc.arg.purpose.consents[i], false, `purpose ${i} not consented`);
-  assert(!r.done, 'no premature success - confirmation not yet received');
+  assert(!r.done, 'no premature success — confirmation not yet received');
   eq(r.events.length, 0, 'no signal until getTCData confirms');
 });
 

@@ -1,12 +1,12 @@
 /**
- * consent-ghost.js - PawsOff ConsentGhost
+ * consent-ghost.js — PawsOff ConsentGhost
  *
  * Content script: silently auto-rejects cookie consent banners before the
  * user sees them. Runs on every page via Manifest V3.
  *
  * Public API: window.__pawsOff_consentGhost_init()
  * Rules: IIFE, try/catch around every async fn, no setTimeout/setInterval in
- * the background service worker (content scripts are exempt - they run in
+ * the background service worker (content scripts are exempt — they run in
  * the page process), all window props namespaced window.__pawsOff_*, silent
  * failures only (errors → chrome.storage.local, never surfaced on the host
  * page), never mutate or remove host DOM beyond clicking a verified reject
@@ -53,8 +53,8 @@
 
   // ── Observer lifetime ───────────────────────────────────────────────────────
   // Torn down after 15s so it never leaks on pages that go quiet. setTimeout is
-  // fine here - content scripts run in the page process, not the evictable
-  // service worker - and a quiet page never fires a mutation callback to check
+  // fine here — content scripts run in the page process, not the evictable
+  // service worker — and a quiet page never fires a mutation callback to check
   // Date.now() against, so a real timer is the only thing that works.
   const OBSERVER_LIFETIME_MS = 15_000;
 
@@ -82,7 +82,7 @@
   // so a sub-second re-inject loop races past it. This one counts rejections
   // per origin in sessionStorage instead (synchronous, survives SPA nav), and
   // stands down for a cool-off once a loop is confirmed rather than flickering
-  // forever - the right response to a pay-or-consent wall with no free reject.
+  // forever — the right response to a pay-or-consent wall with no free reject.
   const REGEN_KEY = 'pawsoff_cg_regen';
   const REGEN_MAX_REJECTS = 3;      // rejects per origin within the window before standing down
   const REGEN_WINDOW_MS = 15000;    // sliding window for counting rejections
@@ -91,7 +91,7 @@
   // ── Enable/disable (driven by the popup + options UI) ──────────────────────
   // The UI writes a single boolean flag; defaults to enabled on a fresh
   // install. A storage READ failure instead sets _stateLoadFailed and stands
-  // down (see below) - we can't trust an incomplete pause/disable state, so
+  // down (see below) — we can't trust an incomplete pause/disable state, so
   // fail-open here means "don't act," not "protect anyway." `_disabled` is
   // cached so the synchronous scan path can short-circuit without an await.
   const DISABLED_KEY = '__pawsOff_consentGhost_disabled';
@@ -131,12 +131,9 @@
   function requestCmpApiMain() {
     try {
       if (protectionPaused() || _cmpApiRequested || window.top !== window) return;
-      _cmpApiVisibleBefore = activeConfig.filter((f) => {
-        try {
-          const el = document.querySelector(f.containerSelector);
-          return !!el && isVisible(el);
-        } catch (_) { return false; }
-      }).map((f) => f.name);
+      _cmpApiVisibleBefore = activeConfig
+        .filter((framework) => frameworkContainers(framework, false).some(isVisible))
+        .map((framework) => framework.name);
       _cmpApiRequested = true;
       chrome.runtime.sendMessage({ type: 'pawsoff_consentGhost_runMain' }, (resp) => {
         try {
@@ -157,7 +154,7 @@
   //
   // This array is the bundled/offline fallback. At runtime loadRemoteConfig()
   // asks background.js for a signed+verified consent-config.json and, if
-  // valid, swaps it into `activeConfig` - selector breakage can be patched
+  // valid, swaps it into `activeConfig` — selector breakage can be patched
   // without a Web Store re-review (remote data is allowed under MV3, remote
   // code is not). The text fallback below is multilingual (REJECT_PHRASES_BY_LANG
   // / ACCEPT_PHRASES_BY_LANG), keyed off document.documentElement.lang →
@@ -172,7 +169,7 @@
         '#onetrust-reject-all-handler',
         '.onetrust-reject-btn-handler',
         'button[class*="onetrust-reject"]',
-        // '#onetrust-pc-btn-handler' is "Save Settings"/"Confirm My Choices" -
+        // '#onetrust-pc-btn-handler' is "Save Settings"/"Confirm My Choices" —
         // persists whatever toggles are currently set, not a reject. Never click it.
         '.ot-pc-refuse-all-handler',
       ],
@@ -191,7 +188,7 @@
 
     // ── 3. Cookiebot ────────────────────────────────────────────────────────
     // Cookiebot often ships the dialog hidden in the initial HTML and reveals
-    // it by toggling display/class - handled by the attribute-aware observer,
+    // it by toggling display/class — handled by the attribute-aware observer,
     // not by added-node detection.
     {
       name: 'Cookiebot',
@@ -256,13 +253,13 @@
         '[data-testid="didomi-notice-disagree-button"]',
         // Deliberately no 'button#didomi-notice-learn-more-button ~ button':
         // that matches every sibling after "learn more" blindly, and in many
-        // Didomi layouts that sibling is Agree/Accept - would opt the user in.
+        // Didomi layouts that sibling is Agree/Accept — would opt the user in.
         '.didomi-components-button--variant-link-secondary',
         // Modern Didomi SDK (v2) uses data-testid on the disagree CTA; some
         // publishers override the id, so also match the SDK class pattern.
         // Deliberately no onclick*="Didomi.notice.hide" match: that API call
         // only dismisses the notice UI, it doesn't confirm the user rejected
-        // tracking - behavior on a bare dismiss varies by publisher config,
+        // tracking — behavior on a bare dismiss varies by publisher config,
         // so it's not a verified reject and we stand down rather than risk
         // it acting like a soft-accept.
         '[data-purpose="disagree"]',
@@ -271,11 +268,11 @@
 
     // ── 7b. Le Monde / gdpr-lmd ──────────────────────────────────────────────
     // Le Monde runs an in-house CMP under the `gdpr-lmd-*` CSS namespace,
-    // deployed across the whole Le Monde Group (telerama.fr, etc.) - not
+    // deployed across the whole Le Monde Group (telerama.fr, etc.) — not
     // Didomi, despite similar branding. Reject:
     // <a class="gdpr-lmd-wall__refuse-link js-gdpr-deny-subscribe"
     //    data-gdpr-expression="denyAll">Reject all cookies</a>.
-    // The reject class includes `js-gdpr-deny-subscribe` - on Le Monde,
+    // The reject class includes `js-gdpr-deny-subscribe` — on Le Monde,
     // rejecting cookies routes into their subscription flow. We still
     // complete the privacy action; the subscribe prompt after is the
     // publisher's own design, not a PawsOff failure.
@@ -304,7 +301,7 @@
         '[data-testid="uc-deny-all-button"]',
         'button#uc-btn-deny-all',
         '[id="usercentrics-reject-all"]',
-        // Deliberately no 'button[data-testid="uc-save-settings-button"]' -
+        // Deliberately no 'button[data-testid="uc-save-settings-button"]' —
         // that's "Save Settings", it persists the current toggles, not a reject.
       ],
     },
@@ -312,7 +309,7 @@
     // ── 8b. Sourcepoint ──────────────────────────────────────────────────────
     // Used by many large EU publishers (Spiegel, Bild, The Guardian, etc.).
     // Renders in a container/iframe whose id starts with "sp_message_container_".
-    // Reject buttons carry a stable "sp_choice_type_N" class - type 13 =
+    // Reject buttons carry a stable "sp_choice_type_N" class — type 13 =
     // "Reject all" on most configs. Some publishers hide reject behind a
     // "Preferences" second layer with no one-click reject; the heuristic tier
     // below is the backstop for those.
@@ -369,7 +366,7 @@
     // Custom banner: .c24-cookie-consent-notice. Reject = "Nur notwendige
     // Cookies" → a.c24-cookie-consent-functional (functional-only consent).
     // Accept label "geht klar" matches no generic accept phrase, so the
-    // accept-veto can't recognise it - an explicit named rule is the safe way.
+    // accept-veto can't recognise it — an explicit named rule is the safe way.
     {
       name: 'Check24',
       containerSelector: '.c24-cookie-consent-notice',
@@ -380,7 +377,7 @@
 
     // ── 8b. consentmanager.net (#cmpbox), common on DE/EU sites ─────────────
     // Reject ("Ablehnen") is a.cmpboxbtnno, often a plain <a href="#"> with
-    // no role="button" - a button-only text fallback would miss it.
+    // no role="button" — a button-only text fallback would miss it.
     {
       name: 'ConsentManager.net',
       containerSelector: '#cmpbox, .cmpbox, [id^="cmpbox"], [class*="cmpbox"], #cmpwrapper, .cmpwrapper',
@@ -432,7 +429,7 @@
   // detection failing never costs us a reject button.
   //
   // Accept phrases are localised too, on purpose: the accept-veto is
-  // worthless on a non-English page if it only knows English accept words -
+  // worthless on a non-English page if it only knows English accept words —
   // that's exactly how a French banner could get mis-clicked. Reject and
   // accept coverage grow together for this reason.
   const REJECT_PHRASES_BY_LANG = {
@@ -490,7 +487,7 @@
     sk: ['prijať všetko', 'prijať', 'súhlasím'],
     ro: ['acceptă tot', 'accept', 'sunt de acord'],
     hu: ['összes elfogadása', 'elfogadás', 'elfogadom'],
-    el: ['αποδοχή όλων', 'αποδοχή', 'σ��μφωνώ'],
+    el: ['αποδοχή όλων', 'αποδοχή', 'συμφωνώ'],
     ru: ['принять все', 'принять', 'согласен', 'разрешить'],
     uk: ['прийняти все', 'прийняти', 'погоджуюсь'],
     tr: ['tümünü kabul et', 'kabul et', 'kabul ediyorum'],
@@ -587,7 +584,7 @@
   //   - reads visible text AND untranslated attributes (Google-Translate-proof)
   //   - 5g accept-veto in every language: never clicks an "accept"-reading label
   const MAX_CONTAINER_SCAN = 1200;      // cap on elements examined for container detection
-  const MIN_CONTAINER_AREA = 12000;     // px^2 - a real banner is sizeable (~ 200x60+)
+  const MIN_CONTAINER_AREA = 12000;     // px^2 — a real banner is sizeable (~ 200x60+)
   const HIGH_Z_THRESHOLD = 100;         // z-index at/above this counts as "overlay-ish"
   const HEURISTIC_SWEEP_COOLDOWN_MS = 1500; // negative-cache window: after a sweep finds no
                                             // overlay, skip re-sweeping for this long so a
@@ -785,7 +782,7 @@
     ja: ['設定', '管理', 'カスタマイズ', 'その他のオプション'],
     ko: ['설정', '관리', '맞춤설정', '추가 옵션', '환경설정'],
     zh: ['设置', '管理', '自定义', '更多选项', '偏好设置'],
-    ar: ['تفضي��ات', 'إدارة', 'إعدادات', 'تخصيص', 'المزيد من الخيارات'],
+    ar: ['تفضيلات', 'إدارة', 'إعدادات', 'تخصيص', 'المزيد من الخيارات'],
     he: ['העדפות', 'נהל', 'הגדרות', 'אפשרויות נוספות'],
     id: ['preferensi', 'kelola', 'pengaturan', 'sesuaikan', 'opsi lainnya'],
     th: ['การตั้งค่า', 'จัดการ', 'ปรับแต่ง', 'ตัวเลือกเพิ่มเติม'],
@@ -866,7 +863,7 @@
       _cbSave(rec);
       return true;
     } catch (_) {
-      return true; // fail open - never let the breaker break consent handling
+      return true; // fail open — never let the breaker break consent handling
     }
   }
   // Clear the budget on a genuine same-document (SPA) navigation. Full reloads
@@ -972,13 +969,14 @@
   // container is present but its buttons haven't rendered (that spam could evict
   // useful entries from the capped log). Reset on navigation.
   const _detectedLogged = new Set();
+  const _roleFlowTried = new Set();
 
   // ── "Detected but couldn't reject" surfacer (fix: popup banner count = 0) ───
   // When a consent banner is plainly present but we cannot complete a reject
   // (classic case: a cross-origin CMP whose reject button lives inside the
   // vendor's OWN iframe, so this frame detects the wrapper but can't click it),
   // the popup used to show 0 because only a CONFIRMED reject is recorded. We now
-  // record ONE honest "seen" catch per page view so the count reflects reality -
+  // record ONE honest "seen" catch per page view so the count reflects reality —
   // flagged seen:true so the popup labels it "Detected", never "Rejected".
   //
   // Deferred + verified: a real reject often lands a beat after detection, so we
@@ -996,7 +994,7 @@
       setTimeout(function () {
         try {
           if (_seenRecorded || window.__pawsOff_consentGhost_handled) return;
-          // Banner gone? Then it WAS dismissed (by us or the CMP's own iframe) -
+          // Banner gone? Then it WAS dismissed (by us or the CMP's own iframe) —
           // don't fabricate a "seen" for a surface that's no longer there.
           if (!anyConsentSurfaceVisible()) return;
           _seenRecorded = true;
@@ -1156,7 +1154,7 @@
         _multiStepTried = true;
         prefEl.click();
         setTimeout(() => pollLayerTwoReject(0), WAIT_INTERVAL_MS);
-        return false; // not handled yet - the poll will finish the job
+        return false; // not handled yet — the poll will finish the job
       }
 
       // Pay-or-consent wall with no reject and no preferences (Spiegel layer 1,
@@ -1269,113 +1267,6 @@
     }
   }
 
-  // ── Declarative action-sequence engine (steps[]) ─────────────────────────���─
-  // Each named framework in the remote config may optionally define a `steps`
-  // array describing an ordered multi-step flow, e.g.
-  //   ["click:.prefs-btn", "waitFor:.reject-btn:2000", "click:.reject-btn"].
-  // Steps are signed remote-config DATA, never executable code. Every click
-  // target is still run through the accept-veto and the double-click retry. If
-  // any step fails (timeout or missing selector) the chain aborts, we never
-  // half-complete a multi-step flow. Steps run asynchronously with the
-  // content-script-safe setTimeout. This keeps complex flows patchable via the
-  // signed config without shipping a new extension build.
-  const STEP_TIMEOUT_DEFAULT = 3000; // default waitFor budget if not specified
-
-  /**
-   * Execute a declarative step sequence. Returns a Promise<boolean>, true if
-   * the full chain completed (consent was rejected), false if any step failed.
-   * @param {string[]} steps  e.g. ["click:.prefs-btn", "waitFor:.reject-btn:2000", "click:.reject-btn"]
-   * @param {Element} root  the container to scope queries to
-   * @returns {Promise<boolean>}
-   */
-  /** A step target is clickable only if visible and NOT an accept control
-   *  (accept-veto). Shared by the click and xpath step verbs. */
-  function isClickableReject(el) {
-    return !!el && isVisible(el) && !isAcceptLabel(el);
-  }
-  async function executeSteps(steps, root) {
-    try {
-      if (!Array.isArray(steps) || !steps.length) return false;
-      for (const step of steps) {
-        let verb, rest, timeout;
-
-        if (typeof step === 'string') {
-          // Legacy string shorthand: "verb:selector[:timeout]"
-          const firstColon = step.indexOf(':');
-          if (firstColon < 0) continue;
-          verb = step.slice(0, firstColon).toLowerCase().trim();
-          rest = step.slice(firstColon + 1);
-          timeout = STEP_TIMEOUT_DEFAULT;
-        } else if (typeof step === 'object' && step !== null) {
-          // Structural object: { verb: "waitFor", selector: "...", timeout: 2000 }
-          verb = (step.verb || '').toLowerCase().trim();
-          rest = step.selector || '';
-          timeout = step.timeout !== undefined ? Number(step.timeout) : STEP_TIMEOUT_DEFAULT;
-        } else {
-          continue;
-        }
-
-        if (verb === 'click') {
-          const targets = scopedQueryAll(root, rest, true);
-          const el = targets.find((e) => isClickableReject(e));
-          if (!el) return false; // step failed - abort chain
-          el.click();
-          setTimeout(() => { try { if (el && el.click) el.click(); } catch (_) {} }, 150); // double-click resilience
-        } else if (verb === 'waitfor') {
-          let selector = rest;
-          // Only attempt to parse trailing timeout from string shorthand
-          if (typeof step === 'string') {
-            const lastColon = rest.lastIndexOf(':');
-            if (lastColon > 0 && /^\d+$/.test(rest.slice(lastColon + 1))) {
-              selector = rest.slice(0, lastColon);
-              timeout = parseInt(rest.slice(lastColon + 1), 10) || STEP_TIMEOUT_DEFAULT;
-            }
-          }
-          const found = await waitForElement(selector, root, timeout);
-          if (!found) return false; // step failed - abort chain
-        } else if (verb === 'hide') {
-          const targets = scopedQueryAll(root, rest, true);
-          targets.forEach((el) => { try { el.style.display = 'none'; } catch (_) {} });
-        } else if (verb === 'xpath') {
-          try {
-            const xr = document.evaluate(rest, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            const el = xr.singleNodeValue;
-            if (!isClickableReject(el)) return false;
-            el.click();
-            setTimeout(() => { try { if (el && el.click) el.click(); } catch (_) {} }, 150);
-          } catch (_) { return false; }
-        }
-      }
-      return true; // all steps succeeded
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /**
-   * Poll for an element matching `selector` inside `root` to appear and become
-   * visible. Returns the element or null after `timeoutMs`.
-   * @param {string} selector
-   * @param {Element} root
-   * @param {number} timeoutMs
-   * @returns {Promise<Element|null>}
-   */
-  function waitForElement(selector, root, timeoutMs) {
-    return new Promise((resolve) => {
-      const interval = 200;
-      let elapsed = 0;
-      const check = () => {
-        const targets = scopedQueryAll(root || document, selector, true);
-        const el = targets.find((e) => isVisible(e));
-        if (el) { resolve(el); return; }
-        elapsed += interval;
-        if (elapsed >= timeoutMs) { resolve(null); return; }
-        setTimeout(check, interval);
-      };
-      check();
-    });
-  }
-
   let _cachedContainer = null;
   let _heuristicCooldownUntil = 0; // negative-cache timestamp for the overlay sweep
 
@@ -1479,27 +1370,98 @@
    * @param {*} cfg
    * @returns {Array|null}
    */
-  /** Remote config is only usable if it's the schema version we understand. */
+  /** Remote config is usable only for the legacy flat or constrained-role schema. */
   function isUsableRemoteConfig(cfg) {
-    return !!cfg && cfg.schemaVersion === 1 && Array.isArray(cfg.frameworks);
+    return !!cfg && (cfg.schemaVersion === 1 || cfg.schemaVersion === 2) && Array.isArray(cfg.frameworks);
   }
   /** A framework entry is valid only with a name, container selector, and a
    *  reject-selector array, and not explicitly disabled. */
   function isValidFrameworkEntry(f) {
     return !!f && f.enabled !== false &&
-      typeof f.name === 'string' && typeof f.containerSelector === 'string' &&
-      Array.isArray(f.rejectSelectors);
+      typeof f.name === 'string' && isSafeRemoteSelector(f.containerSelector, 4096) &&
+      Array.isArray(f.rejectSelectors) && f.rejectSelectors.length > 0;
+  }
+  function isSafeRemoteSelector(selector, maxLength) {
+    if (typeof selector !== 'string') return false;
+    const value = selector.trim();
+    if (!value) return false;
+    if (value.length > (maxLength || 512)) return false;
+    if (/^(?:\/\/|\(\/\/)/.test(value)) return false;
+    if (/(?:\0|javascript:|xpath|[{}])/i.test(value)) return false;
+    try {
+      const segments = shadowSelectorSegments(value);
+      if (segments.some((part) => !part)) return false;
+      segments.forEach((part) => document.querySelector(part));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  function shadowSelectorSegments(selector) {
+    return selector.split('>>>').map((part) => part.trim());
+  }
+  function cleanRemoteSelectors(selectors, max) {
+    if (!Array.isArray(selectors)) return [];
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < selectors.length && out.length < max; i++) {
+      const selector = selectors[i];
+      if (!isSafeRemoteSelector(selector) || seen.has(selector)) continue;
+      seen.add(selector);
+      out.push(selector);
+    }
+    return out;
+  }
+  function normalizeRoleFramework(f) {
+    if (!f || f.enabled === false || typeof f.name !== 'string' || !f.selectors) return null;
+    if (!Array.isArray(f.selectors.save) || f.selectors.save.length !== 0) return null;
+    const containers = cleanRemoteSelectors(f.selectors.containers, 16);
+    const directReject = cleanRemoteSelectors(f.selectors.directReject, 24);
+    if (!containers.length || !directReject.length) return null;
+    return {
+      name: f.name,
+      containerSelector: containers[0],
+      containerSelectors: containers,
+      rejectSelectors: directReject,
+      pierceShadow: f.pierceShadow === true,
+      roleFlow: {
+        directReject,
+        openPreferences: cleanRemoteSelectors(f.selectors.openPreferences, 12),
+        completion: cleanRemoteSelectors(
+          containers.concat(cleanRemoteSelectors(f.selectors.completion, 16)),
+          16,
+        ),
+      },
+    };
+  }
+
+  function shouldStandDownAfterRoleResult(roleResult) {
+    return !!roleResult && roleResult.acted === true && roleResult.completed !== true;
+  }
+
+  function standDownConsentAutomation() {
+    window.__pawsOff_consentGhost_handled = true;
+    if (!window.__pawsOff_consentGhost_observer) return;
+    try { window.__pawsOff_consentGhost_observer.disconnect(); } catch (_) { /* silent */ }
+    window.__pawsOff_consentGhost_observer = null;
   }
   function normalizeRemoteConfig(cfg) {
     try {
       if (!isUsableRemoteConfig(cfg)) return null;
       const out = [];
       for (const f of cfg.frameworks) {
+        if (cfg.schemaVersion === 2) {
+          const normalized = normalizeRoleFramework(f);
+          if (normalized) out.push(normalized);
+          continue;
+        }
         if (!isValidFrameworkEntry(f)) continue;
+        const rejectSelectors = cleanRemoteSelectors(f.rejectSelectors, 24);
+        if (!rejectSelectors.length) continue;
         out.push({
           name: f.name,
           containerSelector: f.containerSelector,
-          rejectSelectors: f.rejectSelectors.filter((s) => typeof s === 'string'),
+          rejectSelectors,
           pierceShadow: f.pierceShadow === true,
           // POLICY (Chrome Web Store, no remotely-controlled behavior): we do NOT
           // accept an action-`steps` engine (click/hide/xpath/waitFor) from remote
@@ -1508,7 +1470,7 @@
           // code gated by the accept-veto. Any `steps` in remote config are ignored.
         });
       }
-      return out.length ? out : null; // empty list is unusable - keep bundled
+      return out.length ? out : null; // empty list is unusable — keep bundled
     } catch (_) {
       return null;
     }
@@ -1689,7 +1651,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── DOM helpers ────────────────────��───────────────���───────────────────────
+  // ── DOM helpers ────────────────────────────────────────────────────────────
 
   /**
    * Return an element's shadow root, OPEN or CLOSED.
@@ -1734,8 +1696,33 @@
     const push = (el) => {
       if (el && !seen.has(el)) { seen.add(el); out.push(el); }
     };
+    const queryScopes = (scopes, segment) => {
+      const matches = [];
+      for (const scope of scopes) {
+        const found = scope.querySelectorAll(segment);
+        for (const el of found) matches.push(el);
+      }
+      return matches;
+    };
+    const queryShadowChain = (node) => {
+      const segments = shadowSelectorSegments(selector);
+      let scopes = [node];
+      for (let index = 0; index < segments.length; index++) {
+        const matches = queryScopes(scopes, segments[index]);
+        if (index === segments.length - 1) {
+          matches.forEach(push);
+          return;
+        }
+        scopes = matches.map(getShadowRoot).filter(Boolean);
+        if (!scopes.length) return;
+      }
+    };
     const queryInto = (node) => {
       try {
+        if (selector.includes('>>>')) {
+          queryShadowChain(node);
+          return;
+        }
         // XPath support: selectors starting with "//" or "(//" are evaluated as
         // XPath instead of CSS. This matches CMPs that use dynamic class names
         // but have a stable DOM structure (e.g. "the 2nd button inside a div
@@ -1776,6 +1763,28 @@
             stack.push(sr);
           }
         }
+      }
+    }
+    return out;
+  }
+
+  function frameworkSelectorList(framework) {
+    if (Array.isArray(framework && framework.containerSelectors)) {
+      return framework.containerSelectors;
+    }
+    return framework && typeof framework.containerSelector === 'string'
+      ? [framework.containerSelector]
+      : [];
+  }
+
+  function frameworkContainers(framework, pierce) {
+    const out = [];
+    const seen = new Set();
+    for (const selector of frameworkSelectorList(framework)) {
+      for (const element of scopedQueryAll(document, selector, pierce)) {
+        if (seen.has(element)) continue;
+        seen.add(element);
+        out.push(element);
       }
     }
     return out;
@@ -1833,7 +1842,73 @@
     return classifyLabel(t) === 'accept';
   }
 
-  // ── CSS fast-hide ───────────────────────────────────────���────────────────────
+  // Role-based remote selectors are descriptive hints, not proof of what a
+  // button currently does. A publisher can relayout its CMP so a formerly-safe
+  // selector resolves to Save/Confirm. Refuse that target even after a reject
+  // selector match; standing down is safer than persisting pre-enabled toggles.
+  const SAVE_ACTION_HINT = /(?:^|\s)(?:save|confirm|submit|apply|store|speichern|bestätigen|enregistrer|confirmer|guardar|confirmar|salva|conferma|opslaan|bevestigen|zapisz|potwierdź)(?:\s|$)/i;
+  function roleTargetLabel(el) {
+    try {
+      const className = typeof el.className === 'string' ? el.className : '';
+      return [heuristicLabel(el), el.id || '', className]
+        .join(' ').toLowerCase().replace(/\s+/g, ' ').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isUnsafeRoleAction(el) {
+    const visibleLabel = btnText(el).toLowerCase();
+    const targetLabel = roleTargetLabel(el);
+    const normalizedTargetLabel = normalizedRoleEvidence(targetLabel);
+    return classifyLabel(visibleLabel) === 'accept' ||
+      classifyLabel(targetLabel) === 'accept' ||
+      SAVE_ACTION_HINT.test(normalizedTargetLabel);
+  }
+
+  function normalizedRoleEvidence(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[_:./-]+/g, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function strictRejectEvidence(value) {
+    const evidence = normalizedRoleEvidence(value);
+    if (!evidence) return false;
+    for (const phrase of REJECT_PHRASES_FLAT) {
+      const reject = normalizedRoleEvidence(phrase);
+      if (evidence === reject) return true;
+      if (evidence === `${reject} cookie` || evidence === `${reject} cookies`) return true;
+    }
+    return false;
+  }
+
+  function directRejectEvidence(el) {
+    const values = [];
+    try {
+      values.push(btnText(el), el.id || '');
+      if (typeof el.className === 'string') values.push(...el.className.split(/\s+/));
+      for (const name of ['aria-label', 'title', 'value', 'data-testid', 'data-action', 'data-role']) {
+        values.push(el.getAttribute(name) || '');
+      }
+    } catch (_) {
+      return false;
+    }
+    return values.some(strictRejectEvidence);
+  }
+
+  function isConsentRoleTarget(el, role) {
+    if (!el || isUnsafeRoleAction(el)) return false;
+    const label = roleTargetLabel(el);
+    if (role === 'directReject') return directRejectEvidence(el);
+    if (role === 'openPreferences') return looksPreferences(label);
+    return false;
+  }
+
+  // ── CSS fast-hide ──────────────────────────────────────────────────────────
   // On a confirmed consent container, inject a targeted `display:none` instantly
   // so the user never sees the banner flash while we look for the reject button.
   // We only do this AFTER matching the container (safe scope) and we undo it if
@@ -1903,7 +1978,7 @@
   }
 
   function revealPrehide() {
-    if (_prehideRevealed) return;                  // idempotent - many paths call this
+    if (_prehideRevealed) return;                  // idempotent — many paths call this
     _prehideRevealed = true;
     try {
       const s = _prehideStyle;
@@ -1945,7 +2020,7 @@
       // single bad pattern cannot abort the remaining patterns.
       const candidates = scopedQueryAll(root, sel, pierce);
       for (const el of candidates) {
-        if (isAcceptLabel(el)) continue;   // 5g veto
+        if (!isConsentRoleTarget(el, 'directReject')) continue;
         if (isVisible(el)) {
           if (!consentClickAllowed()) return false;
           try {
@@ -2001,7 +2076,48 @@
     return false;
   }
 
-  // ── Core consent scan ────────────────────────���─────────────────────────────
+  let _roleEngine = null;
+  function getRoleEngine() {
+    if (_roleEngine) return _roleEngine;
+    try {
+      const api = window.PawsOffConsentRoleEngine;
+      if (!api || typeof api.createConsentRoleEngine !== 'function') return null;
+      _roleEngine = api.createConsentRoleEngine({
+        doc: document,
+        queryAll: scopedQueryAll,
+        isVisible,
+        canAct: isConsentRoleTarget,
+        clickAllowed: consentClickAllowed,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      });
+      return _roleEngine;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function runConstrainedRoleFlow(framework, container, pierce, generation) {
+    if (!framework.roleFlow || _roleFlowTried.has(framework.name)) {
+      return { completed: false, acted: false, stage: 'already-tried' };
+    }
+    const engine = getRoleEngine();
+    if (!engine) return { completed: false, acted: false, stage: 'unavailable' };
+    const surface = surfaceTextAndLabels(container);
+    if (surfaceLooksLikeWall(surface.text, surface.labels)) {
+      standDownAsWall();
+      return { completed: false, acted: false, stage: 'paywall' };
+    }
+    const result = await engine.run(
+      framework.roleFlow,
+      container,
+      pierce,
+      () => _scanGuard.isCurrent(generation) && !protectionPaused(),
+    );
+    if (result.acted) _roleFlowTried.add(framework.name);
+    return result;
+  }
+
+  // ── Core consent scan ──────────────────────────────────────────────────────
 
   let _needsRescan = false;
   let _rescanLoopCount = 0; // Guard against anti-block infinite loops
@@ -2010,10 +2126,6 @@
    * Scans the page for known consent banners and attempts to reject them.
    * Called on initial load and on every relevant MutationObserver batch.
    */
-  /** True when a framework defines a non-empty declarative steps[] chain. */
-  function frameworkHasSteps(framework) {
-    return !!framework.steps && Array.isArray(framework.steps) && framework.steps.length > 0;
-  }
   /** A container is worth acting on only if it is present and visible. */
   function isUsableContainer(container) {
     return !!container && isVisible(container);
@@ -2059,9 +2171,8 @@
       );
       for (let i = 0; i < frames.length; i++) { if (isVisible(frames[i])) return true; }
       for (let c = 0; c < activeConfig.length; c++) {
-        let el = null;
-        try { el = document.querySelector(activeConfig[c].containerSelector); } catch (_) { el = null; }
-        if (el && isVisible(el)) return true;
+        const framework = activeConfig[c];
+        if (frameworkContainers(framework, framework.pierceShadow === true).some(isVisible)) return true;
       }
     } catch (_) { /* fall through → treat as none visible */ }
     return false;
@@ -2263,7 +2374,7 @@
       // Superseded by a newer scan/navigation while awaiting? Bail before acting.
       if (!_scanGuard.isCurrent(_myGen)) return;
       if (_ac && (_ac.outcome === 'rejected' || _ac.outcome === 'hidden')) {
-        revealPrehide(); // H2: Layer-0 handled it - don't wait for the watchdog to reveal
+        revealPrehide(); // H2: Layer-0 handled it — don't wait for the watchdog to reveal
         if (window.__pawsOff_consentGhost_observer) {
           try { window.__pawsOff_consentGhost_observer.disconnect(); } catch (_) {}
           window.__pawsOff_consentGhost_observer = null;
@@ -2280,49 +2391,41 @@
       for (const framework of activeConfig) {
         const pierce = framework.pierceShadow === true;
 
-        // TODO(v2 5e): use querySelectorAll + iterate all matches. querySelector
-        //   returns only the FIRST match, so a hidden decoy that matches the
-        //   container selector ahead of the real banner makes us skip the
-        //   framework entirely.
-        let container = document.querySelector(framework.containerSelector);
-        // For shadow-DOM CMPs the host is usually in light DOM, but cover the
-        // case where the host itself is nested inside another shadow root.
-        if (!container && pierce) {
-          container = scopedQueryAll(document, framework.containerSelector, true)[0] || null;
-        }
+        // Inspect every match so a hidden template/decoy before the live dialog
+        // cannot suppress the framework. scopedQueryAll also contains malformed
+        // remote selectors and optionally reaches nested shadow roots.
+        const containers = frameworkContainers(framework, pierce);
+        let container = containers.find((candidate) => isVisible(candidate)) || containers[0] || null;
         // Reveal our OWN prehide BEFORE the isVisible() gate, visibility:hidden
         // would otherwise make us skip the very banner we hid. fastHideContainer()
         // (display) takes over synchronously below: no paint between reveal+rehide.
-        if (container) revealPrehide();
+        if (container) {
+          revealPrehide();
+          container = containers.find((candidate) => isVisible(candidate)) || container;
+        }
         if (!isUsableContainer(container)) continue;
 
-        // CSS fast-hide: instantly hide the banner so the user never sees it
-        // flash while we look for the reject button. Undo if we fail to click.
-        fastHideContainer(container);
+        // The v2 remote schema uses a fixed local state machine and requires
+        // post-action verification. Keep the surface visible to that verifier;
+        // legacy/bundled selector rules retain the short flash-suppression hide.
+        if (!framework.roleFlow) fastHideContainer(container);
 
-        // Declarative steps[] engine: if the framework defines a multi-step
-        // action sequence (from remote config), execute it first. This enables
-        // complex flows (click Preferences → wait → click Reject) as pure DATA
-        // without code changes. Falls through to simple selectors on failure.
         let clicked = false;
-        if (frameworkHasSteps(framework)) {
-          clicked = await executeSteps(framework.steps, container);
-          // Superseded mid-await? Don't fall through into more clicks.
+        let roleResult = null;
+        if (framework.roleFlow) {
+          roleResult = await runConstrainedRoleFlow(framework, container, pierce, _myGen);
           if (!_scanGuard.isCurrent(_myGen)) return;
+          clicked = roleResult.completed;
+        } else {
+          clicked = tryClickReject(container, framework.rejectSelectors, pierce);
+          if (!clicked) clicked = tryTextFallback(container, pierce);
         }
-
-        if (!clicked) clicked = tryClickReject(container, framework.rejectSelectors, pierce);
-        if (!clicked) clicked = tryTextFallback(container, pierce);
 
         if (clicked) {
           // Disconnect immediately, before any await, so the CMP
           // dismiss animation doesn't keep firing the observer
-          if (window.__pawsOff_consentGhost_observer) {
-            try { window.__pawsOff_consentGhost_observer.disconnect(); } catch (_) {}
-            window.__pawsOff_consentGhost_observer = null;
-          }
-          window.__pawsOff_consentGhost_handled = true;
-          logToStorage({ status: 'rejected', framework: framework.name });
+          standDownConsentAutomation();
+          logToStorage({ status: 'rejected', framework: framework.name, verified: !!framework.roleFlow });
           incrementTotal(CG_TOTAL_KEY);
           scheduleBackdropReaps(); // clear any leftover veil/scroll-lock the CMP left behind
           return;
@@ -2330,7 +2433,16 @@
 
         // No reject found yet, undo the hide so the banner reappears (we don't
         // silently hide consent without actually rejecting it).
-        undoFastHide(container);
+        if (!framework.roleFlow) undoFastHide(container);
+
+        if (shouldStandDownAfterRoleResult(roleResult)) {
+          if (!_detectedLogged.has(framework.name)) {
+            _detectedLogged.add(framework.name);
+            logToStorage({ status: 'action_unverified', framework: framework.name, stage: roleResult.stage });
+          }
+          standDownConsentAutomation();
+          return;
+        }
 
         // Container present but no actionable button yet (skeleton state). Log
         // ONCE per framework per page view (the observer re-scans on every
@@ -2566,7 +2678,7 @@
         } catch (_) { /* silent */ }
       });
     }
-  } catch (_) { /* silent - storage API unavailable */ }
+  } catch (_) { /* silent — storage API unavailable */ }
 
   // ── SPA navigation reset ───────────────────────────────────────────────────
   //
@@ -2597,6 +2709,7 @@
       _wallStandDown = false;  // new page → re-evaluate wall status from scratch
       _wallStandDownLogged = false;
       _detectedLogged.clear(); // new page → allow one detected_no_action per framework again
+      _roleFlowTried.clear();  // new page → allow one constrained flow per framework again
       _seenRecorded = false;   // new page → allow one "detected" catch again
       _seenScheduled = false;
 
@@ -2657,11 +2770,7 @@
           
           let stillVisible = false;
           for (const f of activeConfig) {
-            let container = document.querySelector(f.containerSelector);
-            if (!container && f.pierceShadow) {
-              container = scopedQueryAll(document, f.containerSelector, true)[0] || null;
-            }
-            if (container && isVisible(container)) {
+            if (frameworkContainers(f, f.pierceShadow === true).some(isVisible)) {
               stillVisible = true;
               break;
             }
@@ -2686,7 +2795,7 @@
         }, 1200);
       } catch (_) { /* silent */ }
     });
-  } catch (_) { /* silent - safe to omit if addEventListener unavailable */ }
+  } catch (_) { /* silent — safe to omit if addEventListener unavailable */ }
 
   // ── Auto-invoke ────────────────────────────────────────────────────────────
   // We now inject at document_start (to catch CMPs the instant they appear and
@@ -2705,7 +2814,7 @@
       // reject-without-flash contract and keeps the unit tests' invariant.
       if (!window.__pawsOff_revealPrehide) {
         installPrehide(document.documentElement,
-                       buildPrehideCss(activeConfig.map((f) => f.containerSelector)),
+                       buildPrehideCss(activeConfig.flatMap(frameworkSelectorList)),
                        setTimeout);
       }
     } catch (_) { /* silent */ }
@@ -2739,8 +2848,9 @@
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {
         escapeRe, phrasesToRegexes, detectLangs, buildPatterns,
-        isAcceptLabel, btnText, normalizeRemoteConfig,
-        flatPhrases, looksAccept, looksReject, heuristicLabel,
+        isAcceptLabel, btnText, normalizeRemoteConfig, shouldStandDownAfterRoleResult,
+        flatPhrases, looksAccept, looksReject, heuristicLabel, isUnsafeRoleAction,
+        roleTargetLabel, isConsentRoleTarget,
         looksPreferences, PREF_PHRASES_BY_LANG,
         surfaceLooksLikeWall, WALL_BRAND_HINTS,
         REJECT_PHRASES_BY_LANG, ACCEPT_PHRASES_BY_LANG, BUNDLED_CONSENT_CONFIG,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* PawsOff - test runner.
+/* PawsOff — test runner.
  *
  * Discovers every *.test.js under tests/, registers their cases, runs them, and
  * exits non-zero if anything fails (so CI can gate on it). No dependencies.
@@ -18,7 +18,7 @@ const files = fs
   .filter((f) => f.endsWith('.test.js'))
   .sort();
 
-console.log('PawsOff test suite - ' + files.length + ' file(s)\n');
+console.log('PawsOff test suite — ' + files.length + ' file(s)\n');
 for (const f of files) {
   console.log(f);
   require(path.join(dir, f));

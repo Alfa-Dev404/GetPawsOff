@@ -5,7 +5,7 @@
  *   - config/rules-v1.json.sig verifies against config/rules-v1.json bytes using
  *     the committed public JWK (tools/config-signing-public-key.json), with the
  *     EXACT scheme the extension verifier uses (ECDSA P-256 / SHA-256, raw r||s,
- *     base64) - same as tests/eraser-sign.test.js and tools/sign-adapter.js.
+ *     base64) — same as tests/eraser-sign.test.js and tools/sign-adapter.js.
  *   - config/latest.json points at those files and carries the right keyId/alg.
  *   - the payload is a PUBLIC tracker-domain list with no smell of PII.
  *

@@ -40,14 +40,14 @@
 
   // Resolve the top-level host synchronously when possible. A catch inside a
   // cross-origin CMP iframe (e.g. Sourcepoint) must attribute to the site the
-  // user is visiting, not the iframe's own origin - else the popup's per-site
+  // user is visiting, not the iframe's own origin — else the popup's per-site
   // filter hides it. Both signals are browser-populated + read-only, so page
   // script can't spoof them. Returns null for a sandboxed/null-origin frame;
   // the caller falls back to asking the background worker.
   function topHostSync() {
     try {
       if (G.top === G.self) return (G.location && G.location.hostname) || '';
-    } catch (_) { /* cross-origin top access - we are in a sub-frame */ }
+    } catch (_) { /* cross-origin top access — we are in a sub-frame */ }
     try {
       var ao = G.location && G.location.ancestorOrigins;
       if (ao && ao.length) {
@@ -97,7 +97,7 @@
         try { void chrome.runtime.lastError; } catch (_) {}
         if (Math.random() < PRUNE_SAMPLE) pruneCatches();
       });
-    } catch (_) { /* silent - storage may be restricted in private contexts */ }
+    } catch (_) { /* silent — storage may be restricted in private contexts */ }
   }
 
   function record(entry) {
@@ -156,7 +156,7 @@
   }
   // A consent banner we SAW but could not auto-reject (its reject control is in
   // the CMP's own cross-origin iframe, or no free reject exists). Surfaced so the
-  // popup never shows 0 when a banner is plainly on screen - flagged seen:true so
+  // popup never shows 0 when a banner is plainly on screen — flagged seen:true so
   // it renders as "Detected", not "Rejected".
   function recordBannerSeen(framework) {
     record({ feature: 'banner', label: 'Cookie banner', category: 'Consent', detail: framework ? ('detected via ' + framework + ', no auto-reject') : 'detected, no auto-reject', seen: true });

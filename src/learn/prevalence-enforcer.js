@@ -1,4 +1,4 @@
-/* PawsOff, Prevalence Enforcer - service-worker side.
+/* PawsOff, Prevalence Enforcer — service-worker side.
  *
  * Turns the observe-only learner's verdicts into active, self-cleaning
  * declarativeNetRequest rules. The learner only scores; this module decides
@@ -8,8 +8,8 @@
  *     covered by the static EasyPrivacy ruleset, or a user exception (the
  *     "this broke a site" feedback loop); yellowlisted domains stay
  *     cookieblock, never a hard block
- *   - every sync fully reconciles its own rule band - clears it, re-adds only
- *     what's currently desired - so a decayed score naturally un-blocks with
+ *   - every sync fully reconciles its own rule band — clears it, re-adds only
+ *     what's currently desired — so a decayed score naturally un-blocks with
  *     zero drift between Chrome's rules and our state
  *   - the 30,000 dynamic+session rule cap is shared with allow/pause; budget
  *     is computed from what's actually free, and updateDynamicRules rejects
@@ -19,21 +19,20 @@
  *
  * Dormant by default (__pawsOff_pv_enforce_enabled), and even once enabled,
  * shadow mode (__pawsOff_pv_enforce_shadow, default true) computes the plan
- * into storage without applying a single rule - real would-block data before
+ * into storage without applying a single rule — real would-block data before
  * any rollout decision. Warm-up gates hold a stricter bar than the learner's
- * own verdict threshold: a hard block needs score>=5 on >=5 sites known
- * >=7 days, starts beacon-only, adds scripts only at score>=8, and never
- * touches sub_frame/websocket/media. Anything below that bar - plus every
- * yellowlisted verdict - gets cookies stripped instead of blocked, so the
+ * own verdict threshold: a hard block needs score>=8 on >=10 sites known
+ * >=14 days, starts beacon-only, adds scripts only at score>=15, and never
+ * touches sub_frame/websocket/media. Anything below that bar — plus every
+ * yellowlisted verdict — gets cookies stripped instead of blocked, so the
  * resource still loads but the tracker goes anonymous. Pausing a site
  * auto-excepts its flagged domains (self-healing). Candidates are named by
- * joining the hash-only learner store to the radar's plaintext spotted
- * domains, so enforcement always requires fresh local evidence and never
- * needs new plaintext at rest.
+ * joining hash-only radar entries to the learner's memory-only live labels,
+ * so enforcement requires fresh local evidence and stores no browsing labels.
  *
  * Requires self.PawsOffPSL and self.__pawsOff_prevalence; background.js
  * loads both first via importScripts. Self-registers its own message +
- * alarm listeners (additive - the main router is undisturbed).
+ * alarm listeners (additive — the main router is undisturbed).
  */
 'use strict';
 (function (root) {
@@ -43,19 +42,22 @@
   // ── Storage keys ─────────────────────────────────────────────────────
   var ENABLED_KEY = '__pawsOff_pv_enforce_enabled'; // boolean, default false
   var SHADOW_KEY  = '__pawsOff_pv_enforce_shadow';  // boolean, default TRUE: compute, never apply
-  var IDMAP_KEY   = '__pawsOff_pv_enforce_idmap';   // { domain: ruleId } (debug/stability)
-  var EXCEPT_KEY  = '__pawsOff_pv_enforce_except';   // { domain: ts } user exceptions
+  var IDMAP_KEY   = '__pawsOff_pv_enforce_idmap';   // legacy key, overwritten with an empty object
+  var EXCEPT_KEY  = '__pawsOff_pv_enforce_except';   // { hashHost(domain): ts } user exceptions
   var META_KEY    = '__pawsOff_pv_enforce_meta';     // { updated, blocked, budget, candidates }
-  var RADAR_PREFIX = '__pawsOff_radar_';             // collector snapshots (plaintext spotted domains)
+  var MASTER_KEY  = '__pawsOff_master_enabled';
+  var TRACKER_SETTINGS_KEY = '__pawsOff_pixelBlock_settings';
+  var RADAR_PREFIX = '__pawsOff_radar_';             // collector snapshots (hash-only spotted domains)
   var ENFORCE_ALARM = 'pawsoff_pv_enforce';
+  var ENFORCE_SOON_ALARM = 'pawsoff_pv_enforce_soon';
 
   // ── Warm-up gates (breakage protection) ─────────────────────────────
   // Stricter than the learner's own BLOCK_THRESHOLD (3), so a merely-popular
   // newcomer (a fresh CDN) never gets blocked outright.
-  var ENFORCE_MIN_SCORE    = 5;
-  var ENFORCE_MIN_SITES    = 5;
-  var ENFORCE_MIN_AGE_DAYS = 7;
-  var SCRIPT_TIER_SCORE    = 8;
+  var ENFORCE_MIN_SCORE    = 8;
+  var ENFORCE_MIN_SITES    = 10;
+  var ENFORCE_MIN_AGE_DAYS = 14;
+  var SCRIPT_TIER_SCORE    = 15;
   var COOKIE_MIN_SCORE     = 3;   // matches the learner's verdict threshold
   var MAX_EXCEPTIONS       = 500; // LRU cap on the "this broke a site" list
 
@@ -109,25 +111,38 @@
   ]);
 
   // ── base-domain helper (uses PSL-lite when present) ───────────────────────
+  function pslBase(host) {
+    try {
+      if (root.PawsOffPSL) return root.PawsOffPSL.getBaseDomain(host) || host;
+    } catch (_) { /* ignore */ }
+    return host;
+  }
+
+  function validBaseHost(host) {
+    if (host.indexOf('.') < 0) return false;
+    return /^[a-z0-9.\-]+$/.test(host);
+  }
+
   function normBase(host) {
-    if (!host || typeof host !== 'string') return '';
-    var h = host.toLowerCase().trim();
-    try { if (root.PawsOffPSL) h = root.PawsOffPSL.getBaseDomain(h) || h; } catch (_) { /* ignore */ }
+    if (typeof host !== 'string') return '';
+    if (!host) return '';
+    var h = pslBase(host.toLowerCase().trim());
     h = (h || '').toLowerCase().trim().replace(/\.$/, '');
-    if (h.indexOf('.') < 0) return '';            // not a registrable domain
-    if (!/^[a-z0-9.\-]+$/.test(h)) return '';
-    return h;
+    return validBaseHost(h) ? h : '';
+  }
+
+  function setContains(set, domain) {
+    return !!set && set.has(domain);
   }
 
   // ── PURE: is this domain eligible for an auto-block rule? ──────────────────
   function isEnforceableDomain(domain, sets) {
     if (!domain) return false;
-    var essential = sets && sets.essentialSet;
-    var covered   = sets && sets.coveredSet;
-    var except    = sets && sets.exceptSet;
-    if (essential && essential.has(domain)) return false;  // safelist
-    if (covered && covered.has(domain)) return false;       // already blocked by EasyPrivacy (dedup)
-    if (except && except.has(domain)) return false;         // user said "don't block this"
+    sets = sets || {};
+    if (setContains(sets.essentialSet, domain)) return false;
+    if (setContains(sets.coveredSet, domain)) return false;
+    if (setContains(sets.exceptSet, domain)) return false;
+    if (setContains(sets.exceptSet, hashHost(domain))) return false;
     return true;
   }
 
@@ -164,7 +179,7 @@
   // ── PURE: build one cookie-strip rule ────────────────────────────────
   // modifyHeaders (possible since the manifest gained http/https host
   // permissions): the resource still loads so nothing breaks, but the request
-  // carries no cookies and the response can't set any - the tracker sees an
+  // carries no cookies and the response can't set any — the tracker sees an
   // anonymous fetch. Used for yellowlisted/cookieblock verdicts and for block
   // candidates still inside their warm-up window.
   function buildCookieStripRule(domain, id) {
@@ -186,20 +201,120 @@
   // ── PURE: which enforcement tier does a scored row earn? ─────────────
   // Returns 'block-script' | 'block-beacon' | 'cookie' | null. Rows must carry
   // {score, sites, ageDays, verdict}; missing fields fail toward the safer tier.
+  function numericRowValue(value) {
+    return Number.isFinite(value) ? value : 0;
+  }
+  function hardBlockTier(score, sites, age) {
+    if (score < ENFORCE_MIN_SCORE) return null;
+    if (sites < ENFORCE_MIN_SITES) return null;
+    if (age < ENFORCE_MIN_AGE_DAYS) return null;
+    return score >= SCRIPT_TIER_SCORE ? 'block-script' : 'block-beacon';
+  }
+  function blockTier(score, sites, age) {
+    var hard = hardBlockTier(score, sites, age);
+    if (hard) return hard;
+    return score >= COOKIE_MIN_SCORE ? 'cookie' : null;
+  }
   function tierFor(row) {
     if (!row) return null;
-    var score = typeof row.score === 'number' ? row.score : 0;
-    var sites = typeof row.sites === 'number' ? row.sites : 0;
-    var age   = typeof row.ageDays === 'number' ? row.ageDays : 0;
-    if (row.verdict === 'block') {
-      var hard = score >= ENFORCE_MIN_SCORE && sites >= ENFORCE_MIN_SITES && age >= ENFORCE_MIN_AGE_DAYS;
-      if (hard) return score >= SCRIPT_TIER_SCORE ? 'block-script' : 'block-beacon';
-      return score >= COOKIE_MIN_SCORE ? 'cookie' : null; // warm-up: strip cookies meanwhile
-    }
-    if (row.verdict === 'cookieblock') {
-      return score >= COOKIE_MIN_SCORE ? 'cookie' : null;
-    }
+    var score = numericRowValue(row.score);
+    if (row.verdict === 'block') return blockTier(score, numericRowValue(row.sites), numericRowValue(row.ageDays));
+    if (row.verdict === 'cookieblock') return score >= COOKIE_MIN_SCORE ? 'cookie' : null;
     return null;
+  }
+
+  function tierRank(tier) {
+    if (tier === 'block-script') return 3;
+    if (tier === 'block-beacon') return 2;
+    if (tier === 'cookie') return 1;
+    return 0;
+  }
+
+  function strongerCandidate(candidate, previous) {
+    var candidateRank = tierRank(candidate.tier);
+    var previousRank = tierRank(previous.tier);
+    if (candidateRank !== previousRank) return candidateRank > previousRank;
+    return candidate.score > previous.score;
+  }
+
+  function candidateFromRow(row, sets) {
+    var tier = tierFor(row);
+    if (!tier) return null;
+    var domain = normBase(row.domain);
+    if (!isEnforceableDomain(domain, sets)) return null;
+    return { domain: domain, score: numericRowValue(row.score), tier: tier };
+  }
+
+  function dedupeCandidates(rows, sets) {
+    var byDomain = {};
+    for (var i = 0; i < rows.length; i++) {
+      var candidate = candidateFromRow(rows[i], sets);
+      if (!candidate) continue;
+      var previous = byDomain[candidate.domain];
+      if (!previous || strongerCandidate(candidate, previous)) byDomain[candidate.domain] = candidate;
+    }
+    return Object.keys(byDomain).map(function (domain) { return byDomain[domain]; });
+  }
+
+  function blockCandidate(candidate) {
+    return candidate.tier.indexOf('block') === 0;
+  }
+
+  function sortCandidates(candidates) {
+    candidates.sort(function (left, right) {
+      var leftBlocks = blockCandidate(left) ? 1 : 0;
+      var rightBlocks = blockCandidate(right) ? 1 : 0;
+      if (leftBlocks !== rightBlocks) return rightBlocks - leftBlocks;
+      return right.score - left.score;
+    });
+    return candidates;
+  }
+
+  function requestedBudget(args) {
+    return computeBudget({
+      otherRuleCount: numericRowValue(args.otherRuleCount),
+      maxDynamic: args.maxDynamic,
+      headroom: args.headroom,
+      maxLearnRules: args.maxLearnRules
+    });
+  }
+
+  function candidateRule(candidate, id) {
+    if (candidate.tier === 'cookie') return buildCookieStripRule(candidate.domain, id);
+    var types = candidate.tier === 'block-script' ? SCRIPT_RESOURCE_TYPES : BEACON_RESOURCE_TYPES;
+    return buildLearnerBlockRule(candidate.domain, id, types);
+  }
+
+  function buildCandidateRules(desired) {
+    var result = { addRules: [], idMap: {}, blocked: 0, cookieStripped: 0 };
+    for (var i = 0; i < desired.length; i++) {
+      var id = LEARN_ID_BASE + i;
+      if (id > LEARN_ID_MAX) break;
+      var candidate = desired[i];
+      result.addRules.push(candidateRule(candidate, id));
+      result.idMap[candidate.domain] = id;
+      if (candidate.tier === 'cookie') result.cookieStripped += 1;
+      else result.blocked += 1;
+    }
+    return result;
+  }
+
+  function validLearnerRuleId(value) {
+    var id = Number(value);
+    if (!Number.isInteger(id)) return null;
+    if (id < LEARN_ID_BASE) return null;
+    if (id > LEARN_ID_MAX) return null;
+    return id;
+  }
+
+  function removalIds(existingIds, addRules) {
+    var removeSet = {};
+    for (var i = 0; i < existingIds.length; i++) {
+      var id = validLearnerRuleId(existingIds[i]);
+      if (id !== null) removeSet[id] = 1;
+    }
+    for (var j = 0; j < addRules.length; j++) removeSet[addRules[j].id] = 1;
+    return Object.keys(removeSet).map(Number);
   }
 
   // ── PURE: compute the full DNR update from learner scores ──────────────────
@@ -215,92 +330,21 @@
       exceptSet: args.exceptSet || null
     };
 
-    // 1) tier every eligible row, dedupe base domains keeping the STRONGEST
-    //    row per domain (hashed rows can resolve to the same base domain from
-    //    several subdomains; a weak sighting must not suppress a stronger one
-    //    seen later). The essential/covered/except sets gate both tiers -
-    //    cookie-stripping an SSO or payment domain breaks logins too.
-    function tierRank(t) {
-      if (t === 'block-script') return 3;
-      if (t === 'block-beacon') return 2;
-      if (t === 'cookie') return 1;
-      return 0;
-    }
-    function strongerCandidate(a, b) {
-      var ar = tierRank(a.tier), br = tierRank(b.tier);
-      if (ar !== br) return ar > br;
-      return a.score > b.score;
-    }
-    var byDomain = {};
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var tier = tierFor(r);
-      if (!tier) continue;
-      var d = normBase(r.domain);
-      if (!d) continue;
-      if (!isEnforceableDomain(d, sets)) continue;
-      var cand = { domain: d, score: typeof r.score === 'number' ? r.score : 0, tier: tier };
-      if (!byDomain[d] || strongerCandidate(cand, byDomain[d])) byDomain[d] = cand;
-    }
-    var candidates = Object.keys(byDomain).map(function (d) { return byDomain[d]; });
-
-    // 2) worst offenders first; blocks before cookie-strips at equal urgency
-    candidates.sort(function (a, b) {
-      var ab = a.tier.indexOf('block') === 0 ? 1 : 0;
-      var bb = b.tier.indexOf('block') === 0 ? 1 : 0;
-      if (ab !== bb) return bb - ab;
-      return b.score - a.score;
-    });
-
-    // 3) budget (shared 30k cap minus everyone else)
-    var budget = computeBudget({
-      otherRuleCount: typeof args.otherRuleCount === 'number' ? args.otherRuleCount : 0,
-      maxDynamic: args.maxDynamic,
-      headroom: args.headroom,
-      maxLearnRules: args.maxLearnRules
-    });
-
+    var candidates = sortCandidates(dedupeCandidates(rows, sets));
+    var budget = requestedBudget(args);
     var desired = candidates.slice(0, budget);
-
-    // 4) deterministic ids + rules per tier
-    var addRules = [];
-    var idMap = {};
-    var blockedN = 0, cookieN = 0;
-    for (var j = 0; j < desired.length; j++) {
-      var id = LEARN_ID_BASE + j;
-      if (id > LEARN_ID_MAX) break;
-      var c = desired[j];
-      if (c.tier === 'cookie') {
-        addRules.push(buildCookieStripRule(c.domain, id));
-        cookieN++;
-      } else {
-        addRules.push(buildLearnerBlockRule(c.domain, id,
-          c.tier === 'block-script' ? SCRIPT_RESOURCE_TYPES : BEACON_RESOURCE_TYPES));
-        blockedN++;
-      }
-      idMap[c.domain] = id;
-    }
-
-    // 5) clear the whole band first (idempotent; also reclaims decayed domains)
-    var removeSet = {};
-    for (var k = 0; k < existingLearnerRuleIds.length; k++) {
-      var rid = Number(existingLearnerRuleIds[k]);
-      if (Number.isInteger(rid) && rid >= LEARN_ID_BASE && rid <= LEARN_ID_MAX) removeSet[rid] = 1;
-    }
-    // also clear the ids we are about to (re)add, so remove-then-add is clean
-    for (var a = 0; a < addRules.length; a++) removeSet[addRules[a].id] = 1;
-    var removeRuleIds = Object.keys(removeSet).map(Number);
+    var built = buildCandidateRules(desired);
 
     return {
-      addRules: addRules,
-      removeRuleIds: removeRuleIds,
-      idMap: idMap,
+      addRules: built.addRules,
+      removeRuleIds: removalIds(existingLearnerRuleIds, built.addRules),
+      idMap: built.idMap,
       stats: {
         candidates: candidates.length,
-        blocked: blockedN,
-        cookieStripped: cookieN,
+        blocked: built.blocked,
+        cookieStripped: built.cookieStripped,
         budget: budget,
-        skipped: Math.max(0, candidates.length - addRules.length)
+        skipped: Math.max(0, candidates.length - built.addRules.length)
       }
     };
   }
@@ -308,17 +352,33 @@
   // ══════════════════ ASYNC ORCHESTRATION (chrome-dependent) ═════════════════
   var _coveredCache = null; // Set<baseDomain> from packaged easyprivacy-domains.json
 
+  function canLoadCoveredSet() {
+    if (!root.chrome) return false;
+    if (!chrome.runtime) return false;
+    if (!chrome.runtime.getURL) return false;
+    return typeof fetch === 'function';
+  }
+
+  function coveredSetFromArray(domains) {
+    var covered = new Set();
+    if (!Array.isArray(domains)) return covered;
+    for (var i = 0; i < domains.length; i++) {
+      var base = normBase(domains[i]);
+      if (base) covered.add(base);
+    }
+    return covered;
+  }
+
   function loadCoveredSet() {
     if (_coveredCache) return Promise.resolve(_coveredCache);
     try {
-      if (!(root.chrome && chrome.runtime && chrome.runtime.getURL && typeof fetch === 'function')) {
+      if (!canLoadCoveredSet()) {
         _coveredCache = new Set(); return Promise.resolve(_coveredCache);
       }
       var url = chrome.runtime.getURL('src/rules/easyprivacy-domains.json');
       return fetch(url).then(function (res) { return res.json(); }).then(function (arr) {
-        var s = new Set();
-        if (Array.isArray(arr)) { for (var i = 0; i < arr.length; i++) { var b = normBase(arr[i]); if (b) s.add(b); } }
-        _coveredCache = s; return s;
+        _coveredCache = coveredSetFromArray(arr);
+        return _coveredCache;
       }).catch(function () { _coveredCache = new Set(); return _coveredCache; });
     } catch (_) { _coveredCache = new Set(); return Promise.resolve(_coveredCache); }
   }
@@ -337,6 +397,35 @@
       .catch(function () { return true; });
   }
 
+  // The popup's Trackers pill and global guard must stand down every adaptive
+  // DNR rule while preserving the user's Standard/Preview/Adaptive selection.
+  // Missing state defaults on so a storage read failure does not weaken privacy.
+  function trackerProtectionEnabled(stored) {
+    if (!stored || typeof stored !== 'object') return true;
+    if (stored[MASTER_KEY] === false) return false;
+    var trackerSettings = stored[TRACKER_SETTINGS_KEY];
+    return !(trackerSettings && typeof trackerSettings === 'object' && trackerSettings.globalEnabled === false);
+  }
+  function hasLocalStorage() {
+    return !!root.chrome && !!chrome.storage && !!chrome.storage.local;
+  }
+  function isTrackerProtectionEnabled() {
+    if (!hasLocalStorage()) return Promise.resolve(false);
+    return chrome.storage.local.get([MASTER_KEY, TRACKER_SETTINGS_KEY])
+      .then(trackerProtectionEnabled)
+      .catch(function () { return false; });
+  }
+
+  function modeFromFlags(enabled, shadow) {
+    if (!enabled) return 'standard';
+    return shadow ? 'preview' : 'adaptive';
+  }
+  function flagsForMode(mode) {
+    if (mode === 'preview') return { enabled: true, shadow: true };
+    if (mode === 'adaptive') return { enabled: true, shadow: false };
+    return { enabled: false, shadow: true };
+  }
+
   // Same FNV-1a/32 digest the collector/learner use, so radar keys and hashed
   // learner rows can be joined.
   function hashHost(host) {
@@ -350,58 +439,64 @@
     return 'h:' + h.toString(16).padStart(8, '0');
   }
 
-  // The learner's persisted map is hash-only (privacy invariant), so it cannot
-  // name a domain for a DNR rule. The collector's radar snapshots ALREADY hold
-  // the plaintext spotted-tracker names per (hashed) site - public third-party
-  // domains, never the user's own sites. Joining radar names to hashed learner
-  // rows gives the enforcer its candidates WITHOUT adding any new plaintext at
-  // rest, and doubles as a freshness gate: a tracker the user hasn't actually
-  // encountered recently (no radar entry) simply cannot be enforced yet.
-  function collectRadarNames() {
+  function isHashKey(value) {
+    return typeof value === 'string' && /^h:[0-9a-f]{8}$/.test(value);
+  }
+
+  function collectRadarHashes() {
     return chrome.storage.local.get(null).then(function (all) {
-      var names = {}; // hashKey -> plaintext base domain
+      var hashes = {};
       for (var k in all) {
         if (!Object.prototype.hasOwnProperty.call(all, k)) continue;
         if (k.indexOf(RADAR_PREFIX) !== 0) continue;
-        var spotted = all[k] && all[k].spotted;
-        if (!Array.isArray(spotted)) continue;
-        for (var i = 0; i < spotted.length; i++) {
-          var d = spotted[i] && spotted[i].domain;
-          var b = normBase(d);
-          if (!b) continue;
-          var hk = hashHost(b);
-          if (hk && !names[hk]) names[hk] = b;
-        }
+        addSnapshotHashes(all[k], hashes);
       }
-      return names;
+      return hashes;
+    }).catch(function () { return {}; });
+  }
+  function addSnapshotHashes(snapshot, hashes) {
+    var spotted = snapshot && snapshot.spotted;
+    if (!Array.isArray(spotted)) return;
+    for (var i = 0; i < spotted.length; i++) addRadarHash(spotted[i], hashes);
+  }
+  function addRadarHash(spot, hashes) {
+    var key = spot && spot.domainHash;
+    if (/^h:[0-9a-f]{8}$/.test(key || '')) hashes[key] = true;
+  }
+  function collectLiveRadarNames(learner) {
+    if (!learner || typeof learner.resolveSpots !== 'function') return Promise.resolve({});
+    return collectRadarHashes().then(function (hashes) {
+      return learner.resolveSpots(Object.keys(hashes));
     }).catch(function () { return {}; });
   }
   function loadExceptSet() {
     return chrome.storage.local.get(EXCEPT_KEY).then(function (r) {
-      var obj = (r && r[EXCEPT_KEY]) || {};
-      var s = new Set();
-      for (var d in obj) { if (Object.prototype.hasOwnProperty.call(obj, d)) { var b = normBase(d); if (b) s.add(b); } }
-      return s;
-    }).catch(function () { return new Set(); });
+      var exceptions = sanitizedExceptions(r && r[EXCEPT_KEY]);
+      var payload = {};
+      payload[EXCEPT_KEY] = exceptions;
+      return chrome.storage.local.set(payload).then(function () {
+        return new Set(Object.keys(exceptions));
+      });
+    });
   }
 
   function getDynamicState() {
-    var dnr = root.chrome && chrome.declarativeNetRequest;
+    var dnr = (typeof chrome !== 'undefined') && chrome.declarativeNetRequest;
     var pDyn = (dnr && dnr.getDynamicRules) ? dnr.getDynamicRules() : Promise.resolve([]);
     var pSes = (dnr && dnr.getSessionRules) ? dnr.getSessionRules() : Promise.resolve([]);
-    return Promise.all([pDyn, pSes]).then(function (res) {
-      var dyn = Array.isArray(res[0]) ? res[0] : [];
-      var ses = Array.isArray(res[1]) ? res[1] : [];
-      var bandIds = [];
-      var other = 0;
-      for (var i = 0; i < dyn.length; i++) {
-        var id = Number(dyn[i] && dyn[i].id);
-        if (id >= LEARN_ID_BASE && id <= LEARN_ID_MAX) bandIds.push(id);
-        else other++;
-      }
-      other += ses.length; // session rules also count against the shared cap
-      return { bandIds: bandIds, otherRuleCount: other };
-    }).catch(function () { return { bandIds: [], otherRuleCount: 0 }; });
+    return Promise.all([pDyn, pSes]).then(dynamicStateFromRules);
+  }
+
+  function dynamicStateFromRules(result) {
+    var dynamicRules = Array.isArray(result[0]) ? result[0] : [];
+    var sessionRules = Array.isArray(result[1]) ? result[1] : [];
+    var state = { bandIds: [], otherRuleCount: sessionRules.length };
+    for (var i = 0; i < dynamicRules.length; i++) {
+      var id = validLearnerRuleId(dynamicRules[i] && dynamicRules[i].id);
+      if (id === null) state.otherRuleCount += 1;
+      else state.bandIds.push(id);
+    }
+    return state;
   }
 
   function clearBand(bandIds) {
@@ -410,125 +505,286 @@
       .then(function () { return true; }).catch(function () { return false; });
   }
 
-  // The one entry point: reconcile our DNR band to the learner's current scores.
-  function syncLearnerRules() {
+  function clearAfterLearnerFailure(dyn, reason) {
+    return clearBand(dyn.bandIds).then(function (cleared) {
+      return { ok: false, reason: cleared ? reason : 'clear_failed' };
+    });
+  }
+
+  function cleanupCurrentLearnerBand(reason) {
+    var dnr = (typeof chrome !== 'undefined') && chrome.declarativeNetRequest;
+    if (!dnr || typeof dnr.getDynamicRules !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'clear_failed' });
+    }
+    return dnr.getDynamicRules().then(function (rules) {
+      return dynamicStateFromRules([rules, []]);
+    }).then(function (dyn) {
+      return clearAfterLearnerFailure(dyn, reason);
+    }).catch(function () {
+      return { ok: false, reason: 'clear_failed' };
+    });
+  }
+
+  function learnerAvailable(learner) {
+    return !!learner && typeof learner.getStats === 'function';
+  }
+
+  function saveSuppressedState(enabled, shadow, dyn, protectionEnabled) {
+    return clearBand(dyn.bandIds).then(function (cleared) {
+      if (!cleared) return { ok: false, reason: 'clear_failed' };
+      var mode = modeFromFlags(enabled, shadow);
+      var suppressed = enabled && !protectionEnabled;
+      var payload = {};
+      payload[META_KEY] = {
+        updated: Date.now(), mode: mode, shadow: shadow,
+        suppressed: suppressed, blocked: 0, cookieStripped: 0
+      };
+      return chrome.storage.local.set(payload).catch(function () {}).then(function () {
+        return {
+          ok: true, enabled: enabled, shadow: shadow, mode: mode,
+          suppressed: suppressed, blocked: 0
+        };
+      });
+    });
+  }
+
+  function namedLearnerRows(stats, names) {
+    var hashedRows = Array.isArray(stats.top) ? stats.top : [];
+    var rows = [];
+    for (var i = 0; i < hashedRows.length; i++) {
+      var row = hashedRows[i];
+      var name = row && names[row.domain];
+      if (!name) continue;
+      rows.push({ domain: name, score: row.score, sites: row.sites, ageDays: row.ageDays, verdict: row.verdict });
+    }
+    return rows;
+  }
+
+  function planFromLearnerParts(parts, dyn) {
+    var stats = parts[0] || {};
+    return planSync({
+      rows: namedLearnerRows(stats, parts[3] || {}),
+      existingLearnerRuleIds: dyn.bandIds,
+      otherRuleCount: dyn.otherRuleCount,
+      essentialSet: ESSENTIAL_DOMAINS,
+      coveredSet: parts[1],
+      exceptSet: parts[2]
+    });
+  }
+
+  function previewSample(plan) {
+    return plan.addRules.slice(0, 50).map(function (rule) {
+      var action = rule.action.type === 'block' ? 'block' : 'cookie';
+      return { h: hashHost(rule.condition.requestDomains[0]), a: action };
+    });
+  }
+
+  function savePreviewPlan(plan, dyn) {
+    return clearBand(dyn.bandIds).then(function (cleared) {
+      if (!cleared) return { ok: false, reason: 'clear_failed' };
+      var payload = {};
+      payload[META_KEY] = {
+        updated: Date.now(), mode: 'preview', shadow: true,
+        wouldBlock: plan.stats.blocked,
+        wouldCookieStrip: plan.stats.cookieStripped,
+        budget: plan.stats.budget,
+        candidates: plan.stats.candidates,
+        sample: previewSample(plan)
+      };
+      return chrome.storage.local.set(payload).catch(function () {}).then(function () {
+        return {
+          ok: true, enabled: true, shadow: true, mode: 'preview',
+          wouldBlock: plan.stats.blocked, wouldCookieStrip: plan.stats.cookieStripped
+        };
+      });
+    });
+  }
+
+  function saveAdaptivePlan(plan, dyn) {
+    return chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: plan.removeRuleIds,
+      addRules: plan.addRules
+    }).then(function () {
+      var payload = {};
+      payload[IDMAP_KEY] = {};
+      payload[META_KEY] = {
+        updated: Date.now(), mode: 'adaptive', shadow: false,
+        blocked: plan.stats.blocked, cookieStripped: plan.stats.cookieStripped,
+        budget: plan.stats.budget, candidates: plan.stats.candidates
+      };
+      return chrome.storage.local.set(payload).catch(function () {}).then(function () {
+        return {
+          ok: true, enabled: true, shadow: false, mode: 'adaptive',
+          blocked: plan.stats.blocked, cookieStripped: plan.stats.cookieStripped,
+          budget: plan.stats.budget, candidates: plan.stats.candidates
+        };
+      });
+    }).catch(function (err) {
+      try { console.warn('[PawsOff] enforcer updateDynamicRules failed:', err && err.message); } catch (_) {}
+      return clearAfterLearnerFailure(dyn, 'update_failed');
+    });
+  }
+
+  function syncEnabledLearner(learner, shadow, dyn) {
+    if (!learnerAvailable(learner)) return clearAfterLearnerFailure(dyn, 'no_learner');
+    var reads = [
+      function () { return learner.getStats(GET_STATS_TOPN); },
+      loadCoveredSet,
+      loadExceptSet,
+      function () { return collectLiveRadarNames(learner); },
+    ];
+    return Promise.all(reads.map(function (read) { return Promise.resolve().then(read); }))
+      .then(function (parts) {
+        var plan = planFromLearnerParts(parts, dyn);
+        return shadow ? savePreviewPlan(plan, dyn) : saveAdaptivePlan(plan, dyn);
+      }).catch(function () {
+        return clearAfterLearnerFailure(dyn, 'learner_read_failed');
+      });
+  }
+
+  function syncFromPreconditions(pre, learner) {
+    var enabled = pre[0];
+    var shadow = pre[1];
+    var protectionEnabled = pre[2];
+    var dyn = pre[3];
+    if (!enabled) return saveSuppressedState(enabled, shadow, dyn, protectionEnabled);
+    if (!protectionEnabled) return saveSuppressedState(enabled, shadow, dyn, protectionEnabled);
+    return syncEnabledLearner(learner, shadow, dyn);
+  }
+
+  function canUpdateDynamicRules() {
+    if (!root.chrome) return false;
+    if (!chrome.declarativeNetRequest) return false;
+    return !!chrome.declarativeNetRequest.updateDynamicRules;
+  }
+
+  function reconcileLearnerRules() {
     var learner = root.__pawsOff_prevalence;
-    if (!(root.chrome && chrome.declarativeNetRequest && chrome.declarativeNetRequest.updateDynamicRules)) {
+    if (!canUpdateDynamicRules()) {
       return Promise.resolve({ ok: false, reason: 'no_dnr' });
     }
-    return Promise.all([isEnabled(), isShadow(), getDynamicState()]).then(function (pre) {
-      var enabled = pre[0];
-      var shadow = pre[1];
-      var dyn = pre[2];
-      if (!enabled) {
-        // OFF: make sure no learner rules linger.
-        return clearBand(dyn.bandIds).then(function () {
-          return { ok: true, enabled: false, blocked: 0 };
-        });
-      }
-      if (!learner || typeof learner.getStats !== 'function') {
-        return { ok: false, reason: 'no_learner' };
-      }
-      return Promise.all([learner.getStats(GET_STATS_TOPN), loadCoveredSet(), loadExceptSet(), collectRadarNames()])
-        .then(function (parts) {
-          var stats = parts[0] || {};
-          var hashedRows = Array.isArray(stats.top) ? stats.top : [];
-          var names = parts[3] || {};
-          // Join: learner rows are hash-keyed; the radar supplies the plaintext
-          // name. Unnamed rows (not spotted on any recent site) cannot be
-          // enforced - by design, enforcement requires fresh local evidence.
-          var rows = [];
-          for (var i = 0; i < hashedRows.length; i++) {
-            var r = hashedRows[i];
-            var name = r && names[r.domain];
-            if (!name) continue;
-            rows.push({ domain: name, score: r.score, sites: r.sites, ageDays: r.ageDays, verdict: r.verdict });
-          }
-          var plan = planSync({
-            rows: rows,
-            existingLearnerRuleIds: dyn.bandIds,
-            otherRuleCount: dyn.otherRuleCount,
-            essentialSet: ESSENTIAL_DOMAINS,
-            coveredSet: parts[1],
-            exceptSet: parts[2]
-          });
-          if (shadow) {
-            // SHADOW: apply nothing (and clear any leftovers), but persist the
-            // would-plan so the rollout decision is made on real local data.
-            return clearBand(dyn.bandIds).then(function () {
-              var sample = plan.addRules.slice(0, 50).map(function (rl) {
-                return { d: rl.condition.requestDomains[0], a: rl.action.type === 'block' ? 'block' : 'cookie' };
-              });
-              var payload = {};
-              payload[META_KEY] = {
-                updated: Date.now(),
-                shadow: true,
-                wouldBlock: plan.stats.blocked,
-                wouldCookieStrip: plan.stats.cookieStripped,
-                budget: plan.stats.budget,
-                candidates: plan.stats.candidates,
-                sample: sample
-              };
-              return chrome.storage.local.set(payload).catch(function () {}).then(function () {
-                return { ok: true, enabled: true, shadow: true, wouldBlock: plan.stats.blocked, wouldCookieStrip: plan.stats.cookieStripped };
-              });
-            });
-          }
-          return chrome.declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: plan.removeRuleIds,
-            addRules: plan.addRules
-          }).then(function () {
-            var payload = {};
-            payload[IDMAP_KEY] = plan.idMap;
-            payload[META_KEY] = {
-              updated: Date.now(),
-              shadow: false,
-              blocked: plan.stats.blocked,
-              cookieStripped: plan.stats.cookieStripped,
-              budget: plan.stats.budget,
-              candidates: plan.stats.candidates
-            };
-            return chrome.storage.local.set(payload).catch(function () {}).then(function () {
-              return { ok: true, enabled: true, shadow: false, blocked: plan.stats.blocked, cookieStripped: plan.stats.cookieStripped, budget: plan.stats.budget, candidates: plan.stats.candidates };
-            });
-          }).catch(function (err) {
-            // updateDynamicRules rejects atomically -> nothing applied. Don't crash.
-            try { console.warn('[PawsOff] enforcer updateDynamicRules failed:', err && err.message); } catch (_) {}
-            return { ok: false, reason: 'update_failed', error: err && err.message };
-          });
-        });
-    }).catch(function (err) {
-      return { ok: false, reason: 'sync_error', error: err && err.message };
-    });
+    return Promise.all([isEnabled(), isShadow(), isTrackerProtectionEnabled(), getDynamicState()])
+      .then(function (pre) { return syncFromPreconditions(pre, learner); })
+      .catch(function () { return cleanupCurrentLearnerBand('state_read_failed'); });
+  }
+
+  // The one entry point: serialize and coalesce every alarm, storage, and
+  // message-triggered reconciliation so stale cleanup cannot overwrite a newer
+  // learner plan.
+  var learnerSyncPromise = null;
+  var learnerSyncPending = false;
+  async function syncLearnerRules() {
+    if (learnerSyncPromise) {
+      learnerSyncPending = true;
+      return learnerSyncPromise;
+    }
+    learnerSyncPromise = (async function () {
+      var result;
+      do {
+        learnerSyncPending = false;
+        result = await reconcileLearnerRules();
+      } while (learnerSyncPending);
+      return result;
+    }());
+    try { return await learnerSyncPromise; }
+    finally { learnerSyncPromise = null; }
   }
 
   function setEnabled(on) {
     var payload = {}; payload[ENABLED_KEY] = !!on;
-    return chrome.storage.local.set(payload).catch(function () {}).then(function () { return syncLearnerRules(); });
+    return persistModeAndSync(payload);
+  }
+  function persistModeAndSync(payload) {
+    return chrome.storage.local.set(payload).then(
+      function () { return syncLearnerRules(); },
+      function () { return { ok: false, reason: 'storage_failed' }; }
+    );
+  }
+  function setMode(mode) {
+    var flags = flagsForMode(mode);
+    var payload = {};
+    payload[ENABLED_KEY] = flags.enabled;
+    payload[SHADOW_KEY] = flags.shadow;
+    return persistModeAndSync(payload);
   }
   // User feedback loop: "this broke a site" -> never auto-block it again.
   // Batch form with an LRU cap so the list stays bounded.
-  function addExceptions(domains) {
+  function normalizedExceptionBases(domains) {
     var bases = [];
-    (Array.isArray(domains) ? domains : [domains]).forEach(function (d) {
-      var b = normBase(d);
-      if (b && bases.indexOf(b) < 0) bases.push(b);
+    (Array.isArray(domains) ? domains : [domains]).forEach(function (domain) {
+      var base = normBase(domain);
+      if (base && bases.indexOf(base) < 0) bases.push(base);
     });
+    return bases;
+  }
+
+  function trimExceptions(exceptions) {
+    var keys = Object.keys(exceptions);
+    if (keys.length <= MAX_EXCEPTIONS) return;
+    keys.sort(function (left, right) { return exceptions[left] - exceptions[right]; });
+    for (var i = 0; i < keys.length - MAX_EXCEPTIONS; i++) delete exceptions[keys[i]];
+  }
+
+  function sanitizedExceptions(value) {
+    var source = value && typeof value === 'object' ? value : {};
+    var exceptions = {};
+    Object.keys(source).forEach(function (key) {
+      if (isHashKey(key) && Number.isFinite(source[key])) exceptions[key] = source[key];
+    });
+    return exceptions;
+  }
+
+  function storeExceptionBases(stored, bases) {
+    var exceptions = sanitizedExceptions(stored && stored[EXCEPT_KEY]);
+    var now = Date.now();
+    bases.forEach(function (base) {
+      var key = hashHost(base);
+      if (key) exceptions[key] = now;
+    });
+    trimExceptions(exceptions);
+    var payload = {};
+    payload[EXCEPT_KEY] = exceptions;
+    return chrome.storage.local.set(payload);
+  }
+
+  function addExceptions(domains) {
+    var bases = normalizedExceptionBases(domains);
     if (!bases.length) return Promise.resolve({ ok: false });
-    return chrome.storage.local.get(EXCEPT_KEY).then(function (r) {
-      var obj = (r && r[EXCEPT_KEY]) || {};
-      var now = Date.now();
-      bases.forEach(function (b) { obj[b] = now; });
-      var keys = Object.keys(obj);
-      if (keys.length > MAX_EXCEPTIONS) { // LRU: drop the oldest feedback
-        keys.sort(function (a, b2) { return obj[a] - obj[b2]; });
-        for (var i = 0; i < keys.length - MAX_EXCEPTIONS; i++) delete obj[keys[i]];
-      }
-      var payload = {}; payload[EXCEPT_KEY] = obj;
-      return chrome.storage.local.set(payload);
-    }).catch(function () {}).then(function () { return syncLearnerRules(); });
+    return chrome.storage.local.get(EXCEPT_KEY)
+      .then(function (stored) { return storeExceptionBases(stored, bases); })
+      .then(function () { return syncLearnerRules(); })
+      .catch(function () {
+        return getDynamicState().then(function (dyn) {
+          return clearAfterLearnerFailure(dyn, 'storage_failed');
+        });
+      });
   }
   function addException(domain) { return addExceptions([domain]); }
+
+  function storeExceptionHashes(stored, hashes) {
+    var exceptions = sanitizedExceptions(stored && stored[EXCEPT_KEY]);
+    var now = Date.now();
+    hashes.forEach(function (key) {
+      if (isHashKey(key)) exceptions[key] = now;
+    });
+    trimExceptions(exceptions);
+    var payload = {};
+    payload[EXCEPT_KEY] = exceptions;
+    return chrome.storage.local.set(payload);
+  }
+
+  function addExceptionHashes(hashes) {
+    var valid = Array.from(new Set((hashes || []).filter(isHashKey)));
+    if (!valid.length) return Promise.resolve({ ok: false });
+    return chrome.storage.local.get(EXCEPT_KEY)
+      .then(function (stored) { return storeExceptionHashes(stored, valid); })
+      .then(function () { return syncLearnerRules(); })
+      .catch(function () {
+        return getDynamicState().then(function (dyn) {
+          return clearAfterLearnerFailure(dyn, 'storage_failed');
+        });
+      });
+  }
 
   // Breakage self-healing: pausing a site is the strongest "something here
   // broke" signal the user can send. When it happens, every learner-flagged
@@ -536,33 +792,41 @@
   // so the learner backs off without the user ever finding a settings page.
   // Additive listener: background.js owns the pauseSite op itself; we only
   // observe the same message and never call sendResponse for it.
+  function isFlaggedRadarSpot(spot) {
+    if (!spot) return false;
+    if (spot.verdict !== 'block' && spot.verdict !== 'cookieblock') return false;
+    return /^h:[0-9a-f]{8}$/.test(spot.domainHash || '');
+  }
+  function flaggedRadarHashes(spotted) {
+    if (!Array.isArray(spotted)) return [];
+    return spotted.filter(isFlaggedRadarSpot).map(function (spot) { return spot.domainHash; });
+  }
+  function exceptSnapshot(snapshot) {
+    var flaggedHashes = flaggedRadarHashes(snapshot && snapshot.spotted);
+    if (!flaggedHashes.length) return;
+    return addExceptionHashes(flaggedHashes);
+  }
   function exceptSpottedOnSite(siteHost) {
     try {
       if (!siteHost || typeof siteHost !== 'string') return Promise.resolve();
       var key = RADAR_PREFIX + hashHost(siteHost.toLowerCase());
       return chrome.storage.local.get(key).then(function (r) {
-        var spotted = r && r[key] && r[key].spotted;
-        if (!Array.isArray(spotted)) return;
-        var flagged = [];
-        for (var i = 0; i < spotted.length; i++) {
-          var s = spotted[i];
-          if (s && (s.verdict === 'block' || s.verdict === 'cookieblock') && s.domain) flagged.push(s.domain);
-        }
-        if (flagged.length) return addExceptions(flagged);
+        return exceptSnapshot(r && r[key]);
       }).catch(function () { /* silent */ });
     } catch (_) { return Promise.resolve(); }
   }
   function setShadow(on) {
     var payload = {}; payload[SHADOW_KEY] = !!on;
-    return chrome.storage.local.set(payload).catch(function () {}).then(function () { return syncLearnerRules(); });
+    return persistModeAndSync(payload);
   }
   function getStatus() {
     return chrome.storage.local.get([ENABLED_KEY, SHADOW_KEY, META_KEY, EXCEPT_KEY]).then(function (r) {
       r = r || {};
-      var except = r[EXCEPT_KEY] || {};
+      var except = sanitizedExceptions(r[EXCEPT_KEY]);
       return {
         enabled: !!r[ENABLED_KEY],
         shadow: !(r[SHADOW_KEY] === false),
+        mode: modeFromFlags(!!r[ENABLED_KEY], !(r[SHADOW_KEY] === false)),
         meta: r[META_KEY] || null,
         exceptions: Object.keys(except).length
       };
@@ -577,30 +841,35 @@
   NS.syncLearnerRules = syncLearnerRules;
   NS.setEnabled = setEnabled;
   NS.setShadow = setShadow;
+  NS.setMode = setMode;
   NS.addException = addException;
   NS.addExceptions = addExceptions;
   NS.getStatus = getStatus;
   NS.reset = reset;
 
   // ── Message listener (additive; coexists with background.js's router) ──────
-  // DORMANT-BY-DESIGN: this is the OPT-IN control surface for enforcement. No
-  // shipped UI sends any of these messages - they are reachable only from the
-  // service-worker console (or a future, deliberately-gated enable UI). The
-  // enforcer stays inert until pawsoff_pv_enforce_setEnabled is called AND
-  // __pawsOff_pv_enforce_enabled is true. These handlers are NOT dead code; do
-  // not remove them - see src/learn/README.md ("Enforcement (wired but DORMANT)").
+  // Explicit opt-in control surface. Settings exposes Standard (off), Preview
+  // (shadow), and Adaptive (active); the default remains Standard.
   try {
     chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       try {
         if (!sender || sender.id !== chrome.runtime.id) return false;
         if (!message || typeof message.type !== 'string') return false;
+        if (message.type === 'pawsoff_prevalence_observe') {
+          scheduleSoon();
+          return false; // learner owns and answers this message
+        }
         // Passive breakage feedback: observe the popup's pauseSite op (owned +
-        // answered by background.js - we never sendResponse for it).
+        // answered by background.js — we never sendResponse for it).
         if (message.type === 'pawsoff_allow_apply' && message.op === 'pauseSite' && typeof message.site === 'string') {
           try { exceptSpottedOnSite(message.site); } catch (_) { /* silent */ }
           return false;
         }
         switch (message.type) {
+          case 'pawsoff_pv_enforce_setMode':
+            setMode(message.mode).then(function (r) { try { sendResponse(r); } catch (_) {} },
+              function () { try { sendResponse({ ok: false }); } catch (_) {} });
+            return true;
           case 'pawsoff_pv_enforce_setShadow':
             setShadow(!!message.shadow).then(function (r) { try { sendResponse(r); } catch (_) {} },
               function () { try { sendResponse({ ok: false }); } catch (_) {} });
@@ -636,11 +905,22 @@
   function ensureAlarm() {
     try { chrome.alarms.create(ENFORCE_ALARM, { periodInMinutes: 1440 }); } catch (_) {}
   }
+  function scheduleSoon() {
+    try { chrome.alarms.create(ENFORCE_SOON_ALARM, { delayInMinutes: 1 }); } catch (_) {}
+  }
   try { chrome.runtime.onInstalled.addListener(function () { ensureAlarm(); syncLearnerRules(); }); } catch (_) {}
   try { chrome.runtime.onStartup.addListener(function () { ensureAlarm(); syncLearnerRules(); }); } catch (_) {}
   try {
+    chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area !== 'local') return;
+      if (changes[MASTER_KEY] || changes[TRACKER_SETTINGS_KEY]) syncLearnerRules();
+    });
+  } catch (_) {}
+  try {
     chrome.alarms.onAlarm.addListener(function (alarm) {
-      try { if (alarm && alarm.name === ENFORCE_ALARM) syncLearnerRules(); } catch (_) {}
+      try {
+        if (alarm && (alarm.name === ENFORCE_ALARM || alarm.name === ENFORCE_SOON_ALARM)) syncLearnerRules();
+      } catch (_) {}
     });
   } catch (_) {}
 
@@ -667,7 +947,27 @@
     ENFORCE_MIN_SITES: ENFORCE_MIN_SITES,
     ENFORCE_MIN_AGE_DAYS: ENFORCE_MIN_AGE_DAYS,
     SCRIPT_TIER_SCORE: SCRIPT_TIER_SCORE,
-    COOKIE_MIN_SCORE: COOKIE_MIN_SCORE
+    COOKIE_MIN_SCORE: COOKIE_MIN_SCORE,
+    modeFromFlags: modeFromFlags,
+    flagsForMode: flagsForMode,
+    trackerProtectionEnabled: trackerProtectionEnabled,
+    isTrackerProtectionEnabled: isTrackerProtectionEnabled,
+    clearBand: clearBand,
+    clearAfterLearnerFailure: clearAfterLearnerFailure,
+    cleanupCurrentLearnerBand: cleanupCurrentLearnerBand,
+    getDynamicState: getDynamicState,
+    syncLearnerRules: syncLearnerRules,
+    saveAdaptivePlan: saveAdaptivePlan,
+    syncEnabledLearner: syncEnabledLearner,
+    previewSample: previewSample,
+    sanitizedExceptions: sanitizedExceptions,
+    storeExceptionBases: storeExceptionBases,
+    storeExceptionHashes: storeExceptionHashes,
+    loadExceptSet: loadExceptSet,
+    addExceptions: addExceptions,
+    addExceptionHashes: addExceptionHashes,
+    exceptSnapshot: exceptSnapshot,
+    setMode: setMode
   };
   try { if (root.__pawsOff_TEST) root.__pawsOff_enforcerInternals = TESTAPI; } catch (_) {}
   try { if (typeof module !== 'undefined' && module.exports) module.exports = TESTAPI; } catch (_) {}

@@ -51,11 +51,12 @@
 
   // ── Storage keys ───────────────────────────────────────────────────────────
   const SETTINGS_KEY     = '__pawsOff_tosShield_settings';
-  const CONFIG_CACHE_KEY = '__pawsOff_tosShield_config';
   const EVENT_PREFIX     = '__pawsOff_tosShield_event_'; // scan results → getStats()
   const LOG_PREFIX       = '__pawsOff_tosShield_log_';   // diagnostics
+  const POLICY_PREFIX    = '__pawsOff_tosShield_policy_'; // hashed site -> text fingerprint + aggregates
   const EVENT_MAX        = 500;
   const LOG_MAX          = 200;
+  const POLICY_MAX       = 300;
   const PRUNE_SAMPLE     = 0.1;
   // Monotonic flagged-clauses counter, never pruned, so popup totals never plateau.
   const TS_TOTAL_KEY     = '__pawsOff_ts_total_flagged';
@@ -71,6 +72,27 @@
   // loading or SPA pages; running the full scan pipeline on every batch froze
   // the tab. We coalesce bursts and re-scan at most once per this interval.
   const READINESS_DEBOUNCE_MS = 400;
+
+  // Common policy hubs and rights pages do not always use "privacy policy" in
+  // their title. Keep these engine-owned additions active even when an older
+  // signed config is cached, then require substantive privacy-action language
+  // before allowing a compact page through the confidence gate.
+  const SMART_POLICY_URL_TOKENS = [
+    'data-protection', 'consumer-rights', 'subject-access', 'do-not-sell',
+    'do-not-share', 'ccpa', 'gdpr', 'dsar',
+  ];
+  const SMART_POLICY_TITLE_TOKENS = [
+    'privacy choices', 'privacy center', 'privacy centre', 'privacy rights',
+    'privacy notice', 'consumer privacy', 'data privacy', 'data subject rights',
+    'data protection rights', 'subject access request', 'do not sell my',
+    'do not share my',
+  ];
+  const COMPACT_POLICY_BODY_TOKENS = [
+    'privacy polic', 'opt out', 'data subject rights', 'cookie preferences',
+    'personal information', 'personal data', 'privacy request', 'unsubscribe',
+    'do not sell', 'do not share', 'limit the use', 'submit a request',
+  ];
+  const COMPACT_POLICY_MIN_WORDS = 150;
 
   const HIGHLIGHT_SEVERITIES = ['high', 'med', 'low'];
 
@@ -93,13 +115,13 @@
   //   modifiers: aggravating qualifiers (boost score, never required)
   const DEFAULT_CONFIG = {
     schemaVersion: 1,
-    configVersion: '2026.06.26',
+    configVersion: '2026.6.26',
     minEngineVersion: '1.0.0',
     locale: 'en',
 
     pageDetection: {
-      urlTokens: ['terms', 'tos', 'eula', 'privacy', 'legal', 'conditions', 'user-agreement', 'cookie-policy', 'data-policy'],
-      titleTokens: ['terms of service', 'terms of use', 'terms and conditions', 'privacy policy', 'user agreement', 'cookie policy', 'data policy'],
+      urlTokens: ['terms', 'tos', 'eula', 'privacy', 'legal', 'conditions', 'user-agreement', 'cookie-policy', 'data-policy', ...SMART_POLICY_URL_TOKENS],
+      titleTokens: ['terms of service', 'terms of use', 'terms and conditions', 'privacy policy', 'user agreement', 'cookie policy', 'data policy', ...SMART_POLICY_TITLE_TOKENS],
       legaleseMarkers: ['shall', 'herein', 'hereto', 'you agree', 'we may', 'reserve the right', 'governing law', 'last updated', 'effective date', 'these terms'],
       minWordCount: 400,
       confidenceThreshold: 0.6,
@@ -221,17 +243,22 @@
   // ── Runtime state (closure-private) ───────────────────────────────────────
   const state = {
     config: null,
-    compiled: null,       // compiled patterns (with regex) - never persisted
+    compiled: null,       // compiled patterns (with regex) — never persisted
+    patternById: null,    // pattern id → compiled matcher for evidence ranges
     categoryById: null,   // id → category meta
     regex: null,          // shared compiled regexes (negation, aggravated, clause)
     settings: null,
     findings: [],         // current page findings (in-memory only; holds text)
+    reputation: null,     // optional signed ToS;DR context for this site
+    reputationSource: null,
+    policyChange: null,   // local fingerprint comparison; never contains policy text
     ranges: null,         // severity → Range[] for the Highlight API
     panelHost: null,      // Shadow-DOM panel host element (ours)
-    shadowRoot: null,     // CLOSED shadow root ref (ours) - never exposed on the host
+    shadowRoot: null,     // CLOSED shadow root ref (ours) — never exposed on the host
     styleEl: null,        // injected ::highlight() <style> (ours)
     scanned: false,
     scanning: false,
+    scanGeneration: 0,
     started: false,
     readinessObserver: null,
     readinessTimer: null,
@@ -250,121 +277,34 @@
     return Math.random().toString(36).slice(2, 8);
   }
 
-  /**
-   * Compare two dotted numeric version strings (e.g. "2026.06.07", "1.0.0").
-   * @param {string} a
-   * @param {string} b
-   * @returns {number} -1 | 0 | 1
-   */
-  function compareVersions(a, b) {
-    const pa = String(a || '').split(/[^0-9]+/).filter(Boolean).map(Number);
-    const pb = String(b || '').split(/[^0-9]+/).filter(Boolean).map(Number);
-    const n = Math.max(pa.length, pb.length);
-    for (let i = 0; i < n; i++) {
-      const x = pa[i] || 0;
-      const y = pb[i] || 0;
-      if (x !== y) return x < y ? -1 : 1;
-    }
-    return 0;
-  }
-
-  /**
-   * Decode a base64 string into a Uint8Array. (Kept as a small shared utility;
-   * the signature verification that once used it now lives in the background.)
-   * @param {string} b64
-   * @returns {Uint8Array}
-   */
-  function base64ToBytes(b64) {
-    const bin = atob(b64);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
-
-  /**
-   * Build a case-insensitive alternation regex from literal tokens. Tokens are
-   * escaped (no remote regex injection) and internal whitespace is made elastic
-   * so phrases match across normalised spacing. Boundary lookarounds avoid
-   * matching inside larger words (e.g. "sell" not matching "reseller").
-   * @param {string[]} tokens
-   * @returns {RegExp|null}
-   */
-  function buildAltRegex(tokens) {
-    if (!Array.isArray(tokens) || tokens.length === 0) return null;
-    const parts = tokens
-      .filter((t) => typeof t === 'string' && t.length)
-      .map((t) =>
-        t.toLowerCase()
-          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          .replace(/\s+/g, '\\s+'),
-      );
-    if (!parts.length) return null;
-    try {
-      return new RegExp('(?:^|[^a-z0-9])(?:' + parts.join('|') + ')(?:[^a-z0-9]|$)', 'i');
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /**
-   * Like buildAltRegex but GLOBAL and bare (no boundary groups), for use with
-   * String.replace() to delete every occurrence of any phrase from a string.
-   * Used to strip aggravator phrases before negation testing (see Option A in
-   * compileConfig). Returns null if there are no usable phrases.
-   * @param {string[]} tokens
-   * @returns {RegExp|null}
-   */
-  function buildStripRegex(tokens) {
-    if (!Array.isArray(tokens) || tokens.length === 0) return null;
-    const parts = tokens
-      .filter((t) => typeof t === 'string' && t.length)
-      .map((t) =>
-        t.toLowerCase()
-          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          .replace(/\s+/g, '\\s+'),
-      );
-    if (!parts.length) return null;
-    try {
-      return new RegExp('(?:' + parts.join('|') + ')', 'gi');
-    } catch (_) {
-      return null;
-    }
-  }
+  const TOS_CORE_API = window.PawsOffTosCore;
+  const TOS_CORE = TOS_CORE_API.create({
+    engineVersion: ENGINE_VERSION,
+    schemaVersion: DEFAULT_CONFIG.schemaVersion,
+    policyPrefix: POLICY_PREFIX,
+  });
+  const compareVersions = TOS_CORE_API.compareVersions;
+  const base64ToBytes = TOS_CORE_API.base64ToBytes;
+  const buildAltRegex = TOS_CORE_API.buildAltRegex;
+  const buildEvidenceRegex = TOS_CORE_API.buildEvidenceRegex;
+  const evidenceSpans = TOS_CORE_API.evidenceSpans;
+  const buildStripRegex = TOS_CORE_API.buildStripRegex;
+  const hasRequiredArrays = TOS_CORE_API.hasRequiredArrays;
+  const hasRequiredSections = TOS_CORE_API.hasRequiredSections;
+  const normalizeReputationResponse = TOS_CORE_API.normalizeReputationResponse;
+  const gradePresentation = TOS_CORE_API.gradePresentation;
+  const findingEvidenceLabel = TOS_CORE_API.findingEvidenceLabel;
+  const compilePattern = TOS_CORE_API.compilePattern;
+  const hashHost = TOS_CORE_API.hashHost;
+  const validateConfig = TOS_CORE.validateConfig;
+  const policyFingerprint = TOS_CORE.policyFingerprint;
+  const policySnapshotKey = TOS_CORE.policySnapshotKey;
+  const describePolicyChange = TOS_CORE.describePolicyChange;
 
   // ─────────────────────────────────────────────────────────────────────────
   //  Remote config: fetch + SubtleCrypto verify + validate (fail-closed)
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Structural validation of a config object before we trust it.
-   * @param {*} cfg
-   * @returns {boolean}
-   */
-  /** The page's engine is too old for this config's minimum. */
-  function engineTooOld(cfg) {
-    return cfg.minEngineVersion && compareVersions(ENGINE_VERSION, cfg.minEngineVersion) < 0;
-  }
-  /** Config must carry both the categories and patterns arrays. */
-  function hasRequiredArrays(cfg) {
-    return Array.isArray(cfg.categories) && Array.isArray(cfg.patterns);
-  }
-  /** Config must carry all four behavioural sections. */
-  function hasRequiredSections(cfg) {
-    return !!(cfg.pageDetection && cfg.segmentation && cfg.negation && cfg.scoring);
-  }
-  function validateConfig(cfg) {
-    try {
-      if (!cfg || typeof cfg !== 'object') return false;
-      if (cfg.schemaVersion !== DEFAULT_CONFIG.schemaVersion) return false;
-      if (typeof cfg.configVersion !== 'string') return false;
-      if (engineTooOld(cfg)) return false;
-      if (!hasRequiredArrays(cfg)) return false;
-      if (!hasRequiredSections(cfg)) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
 
   /**
    * Ask the background service worker for the signed + verified config. The
@@ -395,24 +335,26 @@
     }
   }
 
+  async function loadReputation() {
+    try {
+      if (!canMessageBackground()) return null;
+      const resp = await chrome.runtime.sendMessage({ type: 'pawsoff_tosShield_getReputation' });
+      return normalizeReputationResponse(resp);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /**
-   * Resolve the active config: cached (if valid) or bundled default, then try a
-   * verified remote refresh and adopt it only if strictly newer.
+   * Resolve the active config from the bundled engine, then optionally adopt a
+   * newer artifact returned through the signed release-manifest pipeline.
    * @returns {Promise<Object>}
    */
   async function loadConfig() {
-    let cached = null;
-    try {
-      const s = await chrome.storage.local.get(CONFIG_CACHE_KEY);
-      if (s && validateConfig(s[CONFIG_CACHE_KEY])) cached = s[CONFIG_CACHE_KEY];
-    } catch (_) { /* ignore */ }
-
-    let active = cached || DEFAULT_CONFIG;
-
+    let active = DEFAULT_CONFIG;
     const remote = await fetchRemoteConfig();
     if (remote && compareVersions(remote.configVersion, active.configVersion) > 0) {
       active = remote;
-      try { await chrome.storage.local.set({ [CONFIG_CACHE_KEY]: remote }); } catch (_) { /* ignore */ }
     }
     return active;
   }
@@ -424,38 +366,21 @@
    */
   function compileConfig(cfg) {
     state.config = cfg;
-    state.categoryById = {};
-    for (const c of cfg.categories) state.categoryById[c.id] = c;
+    state.categoryById = Object.create(null);
+    for (const category of cfg.categories) state.categoryById[category.id] = category;
 
     state.compiled = [];
-    for (const p of cfg.patterns) {
-      if (p.enabled === false) continue;
-      const anchorRe = buildAltRegex(p.anchors);
-      const objectRe = buildAltRegex(p.objects);
-      if (!anchorRe || !objectRe) continue; // a pattern needs both halves
-      state.compiled.push({
-        id: p.id,
-        categoryId: p.categoryId,
-        weight: typeof p.weight === 'number' ? p.weight : 1,
-        anchorRe,
-        objectRe,
-        modifierRe: buildAltRegex(p.modifiers),
-        // Some categories are NEGATIVE-FORM by nature: a liability waiver IS the
-        // sentence "we are NOT liable / in NO event / in NO way held liable".
-        // For those, the embedded "no/not" is the adverse signal itself, so the
-        // negation down-weight must not apply or the clause silently vanishes.
-        ignoreNegation: p.ignoreNegation === true,
-      });
+    state.patternById = Object.create(null);
+    for (const pattern of cfg.patterns) {
+      const compiled = compilePattern(pattern, cfg);
+      if (!compiled) continue;
+      state.compiled.push(compiled);
+      state.patternById[pattern.id] = compiled;
     }
 
     state.regex = {
       negation: buildAltRegex(cfg.negation.cues),
       aggravated: buildAltRegex(cfg.scoring.aggravatedModifiers),
-      // Global-flag stripper for the SAME aggravator phrases. Used to remove
-      // phrases like "without notice" / "without your consent" from a clause
-      // BEFORE the negation test runs, so the bare cue "without" inside an
-      // aggravator can't be misread as negating the clause (the "without notice"
-      // false-negative). Aggravators are intensifiers, never negations.
       aggravatedStrip: buildStripRegex(cfg.scoring.aggravatedModifiers),
       clause: buildClauseSplitter(cfg.segmentation.clauseDelimiters),
     };
@@ -480,7 +405,25 @@
     }
   }
 
-  // ───────���─────────────────────────────────────────────────────────────────
+  /** Split clauses while preserving raw offsets for precise DOM highlights. */
+  function splitClauseSpans(text, splitter) {
+    const input = String(text || '');
+    if (!splitter) return [{ start: 0, end: input.length, raw: input }];
+    const flags = splitter.flags.includes('g') ? splitter.flags : splitter.flags + 'g';
+    const re = new RegExp(splitter.source, flags);
+    const spans = [];
+    let start = 0;
+    let match;
+    while ((match = re.exec(input))) {
+      spans.push({ start, end: match.index, raw: input.slice(start, match.index) });
+      start = match.index + match[0].length;
+      if (!match[0].length) re.lastIndex += 1;
+    }
+    spans.push({ start, end: input.length, raw: input.slice(start) });
+    return spans;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   //  Settings
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -550,24 +493,56 @@
    * @param {number} max
    * @returns {Promise<void>}
    */
-  /**
-   * One-way, synchronous digest of a hostname for LOCAL log de-identification.
-   * Logs never leave the device, but we also don't want stored diagnostics to
-   * read as a plaintext browsing history, so the visited host is reduced to an
-   * FNV-1a/32 token. This is a privacy de-identifier, NOT a security primitive.
-   * Returns 'h:' + 8 hex chars, or null for empty input.
-   * @param {string} host
-   * @returns {string|null}
-   */
-  function hashHost(host) {
-    if (!host || typeof host !== 'string') return null;
-    let h = 0x811c9dc5;
-    const s = host.toLowerCase();
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-    }
-    return 'h:' + h.toString(16).padStart(8, '0');
+  async function preparePolicySnapshot(text, byCategory) {
+    const fingerprint = await policyFingerprint(text);
+    const key = policySnapshotKey(location.hostname, location.pathname);
+    if (!key) return null;
+    if (!fingerprint) return null;
+    return {
+      key,
+      value: {
+        v: 2,
+        ts: Date.now(),
+        fingerprint,
+        total: state.findings.length,
+        byCategory: { ...(byCategory || {}) },
+      },
+    };
+  }
+
+  function policySnapshotIsCurrent(generation) {
+    return generation === state.scanGeneration;
+  }
+
+  function maybePrunePolicySnapshots() {
+    if (Math.random() < PRUNE_SAMPLE) pruneByPrefix(POLICY_PREFIX, POLICY_MAX);
+  }
+
+  async function persistPolicySnapshot(snapshot, generation) {
+    const stored = await chrome.storage.local.get(snapshot.key);
+    if (!policySnapshotIsCurrent(generation)) return null;
+    const change = describePolicyChange(stored && stored[snapshot.key], snapshot.value);
+    await chrome.storage.local.set({ [snapshot.key]: snapshot.value });
+    return { change };
+  }
+
+  function applyPolicySnapshotResult(result, generation) {
+    if (!result) return;
+    if (!policySnapshotIsCurrent(generation)) return;
+    state.policyChange = result.change;
+    maybePrunePolicySnapshots();
+    if (state.policyChange && state.panelHost) renderPanel(state.findings);
+  }
+
+  async function updatePolicySnapshot(text, byCategory) {
+    const generation = state.scanGeneration;
+    try {
+      const snapshot = await preparePolicySnapshot(text, byCategory);
+      if (!snapshot) return;
+      if (!policySnapshotIsCurrent(generation)) return;
+      const result = await persistPolicySnapshot(snapshot, generation);
+      applyPolicySnapshotResult(result, generation);
+    } catch (_) { /* change detection is optional */ }
   }
 
   async function writeRecord(prefix, record, prunePrefix, max) {
@@ -662,9 +637,9 @@
     return result;
   }
 
-  // ──────────────────────────────────────�����──────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  Content extraction + text index
-  // ─────────────────────────────────────────────────────────────────���───────
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Ancestors whose text is page chrome / non-prose and must never be analysed.
   const EXCLUDE_SELECTOR =
@@ -885,6 +860,7 @@
 
       if (score >= cfg.scoring.presentThreshold) {
         hits.push({
+          patternId: p.id,
           categoryId: p.categoryId,
           level: clauseAggravated ? 'aggravated' : 'present',
           score,
@@ -906,17 +882,59 @@
    * uses this to skip the expensive text-index build on ordinary pages.
    * @returns {boolean}
    */
+  function includesPageToken(text, tokens) {
+    if (!Array.isArray(tokens)) return false;
+    return tokens.some((token) => typeof token === 'string' && text.includes(token.toLowerCase()));
+  }
+
+  function mergedPageTokens(configured, engineOwned) {
+    const configuredTokens = Array.isArray(configured) ? configured : [];
+    return configuredTokens.concat(engineOwned);
+  }
+
+  function pageSignals(pd) {
+    const url = (location.href || '').toLowerCase();
+    const title = (document.title || '').toLowerCase();
+    const heading = ((document.querySelector('h1, h2') || {}).textContent || '').toLowerCase();
+    const titleAndHeading = title + ' ' + heading;
+    const smartTitle = includesPageToken(titleAndHeading, SMART_POLICY_TITLE_TOKENS);
+    return {
+      url: includesPageToken(url, mergedPageTokens(pd.urlTokens, SMART_POLICY_URL_TOKENS)),
+      title: includesPageToken(titleAndHeading, mergedPageTokens(pd.titleTokens, SMART_POLICY_TITLE_TOKENS)),
+      compactTitle: smartTitle,
+    };
+  }
+
   function hasUrlOrTitleSignal() {
     try {
-      const pd = state.config.pageDetection;
-      const url = location.href.toLowerCase();
-      if (pd.urlTokens.some((t) => url.includes(t))) return true;
-      const title = (document.title || '').toLowerCase();
-      const heading = ((document.querySelector('h1, h2') || {}).textContent || '').toLowerCase();
-      return pd.titleTokens.some((t) => title.includes(t) || heading.includes(t));
+      const signals = pageSignals(state.config.pageDetection);
+      return signals.url || signals.title;
     } catch (_) {
       return false;
     }
+  }
+
+  function countPageTokens(text, tokens) {
+    if (!Array.isArray(tokens)) return 0;
+    let count = 0;
+    for (const token of tokens) {
+      if (typeof token === 'string' && text.includes(token.toLowerCase())) count += 1;
+    }
+    return count;
+  }
+
+  function compactPolicyBody(flatText, words, signals) {
+    if (!signals.compactTitle || words < COMPACT_POLICY_MIN_WORDS) return false;
+    const normalized = flatText.toLowerCase().replace(/[-_/]+/g, ' ');
+    return countPageTokens(normalized, COMPACT_POLICY_BODY_TOKENS) >= 2;
+  }
+
+  function policyBodyScore(flatText, pd, signals) {
+    const words = flatText ? flatText.split(/\s+/).filter(Boolean).length : 0;
+    if (words < pd.minWordCount) return compactPolicyBody(flatText, words, signals) ? 0 : -0.3;
+    const markers = countPageTokens(flatText.toLowerCase(), pd.legaleseMarkers);
+    if (markers >= 3) return 0.4;
+    return markers >= 1 ? 0.2 : 0;
   }
 
   /**
@@ -927,24 +945,9 @@
   function pageConfidence(flatText) {
     try {
       const pd = state.config.pageDetection;
-      const url = location.href.toLowerCase();
-      const title = (document.title || '').toLowerCase();
-      const heading = ((document.querySelector('h1, h2') || {}).textContent || '').toLowerCase();
-
-      let score = 0;
-      if (pd.urlTokens.some((t) => url.includes(t))) score += 0.5;
-      if (pd.titleTokens.some((t) => title.includes(t) || heading.includes(t))) score += 0.3;
-
-      const words = flatText ? flatText.split(/\s+/).filter(Boolean).length : 0;
-      if (words >= pd.minWordCount) {
-        const lower = flatText.toLowerCase();
-        let markers = 0;
-        for (const mk of pd.legaleseMarkers) if (lower.includes(mk)) markers += 1;
-        score += markers >= 3 ? 0.4 : markers >= 1 ? 0.2 : 0;
-      } else {
-        score -= 0.3; // too short to be a real policy
-      }
-      return score;
+      const signals = pageSignals(pd);
+      const signalScore = (signals.url ? 0.5 : 0) + (signals.title ? 0.3 : 0);
+      return signalScore + policyBodyScore(flatText, pd, signals);
     } catch (_) {
       return 0;
     }
@@ -952,7 +955,7 @@
 
   // ─────────────────────────────────────────────────────────────────────────
   //  Highlighting (CSS Custom Highlight API, zero DOM mutation)
-  // ──────────────────────────��──────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Inject (or refresh) our ::highlight() style rules. The <style> element is
@@ -1028,7 +1031,7 @@
     '--accent:#ff5e3a;--teal:#3fa89e;--head:#223129;--amber:#f5c518;' +
     '--shadow:4px 5px 0 var(--edge);--radius:16px;' +
     '--font:"Plus Jakarta Sans","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;}' +
-    '.po-ts-card{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:332px;max-height:62vh;' +
+    '.po-ts-card{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:352px;max-width:calc(100vw - 32px);max-height:68vh;' +
     'display:flex;flex-direction:column;font:13px/1.45 var(--font);' +
     'color:var(--ink);background:var(--card);border:2px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}' +
     '.po-ts-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;background:var(--head);color:var(--ink);border-bottom:2px solid var(--edge);}' +
@@ -1036,13 +1039,20 @@
     '.po-ts-title::before{content:"";flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid var(--edge);}' +
     '.po-ts-actions button{all:unset;cursor:pointer;color:var(--ink);opacity:.6;font-size:18px;line-height:1;padding:1px 6px;border-radius:8px;}' +
     '.po-ts-actions button:hover{opacity:1;background:rgba(242,237,227,.12);}' +
+    '.po-ts-change{padding:9px 13px;background:rgba(245,197,24,.16);color:var(--ink);border-bottom:2px solid var(--edge);font-size:11px;font-weight:700;}' +
+    '.po-ts-context{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--card);border-bottom:2px solid var(--edge);}' +
+    '.po-ts-grade{display:grid;place-items:center;flex:0 0 34px;height:34px;border:2px solid var(--edge);border-radius:10px;font-weight:900;font-size:17px;color:var(--edge);}' +
+    '.po-ts-grade.good{background:var(--teal);}.po-ts-grade.mixed{background:var(--amber);}.po-ts-grade.poor{background:var(--accent);}.po-ts-grade.unknown{background:var(--soft);}' +
+    '.po-ts-context-copy{min-width:0}.po-ts-context-title{font-weight:800}.po-ts-context-note{color:var(--soft);font-size:11px;}' +
     '.po-ts-list{overflow-y:auto;padding:7px;background:var(--paper);}' +
-    '.po-ts-item{display:flex;gap:9px;padding:9px;border-radius:12px;cursor:pointer;border:2px solid transparent;transition:transform .08s ease,box-shadow .08s ease;}' +
+    '.po-ts-item{all:unset;box-sizing:border-box;width:100%;display:flex;gap:9px;padding:9px;border-radius:12px;cursor:pointer;border:2px solid transparent;color:inherit;font:inherit;text-align:left;transition:transform .08s ease,box-shadow .08s ease;}' +
     '.po-ts-item:hover{background:var(--card);border-color:var(--edge);box-shadow:3px 3px 0 var(--edge);transform:translate(-1px,-1px);}' +
+    '.po-ts-item:focus-visible{outline:3px solid var(--amber);outline-offset:1px;background:var(--card);}' +
     '.po-ts-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;margin-top:3px;border:1.5px solid var(--edge);}' +
     '.po-ts-dot.high{background:var(--accent);}.po-ts-dot.med{background:var(--amber);}.po-ts-dot.low{background:var(--teal);}' +
-    '.po-ts-cat{font-weight:800;letter-spacing:-0.01em;}' +
-    '.po-ts-snip{color:var(--soft);font-size:12px;margin-top:2px;}' +
+    '.po-ts-cat{display:block;font-weight:800;letter-spacing:-0.01em;}' +
+    '.po-ts-evidence{display:inline-block;margin-top:3px;padding:1px 6px;border:1px solid rgba(242,237,227,.22);border-radius:999px;color:var(--soft);font-size:10px;font-weight:700;}' +
+    '.po-ts-snip{display:block;color:var(--soft);font-size:12px;margin-top:2px;}' +
     '.po-ts-foot{display:flex;align-items:center;gap:6px;padding:9px 13px;font-size:11px;color:var(--soft);border-top:2px solid var(--edge);background:var(--card);}' +
     '.po-ts-empty{padding:16px;color:var(--soft);}';
 
@@ -1055,92 +1065,6 @@
       state.panelHost = null;
       state.shadowRoot = null;
     } catch (_) { /* silent */ }
-  }
-
-  /**
-   * Render the findings summary inside an isolated Shadow DOM. All untrusted
-   * text (the matched sentence) is inserted via textContent, never innerHTML.
-   * @param {Array} findings  current-page findings (with .range)
-   */
-  function renderPanel(findings) {
-    try {
-      removePanel();
-      if (!findings.length) return;
-
-      const host = document.createElement('div');
-      host.className = 'po-ts-root'; // also keeps our node out of the text index
-      // CLOSED shadow root: host.shadowRoot returns null, so neither the page nor
-      // any other installed extension's content script can reach our findings via
-      // the shared DOM. The ONLY reference lives in this isolated-world closure
-      // (state.shadowRoot), never on the host element.
-      const shadow = host.attachShadow({ mode: 'closed' });
-      state.shadowRoot = shadow;
-
-      const style = document.createElement('style');
-      style.textContent = PANEL_CSS;
-      shadow.appendChild(style);
-
-      const card = document.createElement('div');
-      card.className = 'po-ts-card';
-
-      // Header
-      const head = document.createElement('div');
-      head.className = 'po-ts-head';
-      const title = document.createElement('span');
-      title.className = 'po-ts-title';
-      title.textContent = 'GetPawsOff · ' + findings.length + ' clause' + (findings.length === 1 ? '' : 's') + ' flagged';
-      const actions = document.createElement('span');
-      actions.className = 'po-ts-actions';
-      const closeBtn = document.createElement('button');
-      closeBtn.setAttribute('aria-label', 'Dismiss');
-      closeBtn.textContent = '\u00d7';
-      closeBtn.addEventListener('click', () => { clearHighlights(); removePanel(); });
-      actions.appendChild(closeBtn);
-      head.appendChild(title);
-      head.appendChild(actions);
-      card.appendChild(head);
-
-      // List
-      const list = document.createElement('div');
-      list.className = 'po-ts-list';
-      for (const f of findings) {
-        const cat = state.categoryById[f.categoryId] || { label: f.categoryId, severity: 'low' };
-        const item = document.createElement('div');
-        item.className = 'po-ts-item';
-
-        const dot = document.createElement('span');
-        dot.className = 'po-ts-dot ' + cat.severity;
-        item.appendChild(dot);
-
-        const body = document.createElement('div');
-        const catEl = document.createElement('div');
-        catEl.className = 'po-ts-cat';
-        catEl.textContent = cat.label + (f.level === 'aggravated' ? ' (severe)' : '');
-        const snip = document.createElement('div');
-        snip.className = 'po-ts-snip';
-        snip.textContent = truncate(f.text, 160); // untrusted page text → textContent
-        body.appendChild(catEl);
-        body.appendChild(snip);
-        item.appendChild(body);
-
-        // Jump to the highlighted clause on the page.
-        item.addEventListener('click', () => scrollToFinding(f));
-        list.appendChild(item);
-      }
-      card.appendChild(list);
-
-      const foot = document.createElement('div');
-      foot.className = 'po-ts-foot';
-      foot.textContent = 'Informational only, not legal advice. Analysed locally on your device.';
-      card.appendChild(foot);
-
-      shadow.appendChild(card);
-      // Attach to <html> so page CSS resets on <body> cannot affect the host.
-      (document.documentElement || document.body).appendChild(host);
-      state.panelHost = host;
-    } catch (err) {
-      logStatus('panel_error', { message: err && err.message });
-    }
   }
 
   /**
@@ -1167,9 +1091,119 @@
     } catch (_) { /* silent */ }
   }
 
+  const TOS_PANEL = window.PawsOffTosPanel.create({
+    document,
+    state,
+    panelCss: PANEL_CSS,
+    clearHighlights,
+    removePanel,
+    truncate,
+    scrollToFinding,
+    gradePresentation,
+    findingEvidenceLabel,
+    logStatus,
+  });
+  const panelTitle = TOS_PANEL.panelTitle;
+  const renderPanel = TOS_PANEL.renderPanel;
+
   // ─────────────────────────────────────────────────────────────────────────
   //  Scan orchestration
-  // ───���─────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function indexForScan() {
+    if (!state.settings.enabled) return null;
+    if (!hasUrlOrTitleSignal()) return null;
+    const root = findContentRoot();
+    if (!root) return null;
+    const index = buildTextIndex(root);
+    if (!index.text) return null;
+    if (index.text.length < MIN_ROOT_CHARS) return null;
+    const threshold = state.config.pageDetection.confidenceThreshold;
+    return pageConfidence(index.text) >= threshold ? index : null;
+  }
+
+  function clauseForHit(hit, rawClauses, sentence) {
+    if (hit.clauseIndex == null) return { start: 0, end: sentence.raw.length, raw: sentence.raw };
+    if (hit.clauseIndex < 0) return { start: 0, end: sentence.raw.length, raw: sentence.raw };
+    return rawClauses[hit.clauseIndex] || { start: 0, end: sentence.raw.length, raw: sentence.raw };
+  }
+
+  function phraseRangesForHit(index, sentence, clause, hit) {
+    const pattern = state.patternById[hit.patternId];
+    return evidenceSpans(clause.raw, pattern && pattern.evidenceRe).map((span) => buildRange(
+      index.entries,
+      sentence.start + clause.start + span.start,
+      sentence.start + clause.start + span.end,
+    )).filter(Boolean);
+  }
+
+  function addFindingForHit(context) {
+    const { scan, index, sentence, rawClauses, hit } = context;
+    const key = sentence.start + ':' + hit.categoryId;
+    if (scan.seen.has(key)) return;
+    scan.seen.add(key);
+    const cat = state.categoryById[hit.categoryId] || { severity: 'low' };
+    const clause = clauseForHit(hit, rawClauses, sentence);
+    const ranges = phraseRangesForHit(index, sentence, clause, hit);
+    const severityRanges = scan.rangesBySeverity[cat.severity] || scan.rangesBySeverity.low;
+    for (const range of ranges) severityRanges.push(range);
+    scan.findings.push({
+      categoryId: hit.categoryId,
+      level: hit.level,
+      score: hit.score,
+      text: clause.raw.trim() || sentence.raw,
+      range: ranges[0] || null,
+      phraseCount: ranges.length,
+    });
+  }
+
+  function scanSentence(scan, index, sentence) {
+    if (isLikelyHeadingOrQuestion(sentence.raw)) return;
+    const hits = matchSentence(normalizeForMatch(sentence.raw));
+    if (!hits.length) return;
+    const rawClauses = splitClauseSpans(sentence.raw, state.regex.clause);
+    for (const hit of hits) addFindingForHit({ scan, index, sentence, rawClauses, hit });
+  }
+
+  function collectScanFindings(index) {
+    const scan = {
+      findings: [],
+      seen: new Set(),
+      rangesBySeverity: { high: [], med: [], low: [] },
+    };
+    for (const sentence of segmentSentences(index.text)) {
+      if (scan.findings.length >= MAX_FINDINGS) break;
+      scanSentence(scan, index, sentence);
+    }
+    return scan;
+  }
+
+  function findingCounts(findings) {
+    const byCategory = {};
+    for (const finding of findings) {
+      byCategory[finding.categoryId] = (byCategory[finding.categoryId] || 0) + 1;
+    }
+    return byCategory;
+  }
+
+  function recordFindingCatches(byCategory) {
+    try {
+      if (!window.PawsOffCatch) return;
+      Object.keys(byCategory).forEach((categoryId) => window.PawsOffCatch.recordClause(categoryId));
+    } catch (_) { /* silent */ }
+  }
+
+  function publishScan(index, scan) {
+    state.findings = scan.findings;
+    state.scanned = true;
+    if (scan.findings.length) applyHighlights(scan.rangesBySeverity);
+    renderPanel(scan.findings);
+    const byCategory = findingCounts(scan.findings);
+    updatePolicySnapshot(index.text, byCategory);
+    logScanEvent(Object.keys(byCategory), byCategory);
+    recordFindingCatches(byCategory);
+    if (scan.findings.length) incrementTotal(TS_TOTAL_KEY, scan.findings.length);
+  }
 
   /**
    * Run the full pipeline once. Returns true if the page was analysed (passed
@@ -1177,98 +1211,13 @@
    * @returns {boolean}
    */
   function scanNow() {
-    if (state.scanning || state.scanned) return state.scanned;
+    if (state.scanning) return state.scanned;
+    if (state.scanned) return true;
     state.scanning = true;
     try {
-      if (!state.settings.enabled) return false;
-
-      // Cheap pre-gate before the expensive text-index walk. With the current
-      // scoring, a page that matches NEITHER a URL token (+0.5) nor a title
-      // token (+0.3) can reach at most 0.4 from legalese markers, below the
-      // 0.6 threshold. So if neither signal is present, this page can never
-      // qualify and we skip building the index entirely. This script runs on
-      // every http/https page, so avoiding the TreeWalker here is a real win.
-      if (!hasUrlOrTitleSignal()) return false;
-
-      const root = findContentRoot();
-      if (!root) return false;
-
-      const index = buildTextIndex(root);
-      if (!index.text || index.text.length < MIN_ROOT_CHARS) return false;
-
-      if (pageConfidence(index.text) < state.config.pageDetection.confidenceThreshold) {
-        return false; // not a policy page - stand down silently
-      }
-
-      const sentences = segmentSentences(index.text);
-      const findings = [];
-      const seen = new Set(); // dedupe per (sentence,category)
-      const rangesBySeverity = { high: [], med: [], low: [] };
-
-      for (const s of sentences) {
-        if (findings.length >= MAX_FINDINGS) break;
-        // Skip segments that are headings or section questions, not clauses.
-        // Legal docs use ALL-CAPS headings ("DATA CONTROLLER") and question
-        // headings ("WHAT HAPPENS IF WE CHANGE THE POLICY?") that match anchors
-        // but impose no obligation. Matching them produced false positives.
-        if (isLikelyHeadingOrQuestion(s.raw)) continue;
-        const norm = normalizeForMatch(s.raw);
-        const hits = matchSentence(norm);
-        if (!hits.length) continue;
-
-        // Original-case clauses, aligned 1:1 with the normalised clauses inside
-        // matchSentence (same delimiter regex, same order), so we can surface the
-        // exact clause that matched instead of the whole sentence.
-        const rawClauses = s.raw.split(state.regex.clause);
-
-        for (const hit of hits) {
-          const key = s.start + ':' + hit.categoryId;
-          if (seen.has(key)) continue;
-          seen.add(key);
-
-          const range = buildRange(index.entries, s.start, s.end);
-          const cat = state.categoryById[hit.categoryId] || { severity: 'low' };
-          if (range) {
-            (rangesBySeverity[cat.severity] || rangesBySeverity.low).push(range);
-          }
-          const clauseText =
-            (hit.clauseIndex != null && hit.clauseIndex >= 0 && rawClauses[hit.clauseIndex] != null)
-              ? rawClauses[hit.clauseIndex].trim()
-              : s.raw;
-          findings.push({
-            categoryId: hit.categoryId,
-            level: hit.level,
-            score: hit.score,
-            text: clauseText || s.raw, // matched clause (in-memory only; never persisted)
-            range,
-          });
-        }
-      }
-
-      state.findings = findings;
-      state.scanned = true;
-
-      if (findings.length) {
-        applyHighlights(rangesBySeverity);
-        renderPanel(findings);
-      }
-
-      // Persist NON-PII aggregates only.
-      const byCategory = {};
-      for (const f of findings) byCategory[f.categoryId] = (byCategory[f.categoryId] || 0) + 1;
-      logScanEvent(Object.keys(byCategory), byCategory);
-      // PawsOff catch feed (popup "Today's catch"), one entry per flagged
-      // category. Non-PII: the clause TEXT is never persisted, only the category.
-      try {
-        if (window.PawsOffCatch) {
-          Object.keys(byCategory).forEach(function (cid) {
-            window.PawsOffCatch.recordClause(cid);
-          });
-        }
-      } catch (_) { /* silent */ }
-      // Increment the monotonic total so the popup counter never plateaus.
-      if (findings.length > 0) incrementTotal(TS_TOTAL_KEY, findings.length);
-
+      const index = indexForScan();
+      if (!index) return false;
+      publishScan(index, collectScanFindings(index));
       return true;
     } catch (err) {
       logStatus('scan_error', { message: err && err.message });
@@ -1299,7 +1248,7 @@
     }
   }
 
-  // ─────────────────────��───────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  Readiness: handle policies rendered by JS after load
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -1365,6 +1314,8 @@
       clearHighlights();
       removePanel();
       state.findings = [];
+      state.policyChange = null;
+      state.scanGeneration += 1;
       state.scanned = false;
       state.scanning = false;
     } catch (_) { /* silent */ }
@@ -1374,27 +1325,34 @@
   //  Public API
   // ─────────────────────────────────────────────────────────────────────────
 
+  function setReputationContext(context) {
+    state.reputation = context ? context.reputation : null;
+    state.reputationSource = context ? context.source : null;
+  }
+
+  function scanOrWatch() {
+    if (scanNow()) return;
+    if (hasUrlOrTitleSignal()) startReadinessWatch();
+  }
+
+  async function startTosShield() {
+    if (window.top !== window) return;
+    const [config, reputationContext] = await Promise.all([loadConfig(), loadReputation()]);
+    compileConfig(config);
+    setReputationContext(reputationContext);
+    state.settings = await loadSettings(config);
+    state.started = true;
+    if (!state.settings.enabled) return;
+    scanOrWatch();
+  }
+
   /**
    * Initialise ToS Shield: load config + settings, then analyse the page.
    * @returns {Promise<void>}
    */
   window.__pawsOff_tosShield_init = async function () {
     try {
-      // Run only in the top frame, policies are top-level documents, and this
-      // avoids duplicate panels from same-origin iframes.
-      if (window.top !== window) return;
-
-      const cfg = await loadConfig();
-      compileConfig(cfg);
-      state.settings = await loadSettings(cfg);
-      state.started = true;
-
-      if (!state.settings.enabled) return;
-
-      // Only watch for late-rendered policies on pages that ALREADY look like a
-      // policy/terms page (URL or title signal). On an ordinary page this avoids
-      // attaching a long-lived MutationObserver that can never qualify.
-      if (!scanNow() && hasUrlOrTitleSignal()) startReadinessWatch();
+      await startTosShield();
     } catch (err) {
       try { await logStatus('init_error', { message: err && err.message }); } catch (_) { /* silent */ }
     }
@@ -1452,7 +1410,7 @@
     return getStats();
   };
 
-  // ──────────────────────────────────────────��──────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  React to settings changes from the popup in real time
   // ─────────────────────────────────────────────────────────────────────────
   try {
@@ -1470,7 +1428,7 @@
 
   // ─────────────────────────────────────────────────────────────────────────
   //  SPA navigation reset (Navigation API, Chrome 102+)
-  // ──────────────────────────────────────────────────────────��──────────────
+  // ─────────────────────────────────────────────────────────────────────────
   /**
    * Re-run analysis when the user navigates to another in-app route (e.g. from
    * /terms to /privacy in a docs SPA).
@@ -1492,7 +1450,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── Auto-invoke ───────────────────────��────────────────────────────────────
+  // ── Auto-invoke ────────────────────────────────────────────────────────────
   window.__pawsOff_tosShield_init();
 
   // ── Test-only export (NO-OP in Chrome; see consent-ghost.js note) ───────────
@@ -1503,7 +1461,12 @@
       module.exports.__test = {
         compareVersions, buildAltRegex, validateConfig, normalizeSettings,
         defaultSettings, segmentSentences, normalizeForMatch, matchSentence,
-        pageConfidence, compileConfig, base64ToBytes,
+        splitClauseSpans, buildEvidenceRegex, evidenceSpans,
+        pageConfidence, hasUrlOrTitleSignal, compileConfig, base64ToBytes,
+        normalizeReputationResponse, gradePresentation, findingEvidenceLabel,
+        panelTitle, renderPanel, removePanel,
+        policyFingerprint, policySnapshotKey, describePolicyChange, updatePolicySnapshot,
+        hashHost,
         DEFAULT_CONFIG, getState: () => state,
       };
     }

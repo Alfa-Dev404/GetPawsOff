@@ -1,7 +1,7 @@
 {
-  "$comment": "PawsOff ConsentGhost - remote CMP selector config. Host this on Cloudflare Pages (e.g. https://config.getpawsoff.app/consent-ghost/consent-config.json) alongside its detached signature consent-config.json.sig (see scripts/sign-config.js). The content script's BUNDLED_CONSENT_CONFIG in src/content/consent-ghost.js is the offline/first-run mirror of this file - keep them in sync. background.js fetches + ECDSA-P256-verifies this before the content script will use it; any failure falls open to the bundled copy.",
+  "$comment": "PawsOff ConsentGhost — remote CMP selector config. Host this on Cloudflare Pages (e.g. https://config.getpawsoff.app/consent-ghost/consent-config.json) alongside its detached signature consent-config.json.sig (see scripts/sign-config.js). The content script's BUNDLED_CONSENT_CONFIG in src/content/consent-ghost.js is the offline/first-run mirror of this file — keep them in sync. background.js fetches + ECDSA-P256-verifies this before the content script will use it; any failure falls open to the bundled copy.",
   "schemaVersion": 1,
-  "configVersion": "2026.06.18",
+  "configVersion": "2026.6.18",
   "frameworks": [
     {
       "name": "OneTrust",

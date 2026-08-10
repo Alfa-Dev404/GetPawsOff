@@ -1,4 +1,4 @@
-/* PawsOff - orphaned-backdrop reaper.
+/* PawsOff — orphaned-backdrop reaper.
  *
  * Bug: cross-origin CMPs (Sourcepoint) render the dialog in their OWN iframe, but
  * the full-screen click-blocking VEIL + page scroll-lock live in the TOP document.
@@ -49,7 +49,7 @@ function makeDoc() {
     querySelector() { return null; },
     querySelectorAll(sel) {
       if (sel.indexOf('iframe') >= 0) return _state.iframes;
-      if (sel.indexOf('sp_veil') >= 0) return _state.veil ? [_state.veil] : [];
+      if (sel.startsWith('.sp_veil,')) return _state.veil ? [_state.veil] : [];
       return [];
     },
     createElement() { return { style: {}, setAttribute() {}, appendChild() {}, removeChild() {}, textContent: '', parentNode: null }; },

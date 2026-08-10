@@ -1,12 +1,12 @@
-/* PawsOff, Prevalence Collector - observe-only, top frame only.
+/* PawsOff, Prevalence Collector — observe-only, top frame only.
  *
  * Reads the Performance Timeline to learn which third-party domains appear
- * on which first-party sites. Only reads resources the page already loaded -
+ * on which first-party sites. Only reads resources the page already loaded —
  * never intercepts, blocks, or initiates a request, so it can't break page
  * behaviour. Reports hostnames only (never full URLs, cookies, or page
  * content) to the background learner; nothing leaves the device.
  *
- * This is the sensor for the local prevalence tier - enforcement (actual
+ * This is the sensor for the local prevalence tier — enforcement (actual
  * blocking) is a separate, later milestone. Nothing here acts on what it sees.
  */
 'use strict';
@@ -18,7 +18,9 @@
     if (proto !== 'http:' && proto !== 'https:') return;
 
     var FIRST_PARTY = location.hostname;
-    var SEND_AFTER_MS = 4000; // batch window after load before the first flush
+    var PSL = (typeof self !== 'undefined' && self.PawsOffPSL) || null;
+    var FIRST_PARTY_BASE = baseDomain(FIRST_PARTY);
+    var SNAPSHOT_DELAYS_MS = [4000, 15000, 60000]; // cover initial + delayed/SPA resources
     var MAX_HOSTS = 250;      // cap message size
     var ENABLED_KEY = '__pawsOff_prevalence_enabled';
     var MASTER_KEY = '__pawsOff_master_enabled';
@@ -27,13 +29,25 @@
 
     var hosts = new Set();
     var hostSizes = {};  // hostname → total transferSize in bytes (real measurement)
-    var sent = false;
+    var stopped = false;
     var observer = null;
 
-    // One-way FNV-1a/32 host digest - must match po-catch.js + popup.js so the
+    function baseDomain(host) {
+      try {
+        if (PSL && typeof PSL.getBaseDomain === 'function') return PSL.getBaseDomain(host) || host;
+      } catch (_) { /* fall through */ }
+      return host;
+    }
+
+    function isSameSiteHost(host) {
+      return host === FIRST_PARTY || baseDomain(host) === FIRST_PARTY_BASE;
+    }
+
+    // One-way FNV-1a/32 host digest — must match po-catch.js + popup.js so the
     // popup can find this site's radar snapshot by its hashed origin.
     function hashHost(host) {
-      if (!host || typeof host !== 'string') return null;
+      if (typeof host !== 'string') return null;
+      if (!host) return null;
       var h = 0x811c9dc5;
       var s = host.toLowerCase();
       for (var i = 0; i < s.length; i++) {
@@ -63,19 +77,21 @@
       } catch (_) { /* silent */ }
     }
 
+    function recordTransferSize(host, transferSize) {
+      if (!Number.isFinite(transferSize)) return;
+      if (transferSize <= 0) return;
+      hostSizes[host] = (hostSizes[host] || 0) + transferSize;
+    }
+
     function addEntry(u, transferSize) {
-      if (!u || hosts.size >= MAX_HOSTS) return;
+      if (!u) return;
       try {
         var h = new URL(u, location.href).hostname;
-        if (h && h !== FIRST_PARTY) {
-          hosts.add(h);
-          // Accumulate real transferSize (bytes over the wire) per host.
-          // transferSize is 0 for cache hits and cross-origin opaque resources
-          // (CORS blocks the timing data); we only record positive values.
-          if (typeof transferSize === 'number' && transferSize > 0) {
-            hostSizes[h] = (hostSizes[h] || 0) + transferSize;
-          }
-        }
+        if (!h) return;
+        if (isSameSiteHost(h)) return;
+        if (!hosts.has(h) && hosts.size >= MAX_HOSTS) return;
+        hosts.add(h);
+        recordTransferSize(h, transferSize);
       } catch (_) { /* ignore malformed URLs (data:, blob:, etc.) */ }
     }
 
@@ -96,20 +112,27 @@
       } catch (_) { /* fall back to the one-shot harvest above */ }
     }
 
-    function flush() {
-      if (sent) return;
-      sent = true;
+    function stopObservation() {
+      stopped = true;
       try { if (observer) observer.disconnect(); } catch (_) { /* ignore */ }
-      if (hosts.size === 0) return;
-      var payload = {
+    }
+
+    function observationPayload() {
+      return {
         type: 'pawsoff_prevalence_observe',
         firstParty: FIRST_PARTY,
         hosts: Array.from(hosts),
-        // Real transfer sizes observed from the Performance API. The learner
-        // uses these to build per-domain average sizes for honest "bandwidth
-        // saved" estimates. Only hosts with measurable transferSize are included.
         hostSizes: Object.keys(hostSizes).length > 0 ? hostSizes : undefined
       };
+    }
+
+    function takeObservationPayload() {
+      var payload = observationPayload();
+      hostSizes = {};
+      return payload;
+    }
+
+    function sendObservation(payload) {
       try {
         chrome.runtime.sendMessage(payload, function (resp) {
           void chrome.runtime.lastError;
@@ -118,36 +141,83 @@
       } catch (_) { /* extension context invalidated -- ignore */ }
     }
 
+    function flush(stopAfter) {
+      if (stopped) return;
+      if (stopAfter) stopObservation();
+      if (hosts.size === 0) return;
+      sendObservation(takeObservationPayload());
+    }
+
     // OBSERVE-ONLY: stash what the radar spotted on THIS site so the popup can
     // show it. Keyed by hashed origin; nothing is blocked or sent off-device.
+    function radarSpotsFromResponse(resp) {
+      if (!resp) return null;
+      if (!resp.ok) return null;
+      if (!Array.isArray(resp.spotted)) return null;
+      return resp.spotted;
+    }
+
+    function storeRadarSnapshot(originHash, spotted) {
+      var obj = {};
+      obj[RADAR_PREFIX + originHash] = { ts: Date.now(), spotted: spotted };
+      chrome.storage.local.set(obj, function () {
+        void chrome.runtime.lastError;
+        if (Math.random() < 0.1) pruneRadar();
+      });
+    }
+
     function stashRadarSnapshot(resp) {
       try {
-        var list = (resp && resp.ok && Array.isArray(resp.spotted)) ? resp.spotted : null;
-        if (!list || list.length === 0) return;
+        var list = radarSpotsFromResponse(resp);
+        if (list === null) return;
         var oh = hashHost(FIRST_PARTY);
         if (!oh) return;
-        var rec = { ts: Date.now(), spotted: list.slice(0, 24) };
-        var obj = {};
-        obj[RADAR_PREFIX + oh] = rec;
-        chrome.storage.local.set(obj, function () {
-          void chrome.runtime.lastError;
-          if (Math.random() < 0.1) pruneRadar();
-        });
+        var spotted = sanitizeRadarSpots(list);
+        storeRadarSnapshot(oh, spotted);
       } catch (_) { /* ignore */ }
+    }
+
+    function sanitizedRadarSpot(spot, allowedVerdicts) {
+      if (!spot) return null;
+      if (typeof spot.domain !== 'string') return null;
+      var domainHash = hashHost(spot.domain);
+      if (!domainHash) return null;
+      return {
+        domainHash: domainHash,
+        score: Number.isFinite(spot.score) ? spot.score : 0,
+        sites: Number.isFinite(spot.sites) ? Math.max(0, Math.floor(spot.sites)) : 0,
+        verdict: allowedVerdicts[spot.verdict] === true ? spot.verdict : 'allow',
+      };
+    }
+
+    function sanitizeRadarSpots(list) {
+      var out = [];
+      var allowedVerdicts = { allow: true, observing: true, cookieblock: true, block: true };
+      if (!Array.isArray(list)) return out;
+      for (var i = 0; i < list.length; i++) {
+        if (out.length >= 24) break;
+        var sanitized = sanitizedRadarSpot(list[i], allowedVerdicts);
+        if (sanitized) out.push(sanitized);
+      }
+      return out;
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') flush(false);
     }
 
     function begin() {
       harvestExisting();
       startObserver();
-      // Flush on a short timer, and again when the user navigates away / hides
-      // the tab (captures late-loading resources). setTimeout is fine in a
-      // content script -- the no-timer rule only applies to the service worker.
-      try { setTimeout(flush, SEND_AFTER_MS); } catch (_) { /* ignore */ }
-      try { window.addEventListener('pagehide', flush, { once: true }); } catch (_) { /* ignore */ }
+      // Snapshot several bounded windows so delayed ads, embeds, and SPA loads
+      // are learned too. The same first-party sighting never inflates the score;
+      // the learner stores one timestamp per site. Stop when the page leaves.
+      for (var i = 0; i < SNAPSHOT_DELAYS_MS.length; i++) {
+        try { setTimeout(function () { flush(false); }, SNAPSHOT_DELAYS_MS[i]); } catch (_) { /* ignore */ }
+      }
+      try { window.addEventListener('pagehide', function () { flush(true); }, { once: true }); } catch (_) { /* ignore */ }
       try {
-        document.addEventListener('visibilitychange', function () {
-          if (document.visibilityState === 'hidden') flush();
-        });
+        document.addEventListener('visibilitychange', onVisibilityChange);
       } catch (_) { /* ignore */ }
     }
 
@@ -157,10 +227,20 @@
       if (typeof self !== 'undefined' && self.__pawsOff_TEST) {
         self.__pawsOff_collectorInternals = {
           hashHost: hashHost,
+          isSameSiteHost: isSameSiteHost,
           radarKeysToEvict: radarKeysToEvict,
+          radarSpotsFromResponse: radarSpotsFromResponse,
+          sanitizeRadarSpots: sanitizeRadarSpots,
+          stashRadarSnapshot: stashRadarSnapshot,
+          addEntry: addEntry,
+          observationPayload: observationPayload,
+          takeObservationPayload: takeObservationPayload,
+          onVisibilityChange: onVisibilityChange,
+          isStopped: function () { return stopped; },
           RADAR_PREFIX: RADAR_PREFIX,
           RADAR_MAX: RADAR_MAX,
-          MAX_HOSTS: MAX_HOSTS
+          MAX_HOSTS: MAX_HOSTS,
+          SNAPSHOT_DELAYS_MS: SNAPSHOT_DELAYS_MS
         };
       }
     } catch (_) { /* ignore */ }

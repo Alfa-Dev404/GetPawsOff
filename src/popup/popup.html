@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GetPawsOff</title>
-  <link rel="stylesheet" href="vendor/pico.min.css">
   <link rel="stylesheet" href="../styles/po-ui.css">
   <link rel="stylesheet" href="../styles/popup.css">
 </head>
@@ -24,6 +23,12 @@
         <span id="guard-text">Active</span>
       </button>
     </header>
+
+    <div class="trust-rail" role="list" aria-label="Privacy guarantees">
+      <span class="trust-capsule" role="listitem"><span class="capsule-dot"></span>On-device</span>
+      <span class="trust-capsule" role="listitem"><span class="capsule-dot"></span>Signed lists</span>
+      <span class="trust-capsule" role="listitem"><span class="capsule-dot"></span>Fail-open</span>
+    </div>
 
     <section class="donut-strip" aria-label="Activity on this site">
       <div id="donut" class="donut-ring is-empty" role="img" aria-label="No activity recorded yet">
@@ -50,18 +55,37 @@
       </div>
     </section>
 
+    <p id="stat-lifetime" class="stat-lifetime" aria-live="polite">All time — counting locally</p>
+
     <section class="feature-row" aria-label="Protection features">
-      <button id="feat-banner" type="button" class="feat-pill" aria-pressed="true" title="Auto-reject cookie banners on sites you visit">Consent</button>
-      <button id="feat-tracker" type="button" class="feat-pill" aria-pressed="true" title="Block trackers and email pixels">Trackers</button>
-      <button id="feat-terms" type="button" class="feat-pill" aria-pressed="true" title="Flag bad clauses in Terms of Service pages">Terms</button>
+      <button id="feat-banner" type="button" class="feat-pill" aria-pressed="true" title="Auto-reject cookie banners on sites you visit"><span class="feat-dot"></span><span>Consent</span></button>
+      <button id="feat-tracker" type="button" class="feat-pill" aria-pressed="true" title="Block trackers and email pixels"><span class="feat-dot"></span><span>Trackers</span></button>
+      <button id="feat-terms" type="button" class="feat-pill" aria-pressed="true" title="Flag bad clauses in Terms of Service pages"><span class="feat-dot"></span><span>Terms</span></button>
     </section>
 
     <section class="filters-row" aria-label="Catch filters">
+      <div class="feed-toolbar">
+        <span class="section-capsule">Activity feed</span>
+        <span class="scope-capsule">This site only</span>
+      </div>
       <div id="filters-container" class="filters"></div>
     </section>
 
-    <section class="list-shell">
+    <section class="list-shell" aria-label="Protection activity details">
       <ul id="trackers-list" class="tracker-list" aria-live="polite"></ul>
+    </section>
+
+    <section id="radar" class="radar-shell" aria-labelledby="radar-title" hidden>
+      <div class="radar-head">
+        <div>
+          <p class="eyebrow">Local prevalence</p>
+          <h2 id="radar-title">Learner <span id="radar-count" class="radar-count">0</span></h2>
+        </div>
+        <span id="radar-mode" class="radar-mode">Standard</span>
+      </div>
+      <p id="radar-status" class="radar-status">Observed locally; adaptive rules are off.</p>
+      <div id="radar-list" class="radar-list" aria-live="polite"></div>
+      <button id="radar-more" class="radar-more" type="button" aria-controls="radar-list" aria-expanded="false" hidden>+ 0 more</button>
     </section>
 
     <footer class="popup-footer">
@@ -83,6 +107,7 @@
   </div>
 
   <script src="../lib/po-allow.js"></script>
+  <script src="../lib/adaptive-mode.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

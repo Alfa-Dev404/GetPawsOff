@@ -1,0 +1,15 @@
+name = "getpawsoff-config-watchdog"
+main = "src/index.js"
+compatibility_date = "2026-08-10"
+
+# Hourly. The publish cron is daily, so this catches a dead pipeline or a bad
+# signature within an hour -- about the same window a client would take to
+# notice, which is the point.
+[triggers]
+crons = ["17 * * * *"]
+
+[observability]
+enabled = true
+
+# No KV, no secrets, no bindings. This Worker verifies with a PUBLIC key and
+# must never gain the ability to sign or publish -- see src/index.js.

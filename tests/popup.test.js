@@ -1,4 +1,4 @@
-/* PawsOff - Tier-1 unit tests for the "Today's catch" popup logic (popup.js).
+/* PawsOff — Tier-1 unit tests for the "Today's catch" popup logic (popup.js).
  *
  * The popup's rendering is DOM (Tier-2/jsdom), but the decisions behind it are
  * pure and user-visible, so they get locked down here:
@@ -18,6 +18,8 @@
 
 const { test, assert, eq } = require('./harness/framework');
 const { loadPopup } = require('./harness/sandbox');
+const fs = require('fs');
+const path = require('path');
 
 const P = loadPopup().internals || {};
 const {
@@ -31,6 +33,12 @@ const {
   loadCatches,
   radarVerdictLabel,
   radarVerdictClass,
+  radarSpotLabel,
+  refreshRadarLabels,
+  adaptiveMode,
+  adaptiveSummary,
+  visibleRadarSpots,
+  guardMode,
   getState,
 } = P;
 
@@ -96,12 +104,130 @@ test('actClass / actLabel: the action badge per catch type', () => {
 });
 
 test('radarVerdictLabel / radarVerdictClass: observe-only verdict mapping', () => {
-  eq(radarVerdictLabel('block'), 'Tracker');
-  eq(radarVerdictLabel('cookieblock'), 'Cookie tracker');
-  eq(radarVerdictLabel('observing'), 'Watching', 'default is the soft "watching"');
+  eq(radarVerdictLabel('block'), 'High prevalence');
+  eq(radarVerdictLabel('cookieblock'), 'Limit cookies');
+  eq(radarVerdictLabel('observing'), 'Learning', 'default describes local learning');
   eq(radarVerdictClass('block'), 'rv-track');
   eq(radarVerdictClass('cookieblock'), 'rv-cookie');
   eq(radarVerdictClass('anything'), 'rv-watch');
+});
+
+test('radar labels resolve from memory and fall back to an opaque hash suffix', () => {
+  const spot = { domainHash: 'h:1234abcd' };
+  eq(radarSpotLabel(spot, { 'h:1234abcd': 'www.tracker.example' }), 'tracker.example');
+  eq(radarSpotLabel(spot, {}), 'Third party ABCD');
+  assert(!JSON.stringify(spot).includes('tracker.example'), 'persisted spot remains hash-only');
+});
+
+test('adaptiveMode / adaptiveSummary distinguish off, preview, and active rules', () => {
+  eq(adaptiveMode({}), 'standard');
+  eq(adaptiveMode({ __pawsOff_master_enabled: false, __pawsOff_pv_enforce_enabled: true, __pawsOff_pv_enforce_shadow: false }), 'paused');
+  eq(adaptiveMode({ __pawsOff_pv_enforce_enabled: true }), 'preview');
+  eq(adaptiveMode({ __pawsOff_pv_enforce_enabled: true, __pawsOff_pv_enforce_shadow: false }), 'adaptive');
+  eq(adaptiveSummary({}), 'Observed locally; adaptive rules are off.');
+  assert(/paused/.test(adaptiveSummary({
+    __pawsOff_master_enabled: false,
+    __pawsOff_pv_enforce_enabled: true,
+    __pawsOff_pv_enforce_shadow: false,
+    __pawsOff_pv_enforce_meta: { blocked: 99 },
+  })), 'master pause suppresses active adaptive totals');
+  assert(/\b2 would block\b/.test(adaptiveSummary({
+    __pawsOff_pv_enforce_enabled: true,
+    __pawsOff_pv_enforce_meta: { wouldBlock: 2, wouldCookieStrip: 3 },
+  })), 'preview is explicit about would-block');
+  assert(/\b2 blocked\b/.test(adaptiveSummary({
+    __pawsOff_pv_enforce_enabled: true,
+    __pawsOff_pv_enforce_shadow: false,
+    __pawsOff_pv_enforce_meta: { blocked: 2, cookieStripped: 3 },
+  })), 'adaptive is explicit about active rules');
+});
+
+test('learner shows five rows until its disclosure is expanded', () => {
+  const spotted = Array.from({ length: 8 }, (_, index) => ({ domain: 'tracker-' + index + '.test' }));
+  eq(visibleRadarSpots(spotted, false).length, 5);
+  eq(visibleRadarSpots(spotted, true).length, 8);
+  eq(visibleRadarSpots(null, false).length, 0);
+});
+
+test('popup puts Activity before the compact Learner disclosure', () => {
+  const html = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'popup', 'popup.html'), 'utf8');
+  const activityAt = html.indexOf('Activity feed');
+  const learnerAt = html.indexOf('id="radar"');
+  assert(activityAt >= 0 && learnerAt > activityAt, 'Activity feed precedes Learner');
+  const disclosure = html.match(/<[^>]+id="radar-more"[^>]*>/)?.[0] || '';
+  assert(
+    /aria-expanded="false"/.test(disclosure) &&
+      /(?:^|\s)hidden(?:\s*=\s*(?:"(?:hidden)?"|'(?:hidden)?'|hidden))?(?=\s|\/?>)/i.test(disclosure),
+    'Learner uses an accessible collapsed disclosure',
+  );
+});
+
+test('radar label resolution ignores stale asynchronous responses', async () => {
+  const callbacks = [];
+  const loaded = loadPopup({
+    sendMessage(message, callback) {
+      callbacks.push(callback);
+    },
+  });
+  const firstHost = 'first-tracker.example';
+  const secondHost = 'second-tracker.example';
+  const firstKey = loaded.internals.hashHost(firstHost);
+  const secondKey = loaded.internals.hashHost(secondHost);
+  loaded.internals.refreshRadarLabels([{ domainHash: firstKey }]);
+  loaded.internals.refreshRadarLabels([{ domainHash: secondKey }]);
+
+  callbacks[0]({ ok: true, labels: { [firstKey]: firstHost } });
+  await Promise.resolve();
+  assert(!loaded.internals.getState()._radarLabels[firstKey], 'superseded labels are ignored');
+
+  callbacks[1]({ ok: true, labels: { [secondKey]: secondHost } });
+  await Promise.resolve();
+  eq(loaded.internals.getState()._radarLabels[secondKey], secondHost);
+});
+
+test('guardMode never reports active while the background master is paused', () => {
+  eq(guardMode({ __pawsOff_master_enabled: false }), 'paused');
+  eq(guardMode({
+    __pawsOff_master_enabled: true,
+    __pawsOff_pixelBlock_settings: { globalEnabled: false },
+  }), 'custom');
+  eq(guardMode({ __pawsOff_master_enabled: true }), 'active');
+});
+
+test('global guard disables and restores every protection engine', async () => {
+  const { internals, getStore } = loadPopup();
+
+  await internals.setGuard(false);
+  let stored = getStore();
+  eq(stored.__pawsOff_master_enabled, false);
+  eq(stored.__pawsOff_consentGhost_disabled, true);
+  eq(stored.__pawsOff_pixelBlock_settings.globalEnabled, false);
+  eq(stored.__pawsOff_tosShield_settings.enabled, false);
+
+  await internals.setGuard(true);
+  stored = getStore();
+  eq(stored.__pawsOff_master_enabled, true);
+  eq(stored.__pawsOff_consentGhost_disabled, false);
+  eq(stored.__pawsOff_pixelBlock_settings.globalEnabled, true);
+  eq(stored.__pawsOff_tosShield_settings.enabled, true);
+});
+
+test('enabling one feature resumes the master without changing unrelated choices', async () => {
+  const { internals, getStore } = loadPopup();
+  await internals.setGuard(false);
+  let stored = getStore();
+  stored.__pawsOff_pixelBlock_settings.providers = { gmail: false };
+  stored.__pawsOff_pixelBlock_settings.custom = 'keep';
+
+  await internals.persistFeat('tracker', true);
+  stored = getStore();
+
+  eq(stored.__pawsOff_master_enabled, true, 'individual enable resumes the suite');
+  eq(stored.__pawsOff_pixelBlock_settings.globalEnabled, true);
+  eq(stored.__pawsOff_pixelBlock_settings.providers.gmail, false, 'provider preference retained');
+  eq(stored.__pawsOff_pixelBlock_settings.custom, 'keep', 'unrelated tracker setting retained');
+  eq(stored.__pawsOff_consentGhost_disabled, true, 'banner choice unchanged');
+  eq(stored.__pawsOff_tosShield_settings.enabled, false, 'terms choice unchanged');
 });
 
 test('isFromOtherOrigin: true only when both hashes exist and differ', () => {
@@ -137,7 +263,7 @@ test('loadCatches: per-site filter, banners kept, trackers capped', () => {
   // newer tracker records pushed the early banner out of the window → "0 banners").
   const many = {};
   for (let i = 0; i < 100; i++) many['__pawsOff_catch_t' + i] = { ts: i + 10, originHash: 'h:11111111', feature: 'tracker' };
-  many['__pawsOff_catch_banner'] = { ts: 1, originHash: 'h:11111111', feature: 'banner' }; // OLDEST - a flat top-N cap would drop it
+  many['__pawsOff_catch_banner'] = { ts: 1, originHash: 'h:11111111', feature: 'banner' }; // OLDEST — a flat top-N cap would drop it
   loadCatches(many);
   const banners = st.catches.filter((e) => e.feature === 'banner');
   const trackers = st.catches.filter((e) => e.feature === 'tracker');
@@ -271,4 +397,32 @@ test('buildReportMailto: missing info degrades to placeholders, never throws', (
   const body = decodeURIComponent(href.split('&body=')[1]);
   assert(body.indexOf('Site: unknown') >= 0, 'unknown site');
   assert(body.indexOf('GetPawsOff ?') >= 0, 'unknown version');
+});
+
+// renderAllTime shipped as an empty `void all;` stub with live call sites, so
+// the extension counted forever and displayed nothing. These pin the summary so
+// it cannot silently go dark again.
+test('allTimeSummary: sums the disjoint network and pixel tiers', () => {
+  const s = P.allTimeSummary({
+    [P.NET_TOTAL]: 2000,
+    [P.PB_TOTAL]: 43,
+    [P.CG_TOTAL]: 7,
+    [P.TS_TOTAL]: 21,
+  });
+  assert(s.indexOf('2,043 trackers') !== -1, 'network + pixel tiers are summed: ' + s);
+  assert(s.indexOf('7 banners') !== -1, s);
+  assert(s.indexOf('21 terms flags') !== -1, s);
+});
+
+test('allTimeSummary: singular forms, and a zero state that promises nothing', () => {
+  const one = P.allTimeSummary({ [P.NET_TOTAL]: 1, [P.CG_TOTAL]: 1, [P.TS_TOTAL]: 1 });
+  assert(one.indexOf('1 tracker ') !== -1, 'singular tracker: ' + one);
+  assert(one.indexOf('1 banner ') !== -1, 'singular banner: ' + one);
+  assert(one.indexOf('1 terms flag') !== -1, 'singular flag: ' + one);
+
+  eq(P.allTimeSummary({}), 'All time — counting locally');
+  eq(P.allTimeSummary(undefined), 'All time — counting locally');
+  // Corrupt/absent counters must not render NaN at the user.
+  const bad = P.allTimeSummary({ [P.NET_TOTAL]: 'x', [P.PB_TOTAL]: null, [P.CG_TOTAL]: {} });
+  eq(bad, 'All time — counting locally');
 });

@@ -1,4 +1,4 @@
-/* PawsOff - tiny zero-dependency test framework.
+/* PawsOff — tiny zero-dependency test framework.
  *
  * Just enough to register tests, assert, and exit non-zero on failure so it can
  * run under `node tests/run.js` (and later in CI) without any npm install.
