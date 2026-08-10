@@ -45,6 +45,8 @@ const FEED_BYTE_LIMITS = Object.freeze({
   consentGhost: 2 * 1024 * 1024,
   tosReputation: 4 * 1024 * 1024,
   easyPrivacyDelta: 1024 * 1024,
+  tosPatterns: 512 * 1024,
+  pixelBlock: 256 * 1024,
 });
 
 const FEEDS = [
@@ -75,6 +77,21 @@ const FEEDS = [
     input: 'dist-lists/easyprivacy-delta/domains.json',
     fileName: 'domains.json',
     legacyPath: 'easyprivacy-delta/domains.json',
+  },
+  {
+    // legacyPath is the URL 0.1.0 has been fetching (and 404ing on) since launch.
+    key: 'tosPatterns',
+    required: false,
+    input: 'dist-lists/tos-shield/patterns.json',
+    fileName: 'patterns.json',
+    legacyPath: 'tos-shield/patterns.json',
+  },
+  {
+    key: 'pixelBlock',
+    required: false,
+    input: 'dist-lists/pixel-block/pixel-config.json',
+    fileName: 'pixel-config.json',
+    legacyPath: 'pixel-block/pixel-config.json',
   },
 ];
 
@@ -266,11 +283,120 @@ function validateEasyPrivacyDelta(feed) {
   return feed.domains.every((item) => validDeltaItem(item, seen));
 }
 
+// ── Bundled-source feeds (ToS clause vocabulary, PixelBlock selectors) ───────
+// These are generated from our own shipping content scripts rather than an
+// upstream project, but they get the identical treatment: strict key allowlist,
+// bounded strings, no regex source anywhere. The extension compiles the term
+// lists into regexes, so "literal strings only" is the property that keeps a
+// poisoned feed from becoming a ReDoS bomb.
+const TOS_PATTERNS_FEED_KEYS = new Set([
+  'schemaVersion', 'configVersion', 'minEngineVersion', 'locale', 'source',
+  'sourceUrl', 'sourceLicense', 'attribution', 'pageDetection', 'segmentation',
+  'negation', 'scoring', 'categories', 'patterns',
+]);
+const TOS_CATEGORY_KEYS = new Set(['id', 'label', 'description', 'severity', 'defaultEnabled']);
+const TOS_PATTERN_KEYS = new Set(['id', 'categoryId', 'enabled', 'weight', 'anchors', 'objects', 'modifiers']);
+const TOS_SEVERITIES = new Set(['low', 'med', 'high']);
+const PIXEL_FEED_KEYS = new Set([
+  'schemaVersion', 'configVersion', 'source', 'sourceUrl', 'sourceLicense',
+  'attribution', 'providers',
+]);
+const PIXEL_PROVIDER_KEYS = new Set(['id', 'emailBodySelectors', 'excludeSelectors', 'legitimateProxies']);
+const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/** A vocabulary term: bounded literal text, never a regex source. */
+function isVocabTerm(value) {
+  return hasText(value, 200);
+}
+
+function isTermList(value, maxItems, { required = false } = {}) {
+  if (!Array.isArray(value)) return false;
+  if (value.length > maxItems) return false;
+  if (required && !value.length) return false;
+  return value.every(isVocabTerm);
+}
+
+/** Behavioural sections carry only bounded strings, finite numbers, term lists. */
+function validTosSection(section) {
+  if (!isRecord(section)) return false;
+  return Object.values(section).every((value) => {
+    if (Array.isArray(value)) return isTermList(value, 256);
+    if (typeof value === 'number') return Number.isFinite(value);
+    return isVocabTerm(value);
+  });
+}
+
+function validTosCategory(category) {
+  return [
+    isRecord(category),
+    category && hasOnlyKeys(category, TOS_CATEGORY_KEYS),
+    category && hasText(category.id, 80),
+    category && hasText(category.label, 200),
+    category && typeof category.description === 'string' && category.description.length <= 400,
+    category && TOS_SEVERITIES.has(category.severity),
+    category && typeof category.defaultEnabled === 'boolean',
+  ].every(Boolean);
+}
+
+function validTosPattern(pattern, categoryIds) {
+  return [
+    isRecord(pattern),
+    pattern && hasOnlyKeys(pattern, TOS_PATTERN_KEYS),
+    pattern && hasText(pattern.id, 120),
+    pattern && categoryIds.has(pattern.categoryId),
+    pattern && typeof pattern.enabled === 'boolean',
+    pattern && Number.isFinite(pattern.weight) && pattern.weight > 0 && pattern.weight <= 10,
+    pattern && isTermList(pattern.anchors, 256, { required: true }),
+    pattern && isTermList(pattern.objects, 256, { required: true }),
+    pattern && isTermList(pattern.modifiers, 256),
+  ].every(Boolean);
+}
+
+function validateTosPatterns(feed) {
+  if (!validFeedEnvelope(feed, 1, 'pawsoff-bundled')) return false;
+  if (!hasOnlyKeys(feed, TOS_PATTERNS_FEED_KEYS)) return false;
+  if (!hasText(feed.minEngineVersion, 32)) return false;
+  if (!['pageDetection', 'segmentation', 'negation', 'scoring'].every((s) => validTosSection(feed[s]))) return false;
+  if (!boundedNonEmptyArray(feed.categories, 64)) return false;
+  if (!boundedNonEmptyArray(feed.patterns, 512)) return false;
+  if (!feed.categories.every(validTosCategory)) return false;
+  const categoryIds = new Set(feed.categories.map((c) => c.id));
+  if (categoryIds.size !== feed.categories.length) return false;
+  const patternIds = new Set(feed.patterns.map((p) => p && p.id));
+  if (patternIds.size !== feed.patterns.length) return false;
+  return feed.patterns.every((pattern) => validTosPattern(pattern, categoryIds));
+}
+
+function validPixelProvider(provider) {
+  return [
+    isRecord(provider),
+    provider && hasOnlyKeys(provider, PIXEL_PROVIDER_KEYS),
+    provider && typeof provider.id === 'string' && PROVIDER_ID_RE.test(provider.id),
+    provider && isSelectorList(provider.emailBodySelectors, 32, { required: true }),
+    provider && (provider.excludeSelectors === undefined || isSelectorList(provider.excludeSelectors, 32)),
+    provider && (provider.legitimateProxies === undefined
+      || (Array.isArray(provider.legitimateProxies)
+        && provider.legitimateProxies.length <= 32
+        && provider.legitimateProxies.every((host) => DOMAIN_RE.test(String(host).toLowerCase())))),
+  ].every(Boolean);
+}
+
+function validatePixelBlock(feed) {
+  if (!validFeedEnvelope(feed, 1, 'pawsoff-bundled')) return false;
+  if (!hasOnlyKeys(feed, PIXEL_FEED_KEYS)) return false;
+  if (!boundedNonEmptyArray(feed.providers, 64)) return false;
+  const ids = new Set(feed.providers.map((p) => p && p.id));
+  if (ids.size !== feed.providers.length) return false;
+  return feed.providers.every(validPixelProvider);
+}
+
 const FEED_VALIDATORS = Object.freeze({
   consentGhostV2: validateConsentV2,
   consentGhost: validateConsentV1,
   tosReputation: validateTosReputation,
   easyPrivacyDelta: validateEasyPrivacyDelta,
+  tosPatterns: validateTosPatterns,
+  pixelBlock: validatePixelBlock,
 });
 
 function assertFeedSize(spec, bytes) {

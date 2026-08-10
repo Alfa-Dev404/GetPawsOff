@@ -30,8 +30,25 @@ const MAX_TOSDR_PAGES = 5000;
 const autoconsent = require('./autoconsent-to-consent-rules.js');
 const tosdr = require('./tosdr-to-grades.js');
 const easyPrivacyDelta = require('./easyprivacy-to-delta.js');
+const tosPatterns = require('./tos-shield-to-patterns.js');
+const pixelBlock = require('./pixelblock-to-config.js');
 const psl = require('../src/learn/psl-lite.js').PawsOffPSL;
 const essentialDomains = Array.from(require('../src/learn/prevalence-enforcer.js').ESSENTIAL_DOMAINS);
+
+// The two bundled-source feeds below read their input out of the SHIPPING
+// content scripts rather than a copy, so the published feed and the offline
+// fallback can never drift. Those files are browser IIFEs, so they need the same
+// vm sandbox the tests already use to satisfy their module.exports.__test hook.
+// Reusing the test harness beats a second near-identical loader in tools/; both
+// are dev-only and neither ships in the extension.
+const { loadTosShield, loadPixelBlock } = require('../tests/harness/sandbox.js');
+
+/** Pull a named export out of a sandboxed content script, or fail loudly. */
+function bundledExport(load, name) {
+  const value = (load().internals || {})[name];
+  if (value === undefined) throw new Error(`${name} is not exposed by its content script`);
+  return JSON.stringify(value);
+}
 
 function requiredConfigVersion(env = process.env) {
   const value = env && env.PAWSOFF_CONFIG_VERSION;
@@ -289,6 +306,26 @@ const SOURCES = [
       getBaseDomain: (domain) => psl.getBaseDomain(domain),
       max: 2000,
     }),
+  },
+  {
+    // No upstream project and no network: the input is our own bundled
+    // vocabulary. Published so a clause-matching fix reaches installed clients
+    // on the next daily refresh instead of waiting for a Store release.
+    feature: 'ToS Shield (clause vocabulary)',
+    name: 'tos-patterns',
+    license: 'MPL-2.0',
+    fetchText: async () => bundledExport(loadTosShield, 'DEFAULT_CONFIG'),
+    out: 'dist-lists/tos-shield/patterns.json',
+    run: (text, configVersion) => tosPatterns.convert(JSON.parse(text), { configVersion }),
+  },
+  {
+    // Same deal. Webmail DOMs churn; this lets a selector fix ship in a day.
+    feature: 'PixelBlock (webmail selectors)',
+    name: 'pixelblock',
+    license: 'MPL-2.0',
+    fetchText: async () => bundledExport(loadPixelBlock, 'PROVIDER_CONFIG'),
+    out: 'dist-lists/pixel-block/pixel-config.json',
+    run: (text, configVersion) => pixelBlock.convert(JSON.parse(text), { configVersion }),
   },
 ];
 
