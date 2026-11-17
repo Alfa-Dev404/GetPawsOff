@@ -270,6 +270,10 @@ if (require.main === module) {
 	if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 	fs.writeFileSync(path.join(outDir, 'easyprivacy.json'), JSON.stringify(res.rules));
 	fs.writeFileSync(path.join(outDir, 'easyprivacy-meta.json'), JSON.stringify(res.meta));
+	// getMatchedRules reports allow-rule matches too; the worker uses this list so
+	// an exception that let a request through is never counted as a block.
+	var allowIds = res.rules.filter(function (r) { return r.action.type === 'allow'; }).map(function (r) { return r.id; });
+	fs.writeFileSync(path.join(outDir, 'easyprivacy-allow-ids.json'), JSON.stringify(allowIds));
 	var blocks = res.rules.filter(function (r) { return r.action.type === 'block'; }).length;
 	var allows = res.rules.length - blocks;
 	console.log('sources : ' + files.length);

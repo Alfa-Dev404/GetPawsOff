@@ -141,5 +141,6 @@ jobs:
           add-paths: |
             src/rules/easyprivacy.json
             src/rules/easyprivacy-meta.json
+            src/rules/easyprivacy-allow-ids.json
             src/rules/easyprivacy-domains.json
             src/rules/easyprivacy-byid.json

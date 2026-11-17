@@ -230,6 +230,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   const NET_TOTAL_KEY = '__pawsOff_net_total_blocked';
   let _epMeta = null; // lazy id→label map (fetched once from the packaged json)
   let _epById = null; // lazy id→domain-index map for per-tracker badge dedup
+  let _epAllowIds = null; // lazy set of EasyPrivacy allow-rule ids
 
   // FNV-1a/32, identical to po-catch.hashHost so background-written catches
   // share the same hashed-origin space the popup filters on.
@@ -255,6 +256,15 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
       if (!url) return null;
       return hashHost(new URL(url).hostname);
     } catch (_) { return null; }
+  }
+
+  async function loadEpAllowIds() {
+    if (_epAllowIds) return _epAllowIds;
+    try {
+      const res = await fetch(chrome.runtime.getURL('src/rules/easyprivacy-allow-ids.json'));
+      _epAllowIds = new Set(await res.json());
+    } catch (_) { _epAllowIds = new Set(); }
+    return _epAllowIds;
   }
 
   async function loadEpMeta() {
@@ -633,6 +643,10 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   //  never a user host, and nothing is persisted. Needs no extra permission.
   const _tabTrackers = new Map(); // tabId -> Set<dedup-key> of blocks on the live page
   const _tabBlockedReqs = new Map(); // tabId -> COUNT of blocked requests (popup stats)
+  // Requests our own rules blocked on the tab's current page, from getMatchedRules.
+  // The live counter above only sees domains in the EasyPrivacy domain list, so it
+  // misses path rules and first-party tracking hosts; this one sees every rule.
+  const _tabMatchedReqs = new Map();
   // Reconcile cursor lives beside the badge state because a global pause moves
   // it forward: matches from before/during the pause must never reappear later.
   let _lastDnrPoll = 0;
@@ -724,6 +738,10 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   }
   function tabBadgeCount(tabId) { const s = _tabTrackers.get(tabId); return s ? s.size : 0; }
   /** PURE: bump a tab's blocked-request counter; returns the new count. */
+  /** PURE: the popup's per-page count. Each source can miss blocks the other sees. */
+  function tabBlockedCount(liveMap, matchedMap, tabId) {
+    return Math.max(liveMap.get(tabId) | 0, matchedMap.get(tabId) | 0);
+  }
   function bumpBlockedReqs(countMap, tabId) {
     const n = ((countMap.get(tabId) | 0) + 1);
     countMap.set(tabId, n);
@@ -770,7 +788,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   function resetTabBadge(tabId) {
     try {
       bumpTabEpoch(tabId); // fence off any in-flight block that belonged to the old page
-      _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId); clearTabBadgeSession(tabId); refreshBadge(tabId);
+      _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId); _tabMatchedReqs.delete(tabId); clearTabBadgeSession(tabId); refreshBadge(tabId);
     } catch (_) { /* silent */ }
   }
 
@@ -786,7 +804,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
       const s = _tabTrackers.get(tabId);
       // {k: distinct dedup keys (badge), n: blocked-request count (popup stats)}
       chrome.storage.session.set({ [BADGE_SESSION_PREFIX + tabId]: {
-        k: s ? Array.from(s) : [], n: _tabBlockedReqs.get(tabId) | 0,
+        k: s ? Array.from(s) : [], n: _tabBlockedReqs.get(tabId) | 0, m: _tabMatchedReqs.get(tabId) | 0,
       } });
     } catch (_) { /* silent */ }
   }
@@ -816,12 +834,14 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
     }
   }
   function storedBadgeState(value) {
-    if (Array.isArray(value)) return { keys: value, blockedRequests: 0 };
-    if (!value) return { keys: [], blockedRequests: 0 };
+    if (Array.isArray(value)) return { keys: value, blockedRequests: 0, matchedRequests: 0 };
+    if (!value) return { keys: [], blockedRequests: 0, matchedRequests: 0 };
     const keys = Array.isArray(value.k) ? value.k : [];
     let blockedRequests = 0;
     if (typeof value.n === 'number') blockedRequests = value.n | 0;
-    return { keys, blockedRequests };
+    let matchedRequests = 0;
+    if (typeof value.m === 'number') matchedRequests = value.m | 0;
+    return { keys, blockedRequests, matchedRequests };
   }
   function restoreBadgeSession(key, value, openIds) {
     const tabId = parseInt(key.slice(BADGE_SESSION_PREFIX.length), 10);
@@ -831,6 +851,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
     }
     const state = storedBadgeState(value);
     if (state.blockedRequests > 0) _tabBlockedReqs.set(tabId, state.blockedRequests);
+    if (state.matchedRequests > 0) _tabMatchedReqs.set(tabId, state.matchedRequests);
     if (!state.keys.length) return false;
     addTrackers(_tabTrackers, tabId, state.keys);
     refreshBadge(tabId);
@@ -1828,7 +1849,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
             // polls this every 1s while open, so it must never fall through to
             // quota-billed getMatchedRules (20 calls/10min would be gone in 20s).
             if (typeof message.tabId === 'number' && message.tabId >= 0) {
-              sendResponse({ ok: true, count: _tabBlockedReqs.get(message.tabId) | 0 });
+              sendResponse({ ok: true, count: tabBlockedCount(_tabBlockedReqs, _tabMatchedReqs, message.tabId) });
               return false;
             }
             if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.getMatchedRules) {
@@ -1989,7 +2010,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   try {
     chrome.tabs.onRemoved.addListener(function (tabId) {
       try {
-        _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId);
+        _tabTrackers.delete(tabId); _tabBlockedReqs.delete(tabId); _tabMatchedReqs.delete(tabId);
         _tabNavEpoch.delete(tabId); _tabNavStartedAt.delete(tabId);
         clearTabBadgeSession(tabId);
       } catch (_) { /* silent */ }
@@ -2110,17 +2131,26 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
     if (ruleId < DNR_RULE_ID_BASE) return null;
     return PIXELBLOCK_PROVIDERS.find((provider) => provider.dnrIndex === ruleId - DNR_RULE_ID_BASE) || null;
   }
-  function summarizeDnrMatches(matches) {
-    const summary = { perProvider: {}, dnrTotal: 0, epByTab: new Map(), epTotal: 0 };
+  // Blocking rules only: allow rules from paused sites also appear in getMatchedRules.
+  function countTabMatch(summary, match) {
+    if (typeof match.tabId !== 'number' || match.tabId < 0) return;
+    summary.countByTab.set(match.tabId, (summary.countByTab.get(match.tabId) || 0) + 1);
+  }
+  function summarizeDnrMatches(matches, allowIds) {
+    const summary = { perProvider: {}, dnrTotal: 0, epByTab: new Map(), epTotal: 0, countByTab: new Map() };
     for (const match of matches) {
       if (!matchBelongsToCurrentPage(match)) continue;
       const ruleId = match.rule.ruleId;
       if (isEasyPrivacyMatch(match, ruleId)) {
+        // An exception rule matched: the request went through, so it is not a block.
+        if (allowIds && match.rule.rulesetId === EASYPRIVACY_RULESET_ID && allowIds.has(ruleId)) continue;
         addEasyPrivacyMatch(summary, match, ruleId);
+        countTabMatch(summary, match);
         continue;
       }
       const provider = pixelBlockProviderForRule(ruleId);
       if (!provider) continue;
+      countTabMatch(summary, match);
       summary.perProvider[provider.id] = (summary.perProvider[provider.id] || 0) + 1;
       summary.dnrTotal += 1;
     }
@@ -2153,7 +2183,11 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
     try {
       const rulesMatchedInfo = await readNewDnrMatches();
       if (!rulesMatchedInfo) return;
-      const summary = summarizeDnrMatches(rulesMatchedInfo);
+      const summary = summarizeDnrMatches(rulesMatchedInfo, await loadEpAllowIds());
+      for (const [tabId, count] of summary.countByTab) {
+        _tabMatchedReqs.set(tabId, (_tabMatchedReqs.get(tabId) | 0) + count);
+        persistTabBadge(tabId);
+      }
 
       // EasyPrivacy network tier: bump the all-time counter and surface each
       // blocked tracker in the per-site catch feed (hashed origin only).
@@ -2266,6 +2300,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
         bumpTabEpoch: bumpTabEpoch,
         matchBelongsToCurrentPage: matchBelongsToCurrentPage,
         summarizeDnrMatches: summarizeDnrMatches,
+        tabBlockedCount: tabBlockedCount,
         normalizeIdMap: normalizeIdMap,
         ALLOW_PRIORITY: ALLOW_PRIORITY,
         ALLOW_PAUSE_ID_BASE: ALLOW_PAUSE_ID_BASE,

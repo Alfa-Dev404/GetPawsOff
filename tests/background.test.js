@@ -726,3 +726,25 @@ test('DNR cursor survives a worker restart, so old matches are not counted twice
   eq(askedFrom, 100, 'the restarted worker resumes from the stored cursor, not from 0');
   eq(session.__pawsOff_dnr_cursor, 500, 'cursor moves forward and is stored again');
 });
+
+test('popup per-page count includes path rules and skips EasyPrivacy exceptions', () => {
+  const { internals: helpers } = loadBackground();
+  const ep = (tabId, ruleId) => ({ tabId, timeStamp: 1, rule: { rulesetId: 'easyprivacy', ruleId } });
+  const summary = helpers.summarizeDnrMatches([ep(5, 1), ep(5, 2), ep(5, 9001), ep(-1, 3)], new Set([9001]));
+  eq(summary.countByTab.get(5), 2, 'two blocks on tab 5, the exception rule is not one');
+  eq(summary.epTotal, 3, 'the all-time total skips the exception but keeps blocks outside a tab');
+  eq(summary.countByTab.has(-1), false, 'requests outside a tab are not given to a page');
+
+  const live = new Map([[5, 1]]);
+  const matched = new Map([[5, 4]]);
+  eq(helpers.tabBlockedCount(live, matched, 5), 4, 'path-rule blocks the live counter missed are shown');
+  eq(helpers.tabBlockedCount(new Map([[5, 7]]), matched, 5), 7, 'never lower than the live counter');
+  eq(helpers.tabBlockedCount(live, matched, 6), 0);
+});
+
+test('EasyPrivacy allow-id list matches the shipped ruleset', () => {
+  const rules = require('../src/rules/easyprivacy.json');
+  const allowIds = require('../src/rules/easyprivacy-allow-ids.json');
+  const expected = rules.filter((r) => r.action.type === 'allow').map((r) => r.id);
+  eq(JSON.stringify(allowIds), JSON.stringify(expected), 'regenerate with tools/easyprivacy-to-dnr.js');
+});
