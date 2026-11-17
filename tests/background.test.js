@@ -698,3 +698,31 @@ test('pixelblock: DNR rule ids stay unique and inside the reserved band', () => 
     assert(r.condition.initiatorDomains.length > 0, 'every rule is initiator-scoped, never global');
   });
 });
+
+test('DNR cursor survives a worker restart, so old matches are not counted twice', async () => {
+  let now = 100;
+  class FakeDate extends Date {}
+  FakeDate.now = () => now;
+  const session = {};
+  const sessionApi = {
+    get: (key) => Promise.resolve(key in session ? { [key]: session[key] } : {}),
+    set: (values) => { Object.assign(session, values); return Promise.resolve(); },
+  };
+
+  const first = loadBackground({ Date: FakeDate });
+  first.chrome.storage.session = sessionApi;
+  first.chrome.declarativeNetRequest.getMatchedRules = () => Promise.resolve({ rulesMatchedInfo: [] });
+  await first.internals.readNewDnrMatches();
+
+  now = 500;
+  const restarted = loadBackground({ Date: FakeDate });
+  restarted.chrome.storage.session = sessionApi;
+  let askedFrom = null;
+  restarted.chrome.declarativeNetRequest.getMatchedRules = (filter) => {
+    askedFrom = filter.minTimeStamp;
+    return Promise.resolve({ rulesMatchedInfo: [] });
+  };
+  await restarted.internals.readNewDnrMatches();
+  eq(askedFrom, 100, 'the restarted worker resumes from the stored cursor, not from 0');
+  eq(session.__pawsOff_dnr_cursor, 500, 'cursor moves forward and is stored again');
+});

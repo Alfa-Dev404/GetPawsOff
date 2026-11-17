@@ -636,6 +636,27 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   // Reconcile cursor lives beside the badge state because a global pause moves
   // it forward: matches from before/during the pause must never reappear later.
   let _lastDnrPoll = 0;
+  // The worker is stopped and restarted all the time, so the cursor also lives in
+  // session storage. Restarting from 0 would recount every match getMatchedRules
+  // still holds (about five minutes' worth) on each wake-up.
+  const DNR_CURSOR_KEY = '__pawsOff_dnr_cursor';
+  async function loadDnrCursor() {
+    if (_lastDnrPoll) return;
+    try {
+      const session = chrome.storage && chrome.storage.session;
+      if (!session || typeof session.get !== 'function') return;
+      const stored = await session.get(DNR_CURSOR_KEY);
+      const value = stored && stored[DNR_CURSOR_KEY];
+      if (Number.isFinite(value) && value > _lastDnrPoll) _lastDnrPoll = value;
+    } catch (_) { /* fall back to the in-memory cursor */ }
+  }
+  function setDnrCursor(value) {
+    _lastDnrPoll = value;
+    try {
+      const session = chrome.storage && chrome.storage.session;
+      if (session && typeof session.set === 'function') Promise.resolve(session.set({ [DNR_CURSOR_KEY]: value })).catch(() => {});
+    } catch (_) { /* best-effort */ }
+  }
   // Per-tab navigation generation: badge-mutating async work can still be in
   // flight when the user navigates away, so a slow block from the OLD page
   // could get miscounted onto the NEW one. Bumped on navigation start;
@@ -875,7 +896,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
       // was pending. Never let that stale read overwrite the user's choice.
       if (epoch !== _actionIconEpoch) return;
       await paintActionIcon(off);
-      if (off) _lastDnrPoll = Date.now();
+      if (off) setDnrCursor(Date.now());
     } catch (_) { /* silent */ }
   }
   try { syncActionIcon(); } catch (_) { /* silent */ } // every SW start
@@ -1924,7 +1945,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
           const off = changes[MASTER_KEY].newValue === false;
           _actionIconEpoch++;
           paintActionIcon(off);
-          if (off) _lastDnrPoll = Date.now();
+          if (off) setDnrCursor(Date.now());
         }
         if (changes[DELTA_ENABLED_KEY] || changes[DELTA_SHADOW_KEY]) syncEasyPrivacyDeltaRules();
       } catch (err) {
@@ -2048,21 +2069,25 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
   // `force` (popup open, a user gesture, quota-exempt) bypasses the spacing.
   function reconcileDnrMatches(force) {
     if (_reconcileInFlight) return _reconcileInFlight;
-    if (!force && _lastDnrPoll && Date.now() - _lastDnrPoll < DNR_POLL_MIN_MS) return Promise.resolve();
-    _reconcileInFlight = _reconcileDnrMatchesImpl().finally(function () { _reconcileInFlight = null; });
+    _reconcileInFlight = (async function () {
+      await loadDnrCursor();
+      if (!force && _lastDnrPoll && Date.now() - _lastDnrPoll < DNR_POLL_MIN_MS) return;
+      await _reconcileDnrMatchesImpl();
+    })().finally(function () { _reconcileInFlight = null; });
     return _reconcileInFlight;
   }
   async function readNewDnrMatches() {
     const dnr = chrome.declarativeNetRequest;
     if (!dnr) return null;
     if (typeof dnr.getMatchedRules !== 'function') return null;
+    await loadDnrCursor();
     if (!(await isTrackerProtectionEnabled())) {
-      _lastDnrPoll = Date.now();
+      setDnrCursor(Date.now());
       return null;
     }
     const pollStartedAt = Date.now();
     const result = await dnr.getMatchedRules({ minTimeStamp: _lastDnrPoll });
-    _lastDnrPoll = pollStartedAt;
+    setDnrCursor(pollStartedAt);
     if (!(await isTrackerProtectionEnabled())) return null;
     if (!result) return [];
     return Array.isArray(result.rulesMatchedInfo) ? result.rulesMatchedInfo : [];
