@@ -37,8 +37,12 @@ The extension uses your browser's local storage (`chrome.storage.local`) to keep
 - **Short diagnostic logs**: small, capped, automatically pruned records used to
   keep the features working. These do **not** contain message content, email
   subjects, senders, recipients, page text, or full URLs. Any site hostname kept
-  for diagnostics is stored only as a **one-way hash**, not as readable text, so
-  the stored logs cannot be read back as a browsing history.
+  for diagnostics is stored only as a **short hash**, not as readable text. This
+  keeps site names out of plain view, but it is not encryption: someone with
+  access to your browser profile could match a hash against a list of known
+  sites.
+- **Incognito windows**: if you allow the extension in incognito, it still
+  blocks, but it saves no activity records, counters, or learner data.
 
 All of the above stays on your device. You can erase it at any time by removing
 the extension or clearing its storage in your browser.
