@@ -370,6 +370,77 @@ button {
 
 /* Running totals under the current-site strip. Deliberately quieter than
    .stat-value so the per-site numbers stay the primary read. */
+.review-card {
+  margin: 12px 10px 0;
+  padding: 14px 14px 10px;
+  border-radius: var(--popup-radius);
+  background: var(--popup-panel);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--popup-accent) 35%, transparent);
+}
+.review-card[hidden] { display: none; }
+.review-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--popup-ink);
+}
+.review-tally,
+.review-ask,
+.review-help {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--popup-muted);
+}
+.review-tally {
+  color: var(--popup-ink);
+}
+.review-tally strong {
+  color: var(--popup-accent);
+  font-variant-numeric: tabular-nums;
+}
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.review-primary {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--popup-accent);
+  color: var(--popup-bg);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--popup-fade);
+}
+.review-primary:hover {
+  background: color-mix(in srgb, var(--popup-accent) 88%, var(--popup-ink));
+}
+.review-help a {
+  color: var(--popup-ink);
+}
+.review-never {
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--popup-muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.review-primary:focus-visible,
+.review-never:focus-visible,
+.review-help a:focus-visible {
+  outline: 2px solid var(--popup-accent-2);
+  outline-offset: 2px;
+}
+
 .stat-lifetime {
   margin: 7px 10px 0;
   text-align: center;

@@ -473,3 +473,27 @@ test('emptyFeedText: explains a paused state', () => {
   eq(P.emptyFeedText({ __pawsOff_master_enabled: false }), 'Protection is paused.');
   eq(P.emptyFeedText({}), 'No catches match this view yet.');
 });
+
+test('review card waits three days, needs real activity, and respects later and never', () => {
+  const ask = P.shouldAskForReview;
+  const day = 24 * 60 * 60 * 1000;
+  const now = 100 * day;
+  const used = { __pawsOff_installed_at: now - 4 * day, __pawsOff_net_total_blocked: 500, __pawsOff_cg_total_rejected: 3 };
+  eq(ask(used, now), true, 'shown after three days with activity');
+  eq(ask({ ...used, __pawsOff_installed_at: now - 2 * day }, now), false, 'not before three days');
+  eq(ask({ ...used, __pawsOff_installed_at: undefined }, now), false, 'no install date, no prompt');
+  eq(ask({ __pawsOff_installed_at: now - 9 * day, __pawsOff_net_total_blocked: 5 }, now), false, 'not when it has barely done anything');
+  eq(ask({ ...used, __pawsOff_master_enabled: false }, now), false, 'not while paused');
+  eq(ask({ ...used, __pawsOff_review_prompt: { status: 'done' } }, now), false, 'never again after reviewing');
+  eq(ask({ ...used, __pawsOff_review_prompt: { status: 'never' } }, now), false, "never again after Don't ask again");
+  eq(ask({ ...used, __pawsOff_review_prompt: { status: 'later', until: now + day } }, now), false, 'snoozed');
+  eq(ask({ ...used, __pawsOff_review_prompt: { status: 'later', until: now - 1 } }, now), true, 'back after the snooze');
+});
+
+test('review card states real totals and only estimates data when the average is known', () => {
+  const text = (parts) => parts.map((p) => p.text || p.strong).join('');
+  const all = { __pawsOff_net_total_blocked: 1200, __pawsOff_pb_total_blocked: 34, __pawsOff_cg_total_rejected: 12 };
+  eq(text(P.reviewTallyParts(all, 0)), 'So far it has blocked 1,234 tracker requests and rejected 12 cookie banners.');
+  eq(text(P.reviewTallyParts(all, 40)), 'So far it has blocked 1,234 tracker requests and rejected 12 cookie banners, saving an estimated 48.2 MB.');
+  eq(text(P.reviewTallyParts({ __pawsOff_net_total_blocked: 1 }, 0)), 'So far it has blocked 1 tracker request.');
+});

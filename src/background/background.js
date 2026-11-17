@@ -228,6 +228,7 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
     return !(pixelSettings && typeof pixelSettings === 'object' && pixelSettings.globalEnabled === false);
   }
   const NET_TOTAL_KEY = '__pawsOff_net_total_blocked';
+  const INSTALLED_AT_KEY = '__pawsOff_installed_at';
   let _epMeta = null; // lazy id→label map (fetched once from the packaged json)
   let _epById = null; // lazy id→domain-index map for per-tracker badge dedup
   let _epAllowIds = null; // lazy set of EasyPrivacy allow-rule ids
@@ -1915,6 +1916,11 @@ try { importScripts('signed-config-client.js'); } catch (_) { /* signed fetches 
 
   try {
     chrome.runtime.onInstalled.addListener(() => {
+      // Start of the wait before the popup asks for a review. Users updating from
+      // a version without this key start counting from the update.
+      chrome.storage.local.get(INSTALLED_AT_KEY).then((stored) => {
+        if (!stored || typeof stored[INSTALLED_AT_KEY] !== 'number') chrome.storage.local.set({ [INSTALLED_AT_KEY]: Date.now() });
+      }).catch(() => {});
       // Bring the network-level block online immediately, fetch config once, and
       // schedule periodic refresh (chrome.alarms, never setInterval).
       syncBaselineRules();

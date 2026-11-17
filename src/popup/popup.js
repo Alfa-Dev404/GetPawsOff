@@ -521,7 +521,80 @@
       plural(terms, 'terms flag', 'terms flags')
     ].join(' · ');
   }
+  // Review request: once, at least three days after install, only when the
+  // extension has visibly done something. "Maybe later" waits two weeks.
+  var INSTALLED_AT = '__pawsOff_installed_at';
+  var REVIEW_KEY = '__pawsOff_review_prompt';
+  var REVIEW_URL = 'https://chromewebstore.google.com/detail/getpawsoff/cmchcjamdhahnonmppfflbhdoflgknga/reviews?utm_source=popup';
+  var DAY_MS = 24 * 60 * 60 * 1000;
+  var REVIEW_AFTER_MS = 3 * DAY_MS;
+  var REVIEW_SNOOZE_MS = 14 * DAY_MS;
+  var REVIEW_MIN_CATCHES = 20;
+  function lifetimeCounts(all) {
+    var source = all || {};
+    return { trackers: num(source[NET_TOTAL]) + num(source[PB_TOTAL]), banners: num(source[CG_TOTAL]) };
+  }
+  function shouldAskForReview(all, now) {
+    var source = all || {};
+    if (source[MASTER_KEY] === false) return false;
+    var installedAt = source[INSTALLED_AT];
+    if (typeof installedAt !== 'number' || now - installedAt < REVIEW_AFTER_MS) return false;
+    var prompt = source[REVIEW_KEY];
+    if (prompt && (prompt.status === 'done' || prompt.status === 'never')) return false;
+    if (prompt && prompt.status === 'later' && !(now >= num(prompt.until))) return false;
+    var counts = lifetimeCounts(source);
+    return counts.trackers + counts.banners >= REVIEW_MIN_CATCHES;
+  }
+  function reviewTallyParts(all, avgKB) {
+    var counts = lifetimeCounts(all);
+    var parts = [{ text: 'So far it has blocked ' }, { strong: plural(counts.trackers, 'tracker request', 'tracker requests') }];
+    if (counts.banners > 0) parts.push({ text: ' and rejected ' }, { strong: plural(counts.banners, 'cookie banner', 'cookie banners') });
+    var savedKB = counts.trackers * (avgKB || 0);
+    if (savedKB > 0) parts.push({ text: ', saving an estimated ' }, { strong: formatSaved(savedKB).replace('~', '') });
+    parts.push({ text: '.' });
+    return parts;
+  }
+  function renderReviewPrompt(all) {
+    var card = el('review-card');
+    if (!card) return;
+    var source = all || state._lastAll;
+    if (!shouldAskForReview(source, Date.now())) { card.hidden = true; return; }
+    var tally = el('review-tally');
+    if (tally) {
+      tally.textContent = '';
+      reviewTallyParts(source, state._learnedAvgKB).forEach(function (part) {
+        if (part.strong) {
+          var b = document.createElement('strong');
+          b.textContent = part.strong;
+          tally.appendChild(b);
+        } else {
+          tally.appendChild(document.createTextNode(part.text));
+        }
+      });
+    }
+    card.hidden = false;
+  }
+  function setReviewStatus(status) {
+    var value = { status: status, at: Date.now() };
+    if (status === 'later') value.until = Date.now() + REVIEW_SNOOZE_MS;
+    var card = el('review-card');
+    if (card) card.hidden = true;
+    try { chrome.storage.local.set({ [REVIEW_KEY]: value }); } catch (_) {}
+  }
+  function wireReviewPrompt() {
+    var yes = el('review-yes');
+    if (yes) yes.addEventListener('click', function () {
+      try { chrome.tabs.create({ url: REVIEW_URL }); } catch (_) {}
+      setReviewStatus('done');
+    });
+    var later = el('review-later');
+    if (later) later.addEventListener('click', function () { setReviewStatus('later'); });
+    var never = el('review-never');
+    if (never) never.addEventListener('click', function () { setReviewStatus('never'); });
+  }
+
   function renderAllTime(all) {
+    renderReviewPrompt(all || state._lastAll);
     setText('stat-lifetime', allTimeSummary(all || state._lastAll));
   }
 
@@ -1123,6 +1196,7 @@
   async function init() {
     try {
       wire();
+      wireReviewPrompt();
       try {
         chrome.storage.onChanged.addListener(function (changes, area) {
           if (area === 'local') scheduleRefresh();
@@ -1170,6 +1244,7 @@
           }
           // Re-render headline with the learned (or fallback) average.
           renderHeadline();
+          renderReviewPrompt(state._lastAll);
         });
       } catch (_) {}
 
@@ -1203,6 +1278,8 @@
   try {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {
+        shouldAskForReview: shouldAskForReview,
+        reviewTallyParts: reviewTallyParts,
         LEGACY_TERMS_LABEL: LEGACY_TERMS_LABEL,
         emptyFeedText: emptyFeedText,
         hashHost: hashHost,
