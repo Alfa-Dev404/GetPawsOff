@@ -1,12 +1,12 @@
-/* PawsOff, Prevalence Collector — observe-only, top frame only.
+/* PawsOff, Prevalence Collector, observe-only, top frame only.
  *
  * Reads the Performance Timeline to learn which third-party domains appear
- * on which first-party sites. Only reads resources the page already loaded —
+ * on which first-party sites. Only reads resources the page already loaded,
  * never intercepts, blocks, or initiates a request, so it can't break page
  * behaviour. Reports hostnames only (never full URLs, cookies, or page
  * content) to the background learner; nothing leaves the device.
  *
- * This is the sensor for the local prevalence tier — enforcement (actual
+ * This is the sensor for the local prevalence tier, enforcement (actual
  * blocking) is a separate, later milestone. Nothing here acts on what it sees.
  */
 'use strict';
@@ -16,6 +16,9 @@
     if (window.top !== window) return;
     var proto = location.protocol;
     if (proto !== 'http:' && proto !== 'https:') return;
+    // Incognito: the learner persists to chrome.storage.local (shared with the
+    // normal profile, on disk), so never observe private browsing.
+    if (chrome.extension && chrome.extension.inIncognitoContext) return;
 
     var FIRST_PARTY = location.hostname;
     var PSL = (typeof self !== 'undefined' && self.PawsOffPSL) || null;
@@ -43,7 +46,7 @@
       return host === FIRST_PARTY || baseDomain(host) === FIRST_PARTY_BASE;
     }
 
-    // One-way FNV-1a/32 host digest — must match po-catch.js + popup.js so the
+    // One-way FNV-1a/32 host digest, must match po-catch.js + popup.js so the
     // popup can find this site's radar snapshot by its hashed origin.
     function hashHost(host) {
       if (typeof host !== 'string') return null;

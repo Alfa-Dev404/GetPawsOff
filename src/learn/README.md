@@ -1,6 +1,6 @@
-# PawsOff — Local Prevalence Radar
+# PawsOff, Local Prevalence Radar
 
-A Privacy Badger-style **local, on-device** tracker learner — re-derived from the
+A Privacy Badger-style **local, on-device** tracker learner, re-derived from the
 *method only* (clean-room; no Privacy Badger code, no GPL/AGPL data).
 
 ## What it does
@@ -23,7 +23,7 @@ The Settings page exposes three explicit modes: **Standard**, **Preview**, and
   Frames, video, websockets, navigation, payments, auth, and essential CDNs are
   excluded. A site pause or tracker exception has higher DNR priority and wins.
 - **No new permissions** (uses `storage` + messaging you already have).
-- Reports **hostnames only** — never URLs, paths, queries, cookies, or content.
+- Reports **hostnames only**, never URLs, paths, queries, cookies, or content.
 
 ## Files
 | File | Context | Role |
@@ -57,10 +57,6 @@ await __pawsOff_prevalence.getStats()      // summary + top trackers + verdicts
 await __pawsOff_prevalence.getVerdict('doubleclick.net')
 await __pawsOff_prevalence.reset()         // wipe learned data
 ```
-Or from any extension page via messaging:
-```js
-chrome.runtime.sendMessage({ type: 'pawsoff_prevalence_getStats', topN: 25 }, console.log)
-```
 
 ## Toggle off
 Set `__pawsOff_prevalence_enabled = false` (or the master switch
@@ -69,7 +65,7 @@ Set `__pawsOff_prevalence_enabled = false` (or the master switch
 ## Known limits (honest)
 - Top-frame only: resources loaded *inside* cross-origin iframes aren't attributed
   yet (correct-but-incomplete; frame attribution is a phase-2 item).
-- `psl-lite.js` is a curated subset, not the full Public Suffix List — swap in the
+- `psl-lite.js` is a curated subset, not the full Public Suffix List, swap in the
   full PSL for production-grade edge cases.
 - No CNAME uncloaking on Chrome (no `dns.resolve`); a subdomain heuristic is a
   later option.
@@ -96,12 +92,12 @@ labels are persisted.
 ### `cookieblock` is now enforceable (v1.2)
 The learner downgrades site-critical (yellowlisted) domains to a `cookieblock`
 verdict. Historically there was no enforcement path because DNR `modifyHeaders`
-requires broad host permissions — the manifest has since gained `http://*/*` +
+requires broad host permissions, the manifest has since gained `http://*/*` +
 `https://*/*` (for the toolbar-badge webRequest tier), so the enforcer can now
 materialize `cookieblock` as cookie-STRIPPING rules: `modifyHeaders` removes
 `Cookie`/`Set-Cookie` on third-party requests, the resource still loads, the
 tracker sees an anonymous fetch. The ESSENTIAL_DOMAINS safelist gates this tier
-too — stripping cookies on SSO/payment domains (google.com, stripe.com) breaks
+too, stripping cookies on SSO/payment domains (google.com, stripe.com) breaks
 logins, so those stay untouched. Note `background.js`'s `sanitizeRules()`
 ("force block") applies only to the PixelBlock content-script registration
 funnel, not to the enforcer's own service-worker rule writes.

@@ -1,9 +1,9 @@
-/* Cross-file hashHost consistency guard (audit item E2).
+/* Cross-file hashHost consistency guard.
  *
  * PawsOff hashes hostnames with a one-way FNV-1a/32 digest ("h:" + 8 hex). That
  * exact function is DUPLICATED in 9 runtime files because content scripts run in isolated
- * worlds and CANNOT share a module import — the duplication is a requirement, not
- * a smell, so we must NOT refactor it into one shared source (see CLAUDE.md).
+ * worlds and CANNOT share a module import, the duplication is a requirement, not
+ * a smell, so we must NOT refactor it into one shared source.
  *
  * The risk of duplication is DRIFT: if one copy diverges, the popup/options can no
  * longer find a site's hashed radar/catch snapshot written by a content script,

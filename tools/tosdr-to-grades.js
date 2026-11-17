@@ -1,5 +1,4 @@
 'use strict';
-// ─────────────────────────────────────────────────────────────────────────────
 // tosdr-to-grades.js
 //
 // CLEAN-ROOM converter. Reads a ToS;DR (Terms of Service; Didn't Read) service
@@ -8,10 +7,9 @@
 //     services:{ host:{ name, grade, flagged:[{title, topic, severity}] } } }
 //
 // ToS;DR content is CC-BY-SA. That obligation (attribution + share-alike) applies
-// to THIS generated DATA FILE only — it is data fetched at runtime, not linked
+// to THIS generated DATA FILE only, it is data fetched at runtime, not linked
 // into the product's source code, so it does not affect PawsOff's own licence.
 // The `attribution` field is embedded so the obligation travels with the data.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const fs = require('fs');
 const path = require('path');

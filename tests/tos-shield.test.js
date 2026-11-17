@@ -1,4 +1,4 @@
-/* PawsOff — Tier-1 unit tests for ToS Shield (tos-shield.js).
+/* PawsOff, Tier-1 unit tests for ToS Shield (tos-shield.js).
  *
  * Covers the PURE, side-effect-free engine that decides whether a clause in a
  * Terms-of-Service / privacy policy is predatory:
@@ -8,7 +8,7 @@
  *         below threshold instead of scoring as a data sale)
  *       • the "without notice" aggravator family is STRIPPED before the negation
  *         test so the bare cue "without" can't turn a predatory clause into a
- *         false negative — and it boosts severity to "aggravated"
+ *         false negative, and it boosts severity to "aggravated"
  *       • per-category toggles are respected
  *   - segmentSentences() with abbreviation handling ("Inc." is not a boundary)
  *   - normalizeForMatch(), buildAltRegex() word-boundary matching
@@ -18,7 +18,7 @@
  *
  * The matcher reads compiled patterns from closure state, so the harness primes
  * it once via compileConfig(DEFAULT_CONFIG) + defaultSettings() before the tests
- * run — exactly what init() does in the browser. The DOM half (findContentRoot,
+ * run, exactly what init() does in the browser. The DOM half (findContentRoot,
  * the Highlight API, the panel) is Tier-2 (jsdom). Loads the REAL shipping file
  * and satisfies its existing Jest-style hook (no source edit).
  */
@@ -117,7 +117,7 @@ function fakeElement(tagName) {
 
 function findByClass(root, className) {
   if (!root) return null;
-  if (root.className === className) return root;
+  if (String(root.className || '').split(' ').includes(className)) return root;
   for (const child of root.children || []) {
     const match = findByClass(child, className);
     if (match) return match;
@@ -142,7 +142,7 @@ test('tosShield: the Jest-style hook exposes the pure helpers', () => {
   });
 });
 
-// ── compareVersions / base64ToBytes ─────────────────────────────────
+// compareVersions / base64ToBytes
 test('compareVersions: compares canonical safe dotted versions only', () => {
   eq(compareVersions('1.0.0', '1.0.0'), 0);
   eq(compareVersions('1.2.0', '1.10.0'), -1, '2 < 10 numerically');
@@ -212,6 +212,7 @@ test('a successful zero-result scan renders a clear completion panel', () => {
     eq(findByClass(state.panelHost.closedShadow, 'po-ts-empty').textContent, 'No risky clauses found.');
     eq(panelTitle(1), 'GetPawsOff · 1 clause flagged');
     eq(panelTitle(2), 'GetPawsOff · 2 clauses flagged');
+    eq(findByClass(state.panelHost.closedShadow, 'po-ts-headline').textContent, 'Nothing risky found');
   } finally {
     loaded.document.documentElement = previousDoc.documentElement;
     loaded.document.body = previousDoc.body;
@@ -245,6 +246,8 @@ test('interactive findings render as keyboard-operable native buttons', () => {
     state.policyChange = null;
     state.categoryById = { data_sale: { label: 'Sells data', severity: 'high' } };
     renderPanel([{ categoryId: 'data_sale', level: 'present', text: 'We may sell your data.', phraseCount: 1 }]);
+    eq(findByClass(state.panelHost.closedShadow, 'po-ts-headline').textContent, 'serious clause in these terms');
+    eq(findByClass(state.panelHost.closedShadow, 'po-ts-count').textContent, '1');
     const item = findByClass(state.panelHost.closedShadow, 'po-ts-item');
     eq(item.tagName, 'BUTTON');
     eq(item.type, 'button');
@@ -303,18 +306,31 @@ test('panel renders optional context, navigates findings, and dismisses cleanly'
   }
 });
 
-test('policy change detection stores no text and explains aggregate risk deltas', async () => {
+test('policy change detection stores no text and names what changed', async () => {
   const first = await policyFingerprint('We may sell your data.');
   eq(first, await policyFingerprint('  WE may   sell your data. '), 'case and whitespace do not create false changes');
   assert(first !== await policyFingerprint('We never sell your data.'), 'material text change alters fingerprint');
   assert(/^sha256:[a-f0-9]{64}$/.test(first), 'policy fingerprint is collision-resistant SHA-256');
-  const changed = describePolicyChange(
-    { v: 2, fingerprint: `sha256:${'a'.repeat(64)}`, total: 2, ts: 10 },
-    { v: 2, fingerprint: `sha256:${'b'.repeat(64)}`, total: 4, ts: 20 },
-  );
-  eq(changed.delta, 2);
-  assert(/2 more local risk matches/.test(changed.summary), 'aggregate increase explained');
-  eq(describePolicyChange({ v: 2, fingerprint: first }, { v: 2, fingerprint: first }), null, 'same policy stays quiet');
+  const A = `sha256:${'a'.repeat(64)}`;
+  const B = `sha256:${'b'.repeat(64)}`;
+  const snap = (fingerprint, byCategory, extra) => ({
+    v: 3, scanner: '1.0.0/1', fingerprint, byCategory,
+    total: Object.values(byCategory).reduce((sum, n) => sum + n, 0), ...extra,
+  });
+  const added = describePolicyChange(snap(A, { data_sale: 1 }, { ts: 10 }), snap(B, { data_sale: 1, arbitration_classwaiver: 2 }));
+  eq(added.previousSeenAt, 10);
+  eq(added.summary, 'New since your last visit: Forces arbitration / waives class action.', 'a new category is named');
+  const removed = describePolicyChange(snap(A, { data_sale: 1, liability_waiver: 1 }), snap(B, { liability_waiver: 1 }));
+  eq(removed.summary, 'No longer found: Sells or rents your data.', 'a dropped category is named');
+  eq(describePolicyChange(snap(A, { data_sale: 1 }), snap(B, { data_sale: 1 })).summary,
+    'A flagged clause was reworded since your last visit.', 'same categories, different clause text');
+  eq(describePolicyChange(snap(A, { data_sale: 1 }), snap(B, { data_sale: 3 })).summary,
+    '2 more flagged clauses since your last visit.', 'same categories, more clauses');
+  eq(describePolicyChange(snap(A, { data_sale: 1 }), snap(A, { data_sale: 1 })), null, 'unchanged flagged clauses stay quiet');
+  eq(describePolicyChange(snap(A, { data_sale: 1 }), { ...snap(B, { data_sale: 2 }), scanner: '1.0.0/2' }), null,
+    'a scanner update is not reported as a policy change');
+  eq(describePolicyChange({ v: 2, fingerprint: A, total: 2 }, snap(B, { data_sale: 4 })), null,
+    'whole-page snapshots from the previous version are replaced silently');
   eq(describePolicyChange(
     { v: 1, fingerprint: 'h:legacy' },
     { v: 2, fingerprint: first },
@@ -351,7 +367,7 @@ test('policy snapshot update drops stale async work after a page reset', async (
     state.findings = [{ categoryId: 'data_sale' }];
     state.policyChange = null;
     loaded.sandbox.location.pathname = '/privacy';
-    const pending = updatePolicySnapshot('We may sell data.', { data_sale: 1 });
+    const pending = updatePolicySnapshot({ data_sale: 1 });
     await getStarted;
     state.scanGeneration = 11;
     releaseGet({});
@@ -386,7 +402,7 @@ test('policy snapshot completion does not reopen a panel the user dismissed', as
     state.scanGeneration = 20;
     state.findings = [{ categoryId: 'data_sale' }];
     state.panelHost = { parentNode: { removeChild() {} } };
-    const pending = updatePolicySnapshot('We may sell data.', { data_sale: 1 });
+    const pending = updatePolicySnapshot({ data_sale: 1 });
     await writeStarted;
     loaded.internals.removePanel();
     finishWrite();
@@ -414,9 +430,9 @@ test('policy snapshot update replaces legacy weak fingerprints without reporting
     state.findings = [{ categoryId: 'data_sale' }];
     state.policyChange = null;
     state.panelHost = null;
-    await updatePolicySnapshot('We may sell data.', { data_sale: 1 });
+    await updatePolicySnapshot({ data_sale: 1 });
     const snapshot = Object.values(written)[0];
-    eq(snapshot.v, 2, 'snapshot schema is upgraded');
+    eq(snapshot.v, 3, 'snapshot schema is upgraded');
     assert(/^sha256:[a-f0-9]{64}$/.test(snapshot.fingerprint), 'weak fingerprint is replaced');
     eq(state.policyChange, null, 'migration never reports a synthetic policy change');
   } finally {
@@ -427,7 +443,7 @@ test('policy snapshot update replaces legacy weak fingerprints without reporting
   }
 });
 
-// ── buildAltRegex ────────────────────────────────────────────────
+// buildAltRegex
 test('buildAltRegex: matches whole words only (no matching inside larger words)', () => {
   const re = buildAltRegex(['sell', 'rent']);
   assert(re.test('we may sell your data'), 'matches a standalone word');
@@ -437,7 +453,7 @@ test('buildAltRegex: matches whole words only (no matching inside larger words)'
   assert(buildAltRegex('notarray') === null, 'non-array → null');
 });
 
-// ── validateConfig ──────────────────────────────────────────────
+// validateConfig
 test('validateConfig: accepts the bundled DEFAULT_CONFIG', () => {
   assert(validateConfig(DEFAULT_CONFIG), 'the shipping config validates');
 });
@@ -476,7 +492,7 @@ test('validateConfig: deeply validates exact sections, bounded collections, and 
   for (const candidate of cases) assert(!validateConfig(candidate), 'malformed nested config is rejected');
 });
 
-// ── settings ──────────────────────────────────────────────────
+// settings
 test('defaultSettings/normalizeSettings: enabled + every category on, coercion', () => {
   const d = defaultSettings(DEFAULT_CONFIG);
   eq(d.enabled, true);
@@ -489,7 +505,7 @@ test('defaultSettings/normalizeSettings: enabled + every category on, coercion',
   eq(out.categories.tracking_surveillance, true, 'missing category defaults on');
 });
 
-// ── normalizeForMatch / segmentSentences ──────────────────────────────
+// normalizeForMatch / segmentSentences
 test('normalizeForMatch: lowercases and collapses whitespace', () => {
   eq(normalizeForMatch('  We  MAY\n\tSell '), 'we may sell');
 });
@@ -520,7 +536,7 @@ test('clause splitting preserves offsets in the original sentence', () => {
   eq(sentence.slice(clauses[2].start, clauses[2].end), ' we do not sell it.');
 });
 
-// ── matchSentence — the core predatory-clause detector ───────────────────
+// matchSentence, the core predatory-clause detector
 test('matchSentence: flags a plain data-sale clause', () => {
   const hits = matchSentence(norm('We may sell your personal data to third parties.'));
   assert(cats(hits).indexOf('data_sale') !== -1, 'data_sale detected');
@@ -554,7 +570,7 @@ test('matchSentence: respects a disabled category toggle', () => {
   }
 });
 
-// ── pageConfidence ────────────────────────────────────────────
+// pageConfidence
 test('pageConfidence: a long legalese body scores from its markers', () => {
   const body = ('lorem '.repeat(420)) + 'shall herein you agree reserve the right';
   // url/title carry no policy tokens in the stub, so the score is purely the

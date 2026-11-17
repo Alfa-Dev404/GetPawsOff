@@ -1,0 +1,60 @@
+name: Bump autoconsent
+
+# Weekly: if DuckDuckGo has published a newer autoconsent release, move the pin
+# in tools/build-lists.mjs and open a PR. Merging it triggers the signed-config
+# publish, so installed clients get the new consent rules without a Store update.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # weekly, Monday 07:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - name: Move the pin to the latest published version
+        id: bump
+        run: |
+          set -euo pipefail
+          latest="$(npm view @duckduckgo/autoconsent version)"
+          current="$(sed -n "s/^const AUTOCONSENT_VERSION = '\(.*\)';$/\1/p" tools/build-lists.mjs)"
+          if ! printf '%s' "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Unexpected version string from npm: $latest"
+            exit 1
+          fi
+          if [ -z "$current" ]; then
+            echo "::error::Could not read AUTOCONSENT_VERSION from tools/build-lists.mjs"
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          sed -i "s/^const AUTOCONSENT_VERSION = '.*';$/const AUTOCONSENT_VERSION = '$latest';/" tools/build-lists.mjs
+      - name: Build the feeds from the new version and run the tests
+        if: steps.bump.outputs.current != steps.bump.outputs.latest
+        run: |
+          set -euo pipefail
+          PAWSOFF_CONFIG_VERSION="$(date -u +'%Y%m%d%H%M%S')" node tools/build-lists.mjs
+          npm test
+          rm -rf dist-lists
+      - name: Open a PR
+        if: steps.bump.outputs.current != steps.bump.outputs.latest
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
+        with:
+          add-paths: tools/build-lists.mjs
+          commit-message: "chore(consent): bump autoconsent to ${{ steps.bump.outputs.latest }}"
+          title: "chore(consent): bump autoconsent ${{ steps.bump.outputs.current }} -> ${{ steps.bump.outputs.latest }}"
+          body: |
+            Automated weekly check of DuckDuckGo autoconsent.
+
+            The feeds built cleanly from the new version and `npm test` passed.
+            Merging publishes the new consent rules through the signed feed.
+          branch: chore/bump-autoconsent

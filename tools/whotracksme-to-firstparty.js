@@ -1,5 +1,4 @@
 'use strict';
-// ─────────────────────────────────────────────────────────────────────────────
 // whotracksme-to-firstparty.js
 //
 // CLEAN-ROOM converter. Reads a caller-supplied tracker/company catalog and
@@ -16,7 +15,6 @@
 // FIRST_PARTY_SETS (same-owner domains are never third-party to each other) and
 // its BUNDLED_YELLOWLIST (function-critical domains -> cookieblock, not block).
 // This produces exactly those two structures from community data.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const fs = require('fs');
 const { isIP } = require('node:net');

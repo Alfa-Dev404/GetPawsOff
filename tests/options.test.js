@@ -1,4 +1,4 @@
-/* PawsOff — Tier-1 unit tests for the settings page logic (options.js).
+/* PawsOff, Tier-1 unit tests for the settings page logic (options.js).
  *
  * options.js is mostly DOM (toggles built with createElement + textContent, no
  * innerHTML, for CSP/XSS safety), which is Tier-2 (jsdom). What IS pure and
@@ -66,17 +66,17 @@ test('collectActivityRows: keeps only activity records, newest first', () => {
   eq(rows[0].kind, 'PixelBlock', 'kind carried through');
 });
 
-test('activityDetail: ConsentGhost — status with optional framework', () => {
+test('activityDetail: ConsentGhost, status with optional framework', () => {
   eq(activityDetail({ kind: 'ConsentGhost', e: { status: 'rejected', framework: 'OneTrust' } }), 'rejected · OneTrust');
   eq(activityDetail({ kind: 'ConsentGhost', e: { status: 'rejected' } }), 'rejected', 'framework optional');
 });
 
-test('activityDetail: PixelBlock — blocked count with optional provider', () => {
+test('activityDetail: PixelBlock, blocked count with optional provider', () => {
   eq(activityDetail({ kind: 'PixelBlock', e: { blocked_count: 3, provider: 'gmail' } }), '3 blocked · gmail');
   eq(activityDetail({ kind: 'PixelBlock', e: {} }), '0 blocked', 'defaults to 0');
 });
 
-test('activityDetail: ToS Shield — clause count with optional domain', () => {
+test('activityDetail: ToS Shield, clause count with optional domain', () => {
   eq(activityDetail({ kind: 'ToS Shield', e: { total: 5, domain: 'x.com' } }), '5 clauses · x.com');
   eq(activityDetail({ kind: 'ToS Shield', e: {} }), '0 clauses');
 });
@@ -89,10 +89,10 @@ test('PB_PROVIDERS: stays in lockstep with pixel-block (9 providers, iCloud note
   PB_PROVIDERS.forEach((p) => assert(p.id && p.name, 'every provider has id + name'));
 });
 
-test('TS_CATEGORIES: stays in lockstep with tos-shield (12 categories, labelled)', () => {
-  eq(TS_CATEGORIES.length, 12, 'twelve clause categories');
-  assert(TS_CATEGORIES.some((c) => c.id === 'data_sale'), 'data_sale present');
-  TS_CATEGORIES.forEach((c) => assert(c.id && c.label, 'every category has id + label'));
+test('TS_CATEGORIES: same ids and labels as the ToS Shield config', () => {
+  const { loadTosShield } = require('./harness/sandbox');
+  const shipped = loadTosShield().internals.DEFAULT_CONFIG.categories.map((c) => c.id + '|' + c.label);
+  eq(JSON.stringify(TS_CATEGORIES.map((c) => c.id + '|' + c.label)), JSON.stringify(shipped));
 });
 
 test('storage key constants are the shapes the content scripts read', () => {
@@ -342,4 +342,21 @@ test('adaptive recalculate retains its error when synchronization and refresh fa
   await pending;
   assert(!syncButton.disabled, 'Recalculate is re-enabled after failure');
   assert(/Could not recalculate local rules/.test(statusNode.textContent), 'failure remains visible');
+});
+
+test('options: diagnostics carry toggles, counters and notes but no site data', () => {
+  const report = O.buildDiagnostics({
+    __pawsOff_master_enabled: true,
+    __pawsOff_cg_total: 12,
+    __pawsOff_allowlist: { sites: { 'h:deadbeef': { paused: 1 } } },
+    __pawsOff_catch_1_a: { originHash: 'h:deadbeef', feature: 'banner' },
+    __pawsOff_consentGhost_log_2_b: { ts: 2, status: 'rejected', domain: 'h:deadbeef' },
+    __pawsOff_background_log_1_c: { ts: 1, status: 'cmp_main_inject_error' },
+  }, '1.0.0', 'UA');
+  eq(report.version, '1.0.0');
+  eq(report.settings.__pawsOff_master_enabled, true);
+  eq(report.settings.__pawsOff_cg_total, 12);
+  eq(report.logs.length, 2);
+  eq(report.logs[0].status, 'rejected', 'newest note first');
+  assert(JSON.stringify(report).indexOf('deadbeef') === -1, 'no site hash leaves in a bug report');
 });

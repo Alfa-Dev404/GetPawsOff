@@ -1,4 +1,4 @@
-/* PawsOff — Step-3 tests for the pre-paint flash-suppression (prehide) layer in
+/* PawsOff, tests for the pre-paint flash-suppression (prehide) layer in
  * consent-ghost.js.
  *
  * Prehide injects a <style> at document_start that hides ONLY vetted named-CMP
@@ -18,7 +18,7 @@ const { loadConsentGhost } = require('./harness/sandbox');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const T = () => loadConsentGhost().internals; // fresh instance per access
 
-// ── buildPrehideCss: per-rule emission + injection-safe filtering ────────────
+// buildPrehideCss: per-rule emission + injection-safe filtering
 
 test('buildPrehideCss: one rule PER selector (never a grouped a,b{})', () => {
   const css = T().buildPrehideCss(['#a, .b']);
@@ -48,7 +48,7 @@ test('buildPrehideCss: non-array / empty → empty string (fail-open: no prehide
   eq(t.buildPrehideCss(['{}', 12]), '', 'all-bad input yields no rules');
 });
 
-// ── install + UNCONDITIONAL watchdog reveal (the "no CMP → reraised" case) ───
+// install + UNCONDITIONAL watchdog reveal (the "no CMP → reraised" case)
 
 function fakeHtml() {
   const kids = [];
@@ -77,7 +77,7 @@ test('watchdog reveal: firing the scheduled timer removes the style (no-CMP case
   let scheduled = null;
   t.installPrehide(html, '#x{visibility:hidden!important}', (fn, ms) => { scheduled = { fn, ms }; });
   eq(html.kids.length, 1);
-  scheduled.fn();                       // the watchdog fires — no success signal involved
+  scheduled.fn();                       // the watchdog fires, no success signal involved
   eq(html.kids.length, 0, 'style raised by the unconditional watchdog');
 });
 
@@ -90,12 +90,12 @@ test('reveal is idempotent and scheduler-throw reveals immediately (never orphan
   eq(html.kids.length, 0);
 });
 
-// ── disabled site → prehide revealed by init's standdown branch ──────────────
+// disabled site → prehide revealed by init's standdown branch
 
 test('disabled site: init standdown reveals the prehide style', async () => {
   // Default load presets __pawsOff_consentGhost_disabled=true. boot() installs the
   // prehide on documentElement; init() resolves the (async) disabled flag and its
-  // protectionPaused() branch must reveal — independent of the watchdog (no-op
+  // protectionPaused() branch must reveal, independent of the watchdog (no-op
   // setTimeout here, so only the disabled branch can have removed it).
   const loaded = loadConsentGhost();
   eq(loaded.document.documentElement._kids.length, 1, 'prehide installed at document_start');
@@ -103,7 +103,7 @@ test('disabled site: init standdown reveals the prehide style', async () => {
   eq(loaded.document.documentElement._kids.length, 0, 'disabled standdown revealed the banner');
 });
 
-// ── REGRESSION: a banner hidden by our OWN prehide is still rejected ─────────
+// REGRESSION: a banner hidden by our OWN prehide is still rejected
 
 test('prehidden banner is still rejected by scanAndReject (revealed, not skipped)', async () => {
   // Model the collision: the OneTrust container/button report
@@ -162,7 +162,7 @@ test('prehidden banner is still rejected by scanAndReject (revealed, not skipped
   assert(prehideActive(), 'prehide is active at document_start (banner would read invisible)');
   await flush();
   await flush();
-  eq(clicks, 1, 'reject button was clicked — container not skipped by our own prehide');
+  eq(clicks, 1, 'reject button was clicked, container not skipped by our own prehide');
   eq(loaded.win.__pawsOff_consentGhost_handled, true, 'page marked handled (rejected)');
   assert(!prehideActive(), 'prehide revealed during the reject');
 });

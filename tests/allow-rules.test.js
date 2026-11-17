@@ -1,4 +1,4 @@
-/* PawsOff — unit tests for the background allow-list → DNR allow rules. */
+/* PawsOff, unit tests for the background allow-list → DNR allow rules. */
 'use strict';
 const { test, assert, eq } = require('./harness/framework');
 const { loadBackground } = require('./harness/sandbox');

@@ -1,9 +1,9 @@
-/* PawsOff — ToS Shield guarded-vocab recall tests.
+/* PawsOff, ToS Shield guarded-vocab recall tests.
  *
  * Measures the DELTA the guarded vocabulary additions make on a small labelled
  * clause corpus (real-world EU + US phrasings). "Before" is the same shipping
  * config with only the added tokens stripped, isolating exactly what those
- * tokens contribute — not an unrelated baseline.
+ * tokens contribute, not an unrelated baseline.
  *
  * The additions are anchor-gated (anchor + object must co-occur in one
  * clause), so they lift recall on missed clauses without reintroducing false
@@ -49,15 +49,15 @@ function stripAdded(cfg) {
 
 // Labelled corpus. e === null means the clause is benign and must NOT flag.
 const CORPUS = [
-  // ── adverse: the EU / translated phrasings this pass targets ──────────────
+  // adverse: the EU / translated phrasings this pass targets
   { t: "POLITICO may communicate its Users' personal information to third parties to the extent necessary.", e: 'third_party_sharing' },
   { t: 'The personal data may be used by POLITICO or its affiliates for direct marketing purposes.', e: 'marketing_sharing' },
   { t: 'POLITICO may in no way be held liable in the event that this data is stolen or hijacked by a third party.', e: 'liability_waiver' },
-  // ── adverse: already covered before this pass (regression guard) ──────────
+  // adverse: already covered before this pass (regression guard)
   { t: 'We may sell your personal data to third parties.', e: 'data_sale' },
   { t: 'In case of a dispute, the courts of Brussels have exclusive jurisdiction over these terms.', e: 'jurisdiction_choiceoflaw' },
   { t: 'We may change these terms at any time without notice.', e: 'unilateral_change' },
-  // ── benign: GDPR / pro-user phrasing that must stay quiet (precision) ─────
+  // benign: GDPR / pro-user phrasing that must stay quiet (precision)
   { t: 'We will never sell your personal data.', e: null },
   { t: 'You may at any time request to access, rectify or delete your data by emailing us.', e: null },
   { t: 'POLITICO will keep the personal data of its Users for the duration necessary to achieve the objectives pursued.', e: null },
@@ -95,7 +95,7 @@ test('vocab: guarded additions lift recall with no new false positives', () => {
   assert(after.recall > before.recall, 'recall improved (' + before.recall + ' -> ' + after.recall + ')');
   eq(after.recall, 1, 'every labelled adverse clause now flags; remaining misses=' + JSON.stringify(after.misses));
   eq(after.fpCount, 0, 'no benign clause mis-flagged; false-positives=' + JSON.stringify(after.falsePos));
-  eq(before.fpCount, 0, 'corpus precision was already clean — vocab did not trade FN for FP');
+  eq(before.fpCount, 0, 'corpus precision was already clean, vocab did not trade FN for FP');
 });
 
 test('vocab: "communicate … to third parties" now flags third_party_sharing', () => {

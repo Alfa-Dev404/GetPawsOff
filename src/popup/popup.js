@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  // ── storage keys (mirror content scripts / background) ──
+  // storage keys (mirror content scripts / background)
   var PB_SETTINGS = '__pawsOff_pixelBlock_settings';
   var TS_SETTINGS = '__pawsOff_tosShield_settings';
   var CG_DISABLED = '__pawsOff_consentGhost_disabled';
@@ -39,9 +39,9 @@
   // feature flags mirror the same storage keys the content scripts read.
   var FEATS = ['banner', 'tracker', 'terms'];
 
-  var state = { originHash: null, host: '', filter: 'all', catches: [], allow: { v: 1, sites: {} }, features: { banner: true, tracker: true, terms: true }, radarExpanded: false, _radarLabels: {}, _radarResolveKey: '', _radarResolveAt: 0, _lastAll: {}, _learnedAvgKB: 0, _tabDnrBlocked: 0 };
+  var state = { originHash: null, host: '', filter: 'all', catches: [], allow: { v: 1, sites: {} }, features: { banner: true, tracker: true, terms: true }, _trackerNames: {}, radarExpanded: false, _radarLabels: {}, _radarResolveKey: '', _radarResolveAt: 0, _lastAll: {}, _learnedAvgKB: 0, _tabDnrBlocked: 0 };
 
-  // ── storage helpers ──
+  // storage helpers
   function getAll() {
     return new Promise(function (resolve) {
       try { chrome.storage.local.get(null, function (r) { resolve(r || {}); }); }
@@ -88,7 +88,7 @@
   // Human bandwidth estimate, uses REAL learned average transfer size per
   // third-party request, observed from the Performance API across browsing.
   // Falls back to 0 (no fake number) until enough data is learned.
-  var FALLBACK_AVG_KB = 0;  // no fake estimate — show 0 until we have real data
+  var FALLBACK_AVG_KB = 0;  // no fake estimate, show 0 until we have real data
   function formatSaved(kb) {
     if (!(kb > 0)) return '0 KB';
     if (kb >= 1024) return '~' + (kb / 1024).toFixed(1) + ' MB';
@@ -115,7 +115,7 @@
     return { blocked: blocked, banners: banners, saved: formatSaved(blocked * avgKB) };
   }
 
-  // ── activity donut (this site only) ──────────────────────────────────────
+  // activity donut (this site only)
   // PURE helpers so the chart logic is testable without a DOM. Colors are CSS
   // custom properties (var(--dn-*)) resolved by the stylesheet, so the gradient
   // string itself stays theme-agnostic.
@@ -165,7 +165,7 @@
     return 'Activity' + where + ': ' + bits.join(', ');
   }
 
-  // ── anonymous site report (user-sent email) ──────────────────────────────
+  // anonymous site report (user-sent email)
   // Builds a mailto: draft the user's OWN mail app opens; every line is visible
   // and editable before they choose to send. No identifiers, no network call
   // from the extension itself.
@@ -188,7 +188,7 @@
       '&body=' + encodeURIComponent(lines.join('\n'));
   }
 
-  // ── allow-list helpers (per-site pause + per-tracker allow) ──────────────
+  // allow-list helpers (per-site pause + per-tracker allow)
   // Prefer the shared model in window.PawsOffAllow; fall back to local pure
   // implementations so the popup still works if that script failed to load.
   function normDomain(input) {
@@ -209,7 +209,7 @@
     return normDomain(e.detail || e.label || '');
   }
 
-  // ── Readable tracker names ─────────────────────────────────────────────────
+  // Readable tracker names
   // DNR/EasyPrivacy gives only a url-filter substring, so a catch label is often
   // a bare filename like "gtagv4.js". This bundled map turns the common ones
   // into a company name + coarse type; unknown ones fall back to the domain
@@ -275,7 +275,7 @@
     if (dom && dom.indexOf('.') >= 0) return dom.replace(/^www\./, '');
     return 'Tracker';
   }
-  // Coarse type badge, or '' when unknown — never guess a category.
+  // Coarse type badge, or '' when unknown, never guess a category.
   function trackerType(e) {
     var m = trackerMatch(e);
     if (m) return m[2];
@@ -487,7 +487,7 @@
     label.textContent = mode === 'active' ? 'Active' : (mode === 'custom' ? 'Custom' : 'Paused');
   }
 
-  // ── per-site counts and headline values ──
+  // per-site counts and headline values
   function renderStats() {
     var banners = 0;
     state.catches.forEach(function (e) {
@@ -514,8 +514,8 @@
     var trackers = num(source[NET_TOTAL]) + num(source[PB_TOTAL]);
     var banners = num(source[CG_TOTAL]);
     var terms = num(source[TS_TOTAL]);
-    if (!trackers && !banners && !terms) return 'All time — counting locally';
-    return 'All time — ' + [
+    if (!trackers && !banners && !terms) return 'All time: counting locally';
+    return 'All time: ' + [
       plural(trackers, 'tracker', 'trackers'),
       plural(banners, 'banner', 'banners'),
       plural(terms, 'terms flag', 'terms flags')
@@ -536,7 +536,7 @@
     FEATS.forEach(function (feat) {
       var b = el('feat-' + feat);
       if (!b) return;
-      var on = state.features[feat] !== false;
+      var on = all[MASTER_KEY] !== false && state.features[feat] !== false;
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
       b.classList.toggle('is-off', !on);
     });
@@ -570,7 +570,7 @@
     renderToggles(state._lastAll);
   }
 
-  // ── feed ──
+  // feed
   /** A catch entry belongs to a different site than the one being viewed, so the
    *  per-site popup must skip it (no originHash filter => show everything). */
   function isFromOtherOrigin(e) {
@@ -590,20 +590,73 @@
       if (k.indexOf(CATCH_PREFIX) !== 0) return;
       var e = all[k]; if (!e) return;
       if (isFromOtherOrigin(e)) return;
-      items.push(e);
+      // A switched-off feature drops out of every number, not only the feed.
+      if (!featureEnabled(all, e.feature)) return;
+      items.push(namedCatch(e));
     });
     items.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
     // Keep EVERY banner/terms catch (rare + the point of the popup) and cap only
     // the high-volume trackers. A flat top-N slice would let dozens of newer
     // tracker records push a page's lone banner out of view → "0 banners".
     var kept = [];
+    var seenTerms = {};
     var trackerBudget = 80;
     for (var i = 0; i < items.length; i++) {
       var e2 = items[i];
       if (e2.feature === 'tracker') { if (trackerBudget > 0) { kept.push(e2); trackerBudget--; } }
+      else if (e2.feature === 'terms') {
+        // The same clause is recorded again on every visit to the policy page.
+        if (!seenTerms[e2.label]) { seenTerms[e2.label] = true; kept.push(e2); }
+      }
       else { kept.push(e2); }
     }
     state.catches = kept;
+    resolveTrackerNames(items);
+  }
+
+  // Network catches store a hash of the tracker rule, not its name. Ask the
+  // worker for the names once, then re-render so the feed can label them.
+  var HASH_RE = /^h:[0-9a-f]{8}$/;
+  // Terms catches written before 1.0.0 carry a label made from the category id.
+  // Safe to delete once those records have aged out of storage.
+  var LEGACY_TERMS_LABEL = {
+    'Data Sale': 'Sells or rents your data',
+    'Third Party Sharing': 'Shares data with third parties',
+    'Tracking Surveillance': 'Tracks you across sites or devices',
+    'Data Retention': 'Keeps your data indefinitely',
+    'Content License': 'Claims a licence to your content',
+    'Unilateral Change': 'Can change the terms at any time',
+    'Unilateral Termination': 'Can suspend or delete your account anytime',
+    'Arbitration Classwaiver': 'Forces arbitration / waives class action',
+    'Liability Waiver': 'Disclaims liability',
+    'Jurisdiction Choiceoflaw': 'Disputes governed by their chosen courts',
+    'Consent By Use': 'You agree just by using the site',
+    'Marketing Sharing': 'Uses your data for ads or marketing'
+  };
+  function namedCatch(e) {
+    if (e.feature === 'terms') {
+      var label = LEGACY_TERMS_LABEL[e.label];
+      return label ? Object.assign({}, e, { label: label }) : e;
+    }
+    if (e.source !== 'dnr' || !HASH_RE.test(e.detail || '')) return e;
+    var name = state._trackerNames[e.detail];
+    return name ? Object.assign({}, e, { detail: name }) : e;
+  }
+  function resolveTrackerNames(items) {
+    var wanted = {};
+    items.forEach(function (e) {
+      if (e.source === 'dnr' && HASH_RE.test(e.detail || '') && !(e.detail in state._trackerNames)) wanted[e.detail] = true;
+    });
+    var hashes = Object.keys(wanted);
+    if (!hashes.length) return;
+    // Mark as asked so an unknown hash is not requested again on every refresh.
+    hashes.forEach(function (h) { state._trackerNames[h] = ''; });
+    msgBg({ type: 'pawsoff_resolveTrackerHashes', hashes: hashes }).then(function (resp) {
+      if (!resp || !resp.ok || !resp.labels) return;
+      var found = false;
+      Object.keys(resp.labels).forEach(function (h) { state._trackerNames[h] = String(resp.labels[h]); found = true; });
+      if (found) scheduleRefresh();
+    });
   }
 
   function catColor(e) {
@@ -611,6 +664,15 @@
     if (e.feature === 'banner') return 'c-banner';
     if (e.feature === 'terms') return 'c-terms';
     var cat = (e.category || '').toLowerCase();
+    // Network catches carry only the generic category, so go by the known name.
+    if (!cat || cat === 'tracker') {
+      var known = trackerMatch(e);
+      var type = known ? known[2] : '';
+      if (type === 'Ads') return 'c-ad';
+      if (type === 'Session') return 'c-session';
+      if (type === 'Analytics') return 'c-analytics';
+      return 'c-other';
+    }
     if (cat.indexOf('ad') >= 0) return 'c-ad';
     if (cat.indexOf('social') >= 0) return 'c-social';
     if (cat.indexOf('finger') >= 0) return 'c-finger';
@@ -627,6 +689,13 @@
     return Math.floor(h / 24) + 'd ago';
   }
 
+  // Says why the feed is empty when the reason is not "nothing happened".
+  function emptyFeedText(all) {
+    try { if (chrome.extension && chrome.extension.inIncognitoContext) return 'Nothing is recorded in private windows. Blocking still works.'; } catch (_) {}
+    if (all && all[MASTER_KEY] === false) return 'Protection is paused.';
+    return 'No catches match this view yet.';
+  }
+
   function renderFeed() {
     var feed = el('trackers-list');
     if (!feed) return;
@@ -640,7 +709,7 @@
     if (!rows.length) {
       var empty = document.createElement('li');
       empty.className = 'tracker-empty';
-      empty.textContent = 'No catches match this view yet.';
+      empty.textContent = emptyFeedText(state._lastAll);
       feed.appendChild(empty);
       return;
     }
@@ -699,10 +768,10 @@
   // Session rec), plus Banners + Terms for the popup's non-tracker catches. Built
   // dynamically from what's on the page, keyed by the same catColor() class the
   // dots + chips use, so a chip only appears when there's something behind it.
-  var CAT_ORDER = ['c-analytics', 'c-ad', 'c-social', 'c-finger', 'c-session', 'c-banner', 'c-terms'];
+  var CAT_ORDER = ['c-analytics', 'c-ad', 'c-social', 'c-finger', 'c-session', 'c-other', 'c-banner', 'c-terms'];
   var CAT_LABEL = {
     'c-analytics': 'Analytics', 'c-ad': 'Ad network', 'c-social': 'Social',
-    'c-finger': 'Fingerprint', 'c-session': 'Session rec', 'c-banner': 'Banners', 'c-terms': 'Terms',
+    'c-finger': 'Fingerprint', 'c-session': 'Session rec', 'c-other': 'Other', 'c-banner': 'Banners', 'c-terms': 'Terms',
   };
   function renderFilters() {
     var wrap = el('filters-container');
@@ -735,7 +804,7 @@
     });
   }
 
-  // ── radar (OBSERVE-ONLY "spotted on this site", never counted as blocked) ──
+  // radar (OBSERVE-ONLY "spotted on this site", never counted as blocked)
   function radarVerdictLabel(v) {
     if (v === 'block') return 'High prevalence';
     if (v === 'cookieblock') return 'Limit cookies';
@@ -853,7 +922,7 @@
     refreshRadarLabels(spotted);
   }
 
-  // ── wiring ──
+  // wiring
   function onActivate(node, handler) {
     node.addEventListener('click', handler);
     // Native <button> already fires click on Enter/Space, synthesizing it again
@@ -934,7 +1003,7 @@
         }
       });
       // Clicking ANY other control (a feature pill, a filter chip, Reset...)
-      // while the menu is open must close it too — otherwise it stays visibly
+      // while the menu is open must close it too, otherwise it stays visibly
       // stuck open once focus leaves it (Escape only helps if focus is inside).
       document.addEventListener('click', function (ev) {
         if (pauseMenu.hidden) return;
@@ -950,8 +1019,13 @@
       if (b) onActivate(b, async function () {
         var on = b.getAttribute('aria-pressed') !== 'true';
         await persistFeat(feat, on);
+        // Turning one feature on while everything is paused lifts the pause.
+        if (on) await setKeys({ [MASTER_KEY]: true });
         state._lastAll = await getAll();
+        loadCatches(state._lastAll);
         renderToggles(state._lastAll);
+        renderStats();
+        renderHeadline();
         renderFeed();
         renderFilters();
         renderRadar(state._lastAll);
@@ -959,7 +1033,7 @@
     });
 
     // Anonymous report: mailto: needs a registered OS/browser mail handler,
-    // which many desktop setups lack, so this covers both paths — copy the
+    // which many desktop setups lack, so this covers both paths, copy the
     // report to the clipboard (always works) and also try to open the draft.
     var report = el('btn-report');
     if (report) onActivate(report, function () {
@@ -980,7 +1054,7 @@
           report.textContent = 'Copied for ' + REPORT_EMAIL;
         }, function () { /* clipboard denied → mailto attempt below still runs */ });
       } catch (_) { /* silent */ }
-      // 2) mailto via a real, user-activated anchor click — the standard way
+      // 2) mailto via a real, user-activated anchor click, the standard way
       // to trigger a protocol handler from a page; a no-op if no mail handler
       // is registered, so this never leaves a dead tab behind.
       try {
@@ -1024,7 +1098,7 @@
     if (opt) onActivate(opt, function () { try { chrome.runtime.openOptionsPage(); } catch (_) {} });
   }
 
-  // ── live sync: re-render whenever storage changes so catches tick up in real time ──
+  // live sync: re-render whenever storage changes so catches tick up in real time
   var refreshTimer = null;
   function liveRefresh() {
     getAll().then(function (all) {
@@ -1119,16 +1193,18 @@
         // and this re-render shows "Pause on this site" again.
         try { setInterval(function () { pullTabStats(); renderUnbreak(); }, 1000); } catch (_) {}
       }
-    } catch (_) { /* silent — never throw visibly */ }
+    } catch (_) { /* silent, never throw visibly */ }
   }
 
-  // ── Test-only export ──────────────────────────────────────────────────────
+  // Test-only export
   // Inert in the browser (extension pages have no CommonJS `module`); the Node
   // test harness injects a `module` object to read these pure helpers without
   // touching the DOM. Mirrors the content scripts' existing __test hook.
   try {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {
+        LEGACY_TERMS_LABEL: LEGACY_TERMS_LABEL,
+        emptyFeedText: emptyFeedText,
         hashHost: hashHost,
         num: num,
         formatSaved: formatSaved,

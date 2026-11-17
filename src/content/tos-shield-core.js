@@ -305,7 +305,7 @@
     if (normalized === 'A' || normalized === 'B') return { label: normalized, tone: 'good', summary: 'generally positive community rating' };
     if (normalized === 'C') return { label: normalized, tone: 'mixed', summary: 'mixed community rating' };
     if (normalized === 'D' || normalized === 'E') return { label: normalized, tone: 'poor', summary: 'poor community rating' };
-    return { label: '—', tone: 'unknown', summary: 'not yet rated by the community' };
+    return { label: '-', tone: 'unknown', summary: 'not yet rated by the community' };
   }
 
   function findingEvidenceLabel(finding) {
@@ -337,6 +337,8 @@
       weight: typeof pattern.weight === 'number' ? pattern.weight : 1,
       anchorRe,
       objectRe,
+      anchorScan: buildEvidenceRegex(pattern.anchors),
+      objectScan: buildEvidenceRegex(pattern.objects),
       modifierRe: buildAltRegex(pattern.modifiers),
       evidenceRe: buildEvidenceRegex(patternEvidenceTokens(pattern, config)),
       ignoreNegation: pattern.ignoreNegation === true,
@@ -354,13 +356,19 @@
     return 'h:' + hash.toString(16).padStart(8, '0');
   }
 
-  function policyChangeSummary(delta) {
-    const prefix = 'Policy text changed since your last visit.';
-    if (delta === 0) return prefix + ' Review the highlighted clauses for context.';
+  function categoriesPresent(snapshot) {
+    const counts = (snapshot && snapshot.byCategory) || {};
+    return Object.keys(counts).filter((id) => counts[id] > 0);
+  }
+
+  function policyChangeSummary(added, removed, delta) {
+    const parts = [];
+    if (added.length) parts.push(`New since your last visit: ${added.join(', ')}.`);
+    if (removed.length) parts.push(`No longer found: ${removed.join(', ')}.`);
+    if (parts.length) return parts.join(' ');
+    if (delta === 0) return 'A flagged clause was reworded since your last visit.';
     const count = Math.abs(delta);
-    const noun = count === 1 ? 'match' : 'matches';
-    const direction = delta > 0 ? 'more' : 'fewer';
-    return `${prefix} ${count} ${direction} local risk ${noun} detected.`;
+    return `${count} ${delta > 0 ? 'more' : 'fewer'} flagged ${count === 1 ? 'clause' : 'clauses'} since your last visit.`;
   }
 
   function normalizedPolicyText(text) {
@@ -384,7 +392,7 @@
   }
 
   function validPolicySnapshot(snapshot) {
-    if (!snapshot || snapshot.v !== 2) return false;
+    if (!snapshot || snapshot.v !== 3) return false;
     return /^sha256:[a-f0-9]{64}$/.test(String(snapshot.fingerprint || ''));
   }
 
@@ -417,13 +425,26 @@
       return `${options.policyPrefix}${siteHash.slice(2)}_${pathHash.slice(2)}`;
     }
 
+    // Compares the flagged clauses of two visits. Edits elsewhere on the page
+    // (dates, footers) leave the fingerprint alone and report nothing.
     function describePolicyChange(previous, current) {
       if (!validPolicySnapshot(previous) || !validPolicySnapshot(current)) return null;
+      // A different scanner version finds different clauses in the same text.
+      if (previous.scanner !== current.scanner) return null;
       if (previous.fingerprint === current.fingerprint) return null;
-      const before = Number(previous.total) || 0;
-      const after = Number(current.total) || 0;
-      const delta = after - before;
-      return { previousSeenAt: Number(previous.ts) || 0, delta, summary: policyChangeSummary(delta) };
+      const before = new Set(categoriesPresent(previous));
+      const after = new Set(categoriesPresent(current));
+      const label = options.categoryLabel || ((id) => id);
+      const added = Array.from(after).filter((id) => !before.has(id)).map(label);
+      const removed = Array.from(before).filter((id) => !after.has(id)).map(label);
+      const delta = (Number(current.total) || 0) - (Number(previous.total) || 0);
+      return {
+        previousSeenAt: Number(previous.ts) || 0,
+        delta,
+        added,
+        removed,
+        summary: policyChangeSummary(added, removed, delta),
+      };
     }
 
     return { validateConfig, policyFingerprint, policySnapshotKey, describePolicyChange };

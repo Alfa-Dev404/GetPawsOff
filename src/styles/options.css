@@ -17,7 +17,7 @@ header.po-top {
 
 header.po-top .word {
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 header.po-top .word .off {
@@ -47,16 +47,14 @@ section {
 .options-nav a {
   border: var(--po-border);
   border-radius: 999px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .promise-capsule {
   padding: 5px 10px;
   background: var(--po-surface);
   color: var(--po-ink-soft);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
 }
 
 .options-nav {
@@ -77,20 +75,19 @@ section {
   padding: 6px 10px;
   background: var(--po-paper);
   color: var(--po-ink);
-  font-size: 11px;
+  font-size: 12px;
   text-decoration: none;
-  transition: transform .08s ease, box-shadow .08s ease;
+  transition: var(--po-fade);
 }
 
 .options-nav a:hover,
 .options-nav a:focus-visible {
-  box-shadow: 2px 2px 0 var(--po-ink);
+  background: var(--po-raised);
   text-decoration: none;
-  transform: translate(-1px, -1px);
 }
 
 .options-nav a:focus-visible {
-  outline: 3px solid var(--po-accent);
+  outline: 2px solid var(--po-accent-2);
   outline-offset: 2px;
 }
 
@@ -114,9 +111,7 @@ section {
   padding: 5px 10px;
   background: var(--po-surface);
   color: var(--po-ink-soft);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
 }
 
 .options-intro,
@@ -132,31 +127,12 @@ section {
   flex: 1;
 }
 
-.sticker-teal {
-  background: var(--po-accent-2);
-}
-
-.sticker-green {
-  background: var(--po-go);
-}
-
-.sticker-amber {
-  background: var(--po-warn);
-  color: var(--po-ink);
-  text-shadow: none;
-  -webkit-text-stroke: 0;
-}
-
 .activity-head {
   justify-content: space-between;
 }
 
 .activity-copy {
   margin-bottom: 0;
-}
-
-.adaptive-sticker {
-  background: var(--po-accent-2);
 }
 
 .adaptive-card {
@@ -180,9 +156,9 @@ section {
   justify-content: space-between;
   gap: 16px;
   padding: 12px;
-  border: 2px solid var(--po-grid);
+  border: 1px solid var(--po-grid);
   border-radius: var(--po-radius-sm);
-  background: rgba(45, 128, 120, 0.08);
+  background: color-mix(in srgb, var(--po-accent-2) 8%, transparent);
 }
 
 .maintained-feed strong {
@@ -199,14 +175,19 @@ section {
   gap: 11px;
   align-items: start;
   padding: 12px;
-  border: 2px solid var(--po-grid);
+  border: 1px solid var(--po-grid);
   border-radius: var(--po-radius-sm);
   cursor: pointer;
+  transition: var(--po-fade);
+}
+
+.adaptive-mode:hover {
+  background: var(--po-raised);
 }
 
 .adaptive-mode:has(input:checked) {
   border-color: var(--po-accent-2);
-  box-shadow: 4px 4px 0 var(--po-grid);
+  background: color-mix(in srgb, var(--po-accent-2) 8%, transparent);
 }
 
 .adaptive-mode input {
@@ -232,12 +213,10 @@ section {
   margin-left: 5px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: var(--po-accent-2);
-  color: var(--po-paper);
-  font-size: 9px;
+  background: color-mix(in srgb, var(--po-accent-2) 16%, var(--po-surface));
+  color: var(--po-accent-2);
+  font-size: 11px;
   font-style: normal;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .adaptive-footer {
@@ -246,7 +225,7 @@ section {
   justify-content: space-between;
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px dashed var(--po-grid);
+  border-top: 1px solid var(--po-grid);
 }
 
 .adaptive-status {
@@ -283,7 +262,4 @@ section {
     scroll-behavior: auto;
   }
 
-  .options-nav a {
-    transition: none;
-  }
 }

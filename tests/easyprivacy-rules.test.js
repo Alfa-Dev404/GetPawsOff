@@ -9,7 +9,7 @@ const conv = require('../tools/easyprivacy-to-dnr');
 
 const { parseFilterLine, lineToRule, labelFor, convert } = conv;
 
-// ── parseFilterLine: skips ────────────────────────────────────────────────
+// parseFilterLine: skips
 test('parseFilterLine skips comments and headers', () => {
   eq(parseFilterLine('! a comment'), null);
   eq(parseFilterLine('[Adblock Plus 2.0]'), null);
@@ -37,7 +37,7 @@ test('parseFilterLine drops rules with inexpressible options', () => {
   eq(parseFilterLine('||ads.com^$badfilter'), null);
 });
 
-// ── parseFilterLine: accepts ───────────────────────────────────────────────
+// parseFilterLine: accepts
 test('parseFilterLine passes a plain domain-anchored block through', () => {
   const r = parseFilterLine('||doubleclick.net^');
   eq(r.type, 'block');
@@ -79,7 +79,7 @@ test('parseFilterLine ignores benign options without dropping the rule', () => {
   assert(r && r.type === 'block', 'still a block rule');
 });
 
-// ── lineToRule / labelFor ─────────────────────────────────────────────────
+// lineToRule / labelFor
 test('lineToRule assigns id and allow>block priority', () => {
   eq(lineToRule('||t.com^', 7).priority, 1);
   eq(lineToRule('||t.com^', 7).id, 7);
@@ -92,7 +92,7 @@ test('labelFor extracts the domain from a urlFilter', () => {
   assert(labelFor({ urlFilter: '/pagead/conversion.js' }).length > 0, 'non-empty label for a path filter');
 });
 
-// ── convert ───────────────────────────────────────────────────────────────
+// convert
 test('convert assigns sequential ids, dedupes, and counts', () => {
   const text = [
     '! header',
@@ -113,7 +113,7 @@ test('convert assigns sequential ids, dedupes, and counts', () => {
   assert(out.meta[1] && out.meta[1].length > 0, 'meta has a label for id 1');
 });
 
-// ── generated ruleset integrity ───────────────────────────────────────────
+// generated ruleset integrity
 const RULES = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'rules', 'easyprivacy.json'), 'utf8'));
 const META = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'rules', 'easyprivacy-meta.json'), 'utf8'));
 
@@ -156,7 +156,7 @@ test('meta map covers every rule id with a non-empty label', () => {
   }
 });
 
-// ── Consent-manager core assets are never blocked ──────────────────────
+// Consent-manager core assets are never blocked
 const { isConsentManagerAsset } = conv;
 
 test('isConsentManagerAsset flags CMP core scripts/workers/vendor-list', () => {

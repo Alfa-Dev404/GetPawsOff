@@ -1,4 +1,4 @@
-/* PawsOff — Tier-1 unit tests for the "Today's catch" popup logic (popup.js).
+/* PawsOff, Tier-1 unit tests for the "Today's catch" popup logic (popup.js).
  *
  * The popup's rendering is DOM (Tier-2/jsdom), but the decisions behind it are
  * pure and user-visible, so they get locked down here:
@@ -263,7 +263,7 @@ test('loadCatches: per-site filter, banners kept, trackers capped', () => {
   // newer tracker records pushed the early banner out of the window → "0 banners").
   const many = {};
   for (let i = 0; i < 100; i++) many['__pawsOff_catch_t' + i] = { ts: i + 10, originHash: 'h:11111111', feature: 'tracker' };
-  many['__pawsOff_catch_banner'] = { ts: 1, originHash: 'h:11111111', feature: 'banner' }; // OLDEST — a flat top-N cap would drop it
+  many['__pawsOff_catch_banner'] = { ts: 1, originHash: 'h:11111111', feature: 'banner' }; // OLDEST, a flat top-N cap would drop it
   loadCatches(many);
   const banners = st.catches.filter((e) => e.feature === 'banner');
   const trackers = st.catches.filter((e) => e.feature === 'tracker');
@@ -271,7 +271,7 @@ test('loadCatches: per-site filter, banners kept, trackers capped', () => {
   eq(trackers.length, 80, 'trackers are capped at the budget');
 });
 
-// ── readable tracker names + grouping (the "gtagv4.js × 60" fix) ─────────────
+// readable tracker names + grouping (the "gtagv4.js × 60" fix)
 test('trackerLabel: maps EasyPrivacy url-filter patterns to company names', () => {
   const { trackerLabel } = P;
   eq(trackerLabel({ feature: 'tracker', detail: 'gtagv4.js', label: 'gtagv4.js' }), 'Google Analytics');
@@ -309,7 +309,7 @@ test('groupCatches: collapses duplicates into one row with a count + latest ts',
   eq(groups[1].count, 1);
 });
 
-// ── activity donut (pure chart logic) ────────────────────────────────────────
+// activity donut (pure chart logic)
 
 test('donutSegments: splits catches by feature and folds live DNR count into trackers', () => {
   const { internals: I } = loadPopup();
@@ -346,7 +346,7 @@ test('donutAriaLabel: readable summary, honest zero state, skips empty segments'
     'No activity recorded on example.com yet');
 });
 
-// ── timed pause helpers (popup side) ────────────────────────────────────────
+// timed pause helpers (popup side)
 
 test('pauseUntilFromChoice: minutes map to an absolute expiry; 0 = indefinite', () => {
   const { internals: I } = loadPopup();
@@ -367,7 +367,7 @@ test('pauseLeftMs/pauseLeftLabel: remaining time flows through to the button cop
   eq(I.pauseLeftLabel(-1), '');
 });
 
-// ── anonymous report (mailto draft) ─────────────────────────────────────────
+// anonymous report (mailto draft)
 
 test('buildReportMailto: correct inbox, encoded fields, and ONLY the expected fields', () => {
   const { internals: I } = loadPopup();
@@ -420,9 +420,56 @@ test('allTimeSummary: singular forms, and a zero state that promises nothing', (
   assert(one.indexOf('1 banner ') !== -1, 'singular banner: ' + one);
   assert(one.indexOf('1 terms flag') !== -1, 'singular flag: ' + one);
 
-  eq(P.allTimeSummary({}), 'All time — counting locally');
-  eq(P.allTimeSummary(undefined), 'All time — counting locally');
+  eq(P.allTimeSummary({}), 'All time: counting locally');
+  eq(P.allTimeSummary(undefined), 'All time: counting locally');
   // Corrupt/absent counters must not render NaN at the user.
   const bad = P.allTimeSummary({ [P.NET_TOTAL]: 'x', [P.PB_TOTAL]: null, [P.CG_TOTAL]: {} });
-  eq(bad, 'All time — counting locally');
+  eq(bad, 'All time: counting locally');
+});
+
+test('loadCatches: switched-off features and repeated terms flags drop out of every number', () => {
+  const st = getState();
+  st.originHash = 'h:11111111';
+  const here = (feature, extra) => ({ originHash: 'h:11111111', feature, ...extra });
+  const all = {
+    '__pawsOff_catch_a': here('terms', { ts: 1, label: 'Sells or rents your data' }),
+    '__pawsOff_catch_b': here('terms', { ts: 2, label: 'Sells or rents your data' }), // same clause, second visit
+    '__pawsOff_catch_c': here('terms', { ts: 3, label: 'Uses your data to train AI' }),
+    '__pawsOff_catch_d': here('banner', { ts: 4 }),
+  };
+  loadCatches(all);
+  eq(st.catches.filter((c) => c.feature === 'terms').length, 2, 'one row per distinct clause');
+  loadCatches({ ...all, __pawsOff_tosShield_settings: { enabled: false } });
+  eq(st.catches.filter((c) => c.feature === 'terms').length, 0, 'terms catches hidden while ToS Shield is off');
+  eq(st.catches.length, 1, 'other features unaffected');
+});
+
+test('catColor: network catches are grouped by known name, unknown ones as Other', () => {
+  eq(catColor({ feature: 'tracker', category: 'Tracker', detail: 'gtagv4.js', source: 'dnr' }), 'c-analytics');
+  eq(catColor({ feature: 'tracker', category: 'Tracker', detail: 'doubleclick.net', source: 'dnr' }), 'c-ad');
+  eq(catColor({ feature: 'tracker', category: 'Tracker', detail: 'h:1a2b3c4d', source: 'dnr' }), 'c-other', 'an unresolved hash is not called Analytics');
+});
+
+test('legacy terms labels map to the labels ToS Shield ships today', () => {
+  const { loadTosShield } = require('./harness/sandbox');
+  const byId = {};
+  loadTosShield().internals.DEFAULT_CONFIG.categories.forEach((c) => { byId[c.id] = c.label; });
+  const humanize = (id) => id.replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  const legacyIds = ['data_sale', 'third_party_sharing', 'tracking_surveillance', 'data_retention', 'content_license',
+    'unilateral_change', 'unilateral_termination', 'arbitration_classwaiver', 'liability_waiver',
+    'jurisdiction_choiceoflaw', 'consent_by_use', 'marketing_sharing'];
+  legacyIds.forEach((id) => eq(P.LEGACY_TERMS_LABEL[humanize(id)], byId[id], id));
+  const st = getState();
+  st.originHash = 'h:11111111';
+  loadCatches({
+    '__pawsOff_catch_a': { ts: 1, originHash: 'h:11111111', feature: 'terms', label: 'Data Sale' },
+    '__pawsOff_catch_b': { ts: 2, originHash: 'h:11111111', feature: 'terms', label: 'Sells or rents your data' },
+  });
+  eq(st.catches.length, 1, 'an old and a new record of the same clause collapse into one');
+  eq(st.catches[0].label, 'Sells or rents your data');
+});
+
+test('emptyFeedText: explains a paused state', () => {
+  eq(P.emptyFeedText({ __pawsOff_master_enabled: false }), 'Protection is paused.');
+  eq(P.emptyFeedText({}), 'No catches match this view yet.');
 });

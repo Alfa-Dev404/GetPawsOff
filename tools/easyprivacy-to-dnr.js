@@ -37,7 +37,7 @@ var RESOURCE_MAP = {
 // `important` is handled explicitly (it changes precedence), so it is NOT here.
 var IGNORE_OPTS = { all: 1, popup: 1 };
 
-// ── Consent-manager CORE assets - NEVER block these ────────────────────────
+// Consent-manager CORE assets - NEVER block these
 // A CMP's own bootstrap script / web-worker / IAB Global Vendor List is HOW a
 // consent banner renders and how the user's reject is applied. If we block it,
 // the banner can't initialise -> can't be rejected -> it re-injects/reloads
@@ -254,7 +254,7 @@ module.exports = {
 	RESOURCE_MAP: RESOURCE_MAP,
 };
 
-// ── CLI: node tools/easyprivacy-to-dnr.js <outDir> <file...> ────────────────
+// CLI: node tools/easyprivacy-to-dnr.js <outDir> <file...>
 if (require.main === module) {
 	var fs = require('fs');
 	var path = require('path');

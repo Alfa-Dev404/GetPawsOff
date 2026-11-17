@@ -1,40 +1,98 @@
-/* PawsOff dark theme for extension pages (options, and any future page that
- * opts in by linking this AFTER po-ui.css). Same design language as the popup:
- * deep pine surfaces, warm paper text, icon-orange accent, hard offset shadows.
- * po-ui.css is token-driven, so this file only re-points the --po-* tokens
- * (plus a couple of contrast fixes); the shared stylesheet stays untouched for
- * pages that remain light. */
+/* Dark theme for extension pages. Link it after po-ui.css.
+ * It re-points the --po-* tokens to the popup palette, then flattens the
+ * components whose outlined shape is fixed in po-ui.css. */
 
 :root {
   color-scheme: dark;
 
-  --po-paper:      #101613;   /* deep pine base (matches the popup) */
-  --po-grid:       rgba(242, 237, 227, 0.045);
-  --po-surface:    #1c2722;   /* cards */
-  --po-ink:        #f2ede3;   /* warm paper text + outlines */
-  --po-ink-soft:   #a7b0a5;   /* secondary text */
+  /* Surfaces, darkest to lightest. */
+  --po-paper:      #14161a;
+  --po-surface:    #1e2227;
+  --po-raised:     #2a2f36;
+  --po-grid:       rgba(255, 255, 255, 0.07);
+  --po-control:    #7b8590;   /* control outlines, 3:1 or better on every surface */
 
-  --po-accent:     #ff5e3a;   /* icon orange */
-  --po-accent-2:   #3fa89e;   /* teal, lightened for dark contrast */
-  --po-go:         #2fbf71;
-  --po-warn:       #f5c518;
+  --po-ink:        #e6e8eb;
+  --po-ink-soft:   #9aa3ad;
 
-  /* Hard shadows/borders read better in the edge color than in light ink. */
-  --po-edge:       #0a0d0c;
-  --po-shadow:     4px 4px 0 var(--po-edge);
-  --po-shadow-sm:  3px 3px 0 var(--po-edge);
-  --po-border:     2px solid var(--po-edge);
+  /* One accent, as in the popup. */
+  --po-accent:     #d98a6a;
+  --po-accent-2:   var(--po-accent);
+  --po-go:         var(--po-accent);
+  --po-warn:       #c3c9d1;
+
+  --po-radius:     14px;
+  --po-radius-sm:  10px;
+  --po-shadow:     none;
+  --po-shadow-sm:  none;
+  --po-border:     1px solid transparent;
+
+  --po-ease:       cubic-bezier(0.2, 0, 0, 1);
+  --po-fade:       background-color .18s var(--po-ease), color .18s var(--po-ease), border-color .18s var(--po-ease), transform .18s var(--po-ease);
 }
 
-/* Small bold labels sitting on accent/go/warn chips need dark text for AA. */
-.po-sticker { color: #14100c; }
+/* No graph-paper grid. */
+html, body { background-image: none; }
 
-/* The header logo is the packaged icon now; keep it crisp on dark. */
+/* Section headings are plain type, not a rotated sticker. */
+.po-sticker {
+  padding: 0;
+  background: none;
+  color: var(--po-ink);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  transform: none;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
+.po-title { font-weight: 600; }
+.po-stat  { font-weight: 600; }
+
+.po-btn {
+  background: var(--po-raised);
+  font-weight: 600;
+  transition: var(--po-fade);
+}
+.po-btn:hover  { transform: none; box-shadow: none; background: color-mix(in srgb, var(--po-ink) 12%, var(--po-raised)); }
+.po-btn:active { transform: scale(0.97); box-shadow: none; }
+.po-btn.accent { background: color-mix(in srgb, var(--po-accent) 16%, var(--po-surface)); color: var(--po-accent); }
+
+.po-input {
+  border-color: var(--po-control);
+  background: var(--po-paper);
+  transition: var(--po-fade);
+}
+.po-input:focus-visible,
+.po-toggle input:focus-visible ~ .track { outline: 2px solid var(--po-accent-2); }
+
+/* The track keeps an outline so the off state is visible against the card. */
+.po-toggle .track { border-color: var(--po-control); background: var(--po-raised); transition: var(--po-fade); }
+.po-toggle .thumb { border: 0; background: var(--po-ink-soft); transition: var(--po-fade), transform .24s var(--po-ease); }
+.po-toggle input:checked ~ .track { border-color: transparent; background: color-mix(in srgb, var(--po-go) 60%, var(--po-raised)); }
+.po-toggle input:checked ~ .track .thumb { background: var(--po-ink); }
+
+.po-pill {
+  background: color-mix(in srgb, var(--po-warn) 16%, var(--po-surface));
+  color: var(--po-warn);
+  font-weight: 600;
+}
+
+.po-divider { border-top: 1px solid var(--po-grid); }
+/* Rows sit on the page, not in a card, so they carry the card surface. */
+.po-list .item { padding: 10px 14px; background: var(--po-surface); transition: var(--po-fade); }
+.po-list .item:hover { background: var(--po-raised); }
+.po-list .item .name { font-weight: 600; }
+
 .po-top .logo-img {
   width: 34px;
   height: 34px;
   display: block;
-  border: var(--po-border);
   border-radius: 10px;
-  box-shadow: var(--po-shadow-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
 }

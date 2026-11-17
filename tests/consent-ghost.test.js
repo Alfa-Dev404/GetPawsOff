@@ -1,4 +1,4 @@
-/* PawsOff — Tier-1 unit tests for Consent Autopilot (consent-ghost.js).
+/* PawsOff, Tier-1 unit tests for Consent Autopilot (consent-ghost.js).
  *
  * Covers the PURE, side-effect-free core of the content script:
  *   - phrase → regex compilation (escapeRe, phrasesToRegexes) and the anchored,
@@ -83,14 +83,14 @@ test('consentGhost: the Jest-style hook exposes the pure helpers', () => {
   });
 });
 
-// ── escapeRe ───────────────────────────────────────────────────────
+// escapeRe
 test('escapeRe: neutralises regex metacharacters so phrases match literally', () => {
   const re = new RegExp('^' + escapeRe('a.b*c(d)') + '$');
   assert(re.test('a.b*c(d)'), 'literal string matches itself');
   assert(!re.test('axbxcxd'), '. and * are not treated as wildcards');
 });
 
-// ── phrasesToRegexes ───────────────────────────────────────────────
+// phrasesToRegexes
 test('phrasesToRegexes: anchored to the whole label (no substring matches)', () => {
   const [re] = phrasesToRegexes(['reject all']);
   assert(re.test('reject all'), 'exact label matches');
@@ -110,7 +110,7 @@ test('phrasesToRegexes: skips malformed phrases without throwing', () => {
   assert(out.length >= 1, 'the valid phrase still compiles');
 });
 
-// ── detectLangs / buildPatterns / flatPhrases ─────────────────────────────
+// detectLangs / buildPatterns / flatPhrases
 test('detectLangs: default stub reports the page language (en)', () => {
   const langs = detectLangs();
   assert(Array.isArray(langs), 'returns an array');
@@ -140,7 +140,7 @@ test('flatPhrases: lowercased and sorted longest-first (specificity wins)', () =
   flat.forEach((p) => assert(p === p.toLowerCase(), 'phrase is lowercased'));
 });
 
-// ── classifier: looksReject / looksAccept ───────────────────────────────
+// classifier: looksReject / looksAccept
 test('looksReject: plain reject labels are recognised', () => {
   assert(looksReject('reject all'), '"reject all" reads as reject');
   assert(!looksReject('accept all'), '"accept all" does not read as reject');
@@ -153,7 +153,7 @@ test('looksAccept: "Accept All Cookies" reads as ACCEPT (longest-hit veto)', () 
 
 test('classifier: a pay-or-consent subscribe wall is untouchable (neither)', () => {
   // "subscribe" alone, and the French "refuser et s'abonner" which literally
-  // contains a reject word — both must classify as NEITHER reject nor accept.
+  // contains a reject word, both must classify as NEITHER reject nor accept.
   assert(!looksReject('subscribe'), 'subscribe is not a free reject');
   assert(!looksAccept('subscribe'), 'subscribe is not an accept either');
   assert(!looksReject("refuser et s'abonner"), 'paywall reject-word does not trigger a click');
@@ -166,7 +166,7 @@ test('looksPreferences: recognises a manage/settings opener, not a reject', () =
   assert(!looksPreferences(''), 'empty label is not a preferences opener');
 });
 
-// ── btnText / heuristicLabel / isAcceptLabel ────────────────────────────
+// btnText / heuristicLabel / isAcceptLabel
 test('btnText: normalises whitespace and falls back to aria-label', () => {
   eq(btnText(el('  Reject   All ')), 'Reject All', 'collapses + trims whitespace');
   eq(btnText(el('', { 'aria-label': 'Reject all' })), 'Reject all', 'aria-label fallback when no text');
@@ -221,7 +221,7 @@ test('isConsentRoleTarget: requires positive evidence for each declared action',
   assert(!isConsentRoleTarget(el('Ablehnen und speichern'), 'directReject'), 'localized reject-and-save action is not clicked');
 });
 
-// ── normalizeRemoteConfig — the remote-config trust boundary ──────────────
+// normalizeRemoteConfig, the remote-config trust boundary
 test('normalizeRemoteConfig: accepts a valid v1 config and filters bad selectors', () => {
   const out = normalizeRemoteConfig({
     schemaVersion: 1,
@@ -360,10 +360,10 @@ test('normalizeRemoteConfig: NEVER adopts a remote action-steps engine (MV3 poli
     frameworks: [{ name: 'Evil', containerSelector: '.e', rejectSelectors: ['.r'], steps: [{ action: 'click', selector: '.anything' }] }],
   });
   assert(out && out.length === 1, 'framework still usable');
-  assert(!('steps' in out[0]), 'remote steps engine is stripped — no remotely-controlled behavior');
+  assert(!('steps' in out[0]), 'remote steps engine is stripped, no remotely-controlled behavior');
 });
 
-// ── bundled config sanity ──────────────────────────────────────────
+// bundled config sanity
 test('BUNDLED_CONSENT_CONFIG: every entry is structurally well-formed', () => {
   assert(Array.isArray(BUNDLED_CONSENT_CONFIG) && BUNDLED_CONSENT_CONFIG.length > 0, 'non-empty fallback');
   BUNDLED_CONSENT_CONFIG.forEach((f) => {
@@ -375,7 +375,7 @@ test('BUNDLED_CONSENT_CONFIG: every entry is structurally well-formed', () => {
 });
 
 // A "hide"/"close" API call dismisses the notice UI without confirming the
-// user rejected tracking — Didomi's actual behavior on a bare dismiss varies
+// user rejected tracking, Didomi's actual behavior on a bare dismiss varies
 // by publisher config, so it must never be treated as a verified reject
 // (CodeRabbit finding, 2026-07-03: [onclick*="Didomi.notice.hide"] was
 // removed from Didomi's rejectSelectors for exactly this reason).

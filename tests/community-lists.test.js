@@ -24,7 +24,7 @@ const AUTOCONSENT_OPTIONS = Object.freeze({
   v2ConfigVersion: '20260714000000.2',
 });
 
-// ── Replicated ConsentGhost validators (must stay in sync with consent-ghost.js)
+// Replicated ConsentGhost validators (must stay in sync with consent-ghost.js)
 function cgUsable(cfg) {
   return !!cfg && cfg.schemaVersion === 1 && Array.isArray(cfg.frameworks);
 }
@@ -63,7 +63,7 @@ function loadFixture(name) {
   return JSON.parse(fs.readFileSync(path.resolve(__dirname, 'fixtures', name), 'utf8'));
 }
 
-// ─────────────────────────────── autoconsent ───────────────────────────────
+// autoconsent
 test('autoconsent: parseRule pulls container + splits comma-joined reject selectors', () => {
   const rules = loadFixture('autoconsent-sample.json');
   const e = ac.parseRule(rules[0]);
@@ -205,7 +205,7 @@ test('autoconsent: release versions are explicit and monotonic', () => {
   assert(byteCapRejected, 'aggregate input bytes are bounded before file reads');
 });
 
-// ──────────────────────────────────  ToS;DR  ───────────────────────────────
+// ToS;DR
 test('tosdr: parseService keeps only bad/blocker points and maps grade + hosts', () => {
   const svcs = loadFixture('tosdr-sample.json');
   const p = td.parseService(svcs[0]);
@@ -334,7 +334,7 @@ test('tosdr: untrusted collection and serialized-output caps fail closed', () =>
   assert(outputRejected, 'serialized byte cap enforced');
 });
 
-// ─────────────────────────────── whotracks.me ──────────────────────────────
+// whotracks.me
 test('whotracksme: domains are grouped by company into first-party sets (>=2)', () => {
   const { config } = wtm.convert(loadFixture('whotracksme-sample.json'), CATALOG_METADATA);
   const googleSet = config.firstPartySets.find((s) => s.indexOf('google.com') !== -1);
@@ -487,7 +487,7 @@ test('tosdr: deterministic config version is mandatory', () => {
   eq(td.convert(loadFixture('tosdr-sample.json'), TOSDR_OPTIONS).config.configVersion, TOSDR_OPTIONS.configVersion);
 });
 
-// ── Generated artifacts (present only after a build run) stay drop-in valid ──
+// Generated artifacts (present only after a build run) stay drop-in valid
 test('generated consent artifact, if built, is drop-in valid', () => {
   const p = path.resolve(__dirname, '../dist-lists/consent-ghost/consent-config.json');
   if (!fs.existsSync(p)) return; // built in CI / sample run only

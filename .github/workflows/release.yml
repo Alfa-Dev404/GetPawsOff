@@ -1,0 +1,38 @@
+name: Release package
+
+# Pushing a tag like v1.0.1 tests the code, builds the Store zip, and attaches it
+# to a GitHub release. Uploading that zip to the Chrome Web Store stays a manual
+# step: publishing to live users should be a deliberate human action.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - run: npm test
+      - name: Tag must match manifest version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./manifest.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest version $version"
+            exit 1
+          fi
+      - run: npm run pack
+      - name: Publish GitHub release with the zip and its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha256sum getpawsoff.zip > getpawsoff.zip.sha256
+          gh release create "$GITHUB_REF_NAME" getpawsoff.zip getpawsoff.zip.sha256 --generate-notes

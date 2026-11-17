@@ -1,4 +1,4 @@
-/* PawsOff — GEDI (Sourcepoint) own consent rule unit tests.
+/* PawsOff, GEDI (Sourcepoint) own consent rule unit tests.
  *
  * Exercises src/content/pawsoff-consent-rules.js (PawsOff-authored, NOT
  * autoconsent) against the shared engine + a tiny fake DOM. Covers: the
@@ -14,7 +14,7 @@ const own = require('../src/content/pawsoff-consent-rules.js');
 
 const GEDI = own.rules.find((r) => r.name === 'pawsoff-gedi-cmp');
 
-/* ---- minimal fake DOM (mirrors consent-autoconsent.test.js) ---- */
+/* minimal fake DOM (mirrors consent-autoconsent.test.js) */
 function tokenize(sel) {
   const t = { tag: null, id: null, cls: [], attrs: [] };
   let s = sel.trim();
@@ -128,9 +128,9 @@ function buildGediDom(opts) {
   return doc;
 }
 
-/* ---------------------------------------------------------------------------
+/*
  * Tests
- * ------------------------------------------------------------------------- */
+  */
 test('GEDI rule: URL gate matches mastheads and rejects spoofs', () => {
   assert(GEDI, 'GEDI rule is present');
   const re = new RegExp(GEDI.runContext.urlPattern);

@@ -1,10 +1,10 @@
-// pixel-block.js, PawsOff — Multi-provider email tracking-pixel protection.
+// pixel-block.js, PawsOff, Multi-provider email tracking-pixel protection.
 //
 // Finds tracking pixels (usually 1x1 transparent images) inside opened emails
 // and stops them phoning home. Two layers:
-//   PRIMARY  — declarativeNetRequest blocks known tracker domains at the
+//   PRIMARY , declarativeNetRequest blocks known tracker domains at the
 //              network level (request never leaves the browser).
-//   FALLBACK — DOM rewriting swaps the src of suspected pixels for a local
+//   FALLBACK, DOM rewriting swaps the src of suspected pixels for a local
 //              transparent data URI; catches unknown senders DNR can't know
 //              about, and is the source of per-block stats DNR can't give us.
 //
@@ -18,7 +18,7 @@
 // subject, sender, or full URLs); unique-key storage writes only; never touch
 // DOM nodes we didn't create beyond rewriting <img> src/srcset.
 //
-// ─── MANIFEST host_permissions REQUIRED ────────────────────────────────────
+// MANIFEST host_permissions REQUIRED
 //   https://mail.google.com/*      https://mail.proton.me/*
 //   https://mail.protonmail.com/*  https://mail.zoho.com/*
 //   https://mail.zoho.in/*         https://mail.zoho.eu/*
@@ -28,9 +28,9 @@
 //   https://mail.tutanota.com/*    https://www.icloud.com/mail*
 //
 //   content_scripts entry needs "all_frames": true for same-origin email
-//   iframes; does NOT help cross-origin iframes (iCloud — see iframeLimited).
+//   iframes; does NOT help cross-origin iframes (iCloud, see iframeLimited).
 //
-// ─── MANIFEST declarativeNetRequest REQUIRED ───────────────────────────────
+// MANIFEST declarativeNetRequest REQUIRED
 //   Content scripts can't call the DNR API directly, so PixelBlock builds
 //   dynamic rules from TRACKING_DOMAINS and forwards them to the background
 //   worker via { type: 'pawsoff_pixelBlock_dnr', op, rules, removeRuleIds },
@@ -40,18 +40,18 @@
 (function () {
   'use strict';
 
-  // ── Double-run guard ───────────────────────────────────────────────────────
+  // Double-run guard
   // Per-frame isolated world: if we already initialised in this frame, bail.
   if (typeof window.__pawsOff_pixelBlock_init === 'function') return;
 
-  // ── Transparent 1x1 PNG used to neutralise a tracker src ──────────────────
+  // Transparent 1x1 PNG used to neutralise a tracker src
   // A real, decodable image so layout never breaks and no broken-image icon
   // appears. Local data URI → zero network request.
   const TRANSPARENT_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
     'AAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-  // ── Storage keys ───────────────────────────────────────────────────────────
+  // Storage keys
   const SETTINGS_KEY  = '__pawsOff_pixelBlock_settings';
   const ALLOW_KEY     = '__pawsOff_allowlist'; // per-site pause + per-tracker allow (written by the popup)
   const EVENT_PREFIX  = '__pawsOff_pixelBlock_event_'; // block events → getStats()
@@ -62,12 +62,12 @@
   // Monotonic blocked-pixel counter, never pruned, so popup totals never plateau.
   const PB_TOTAL_KEY  = '__pawsOff_pb_total_blocked';
 
-  // ── declarativeNetRequest rule id space ───────────────────────────────────
+  // declarativeNetRequest rule id space
   // One dynamic rule per provider, so a per-provider toggle maps to add/remove
   // of a single rule. 9100.. is reserved for PixelBlock.
   const DNR_RULE_ID_BASE = 9100;
 
-  // ── Known tracking domains ───────────────────────────────────────────────
+  // Known tracking domains
   // Single source of truth for BOTH the DNR ruleset (network block) and the DOM
   // fallback. Matched by exact hostname OR as a parent suffix (host endsWith
   // '.' + entry), so 'klaviyo.com' also catches 'trk.klaviyo.com', etc.
@@ -91,7 +91,7 @@
     'benchmarkemail.com', 'moosend.com', 'mailjet.com',
   ];
 
-  // ── Heuristic patterns (catch unknown senders) ────────────────────────────
+  // Heuristic patterns (catch unknown senders)
   // STRONG signals → block before the request fires (pre-load rewrite); these
   //   path/query tokens are unambiguous tracking endpoints.
   // WEAK signals → too generic to pre-block (would break legitimate images), so
@@ -101,7 +101,7 @@
   const TRACKER_QUERY_STRONG = ['trk=', 'tracking_id=', 'mtm_=', 'mc_eid=', 'mid=email'];
   const TRACKER_QUERY_WEAK   = ['qs=', 'sig='];
 
-  // ── Provider configuration ─────────────────────────────────────────────────
+  // Provider configuration
   // id is the slug used for the per-provider settings toggle and for storage.
   const PROVIDER_CONFIG = [
     {
@@ -111,7 +111,7 @@
       emailBodySelectors: ['.ii.gt', '.a3s.aiL', '[data-message-id] .ii'],
       excludeSelectors: ['.aeH', '.G-atb', '.gb_', '[id=":0"]'],
       // Gmail proxies remote images through googleusercontent (server-side,
-      // already IP-shielding) — never block these.
+      // already IP-shielding), never block these.
       legitimateProxies: [
         'mail-attachment.googleusercontent.com',
         'ci3.googleusercontent.com',
@@ -192,7 +192,7 @@
       name: 'iCloud Mail',
       id: 'icloud',
       hosts: ['www.icloud.com'],
-      // iCloud renders email in a cross-origin sandboxed iframe — unreachable
+      // iCloud renders email in a cross-origin sandboxed iframe, unreachable
       // by a content script or all_frames injection. Detect the host, skip
       // scanning, surface the limitation via getStats().
       emailBodySelectors: [],
@@ -203,7 +203,7 @@
     },
   ];
 
-  // ── Runtime state (closure-private; nothing on window can mutate it) ───────
+  // Runtime state (closure-private; nothing on window can mutate it)
   const state = {
     provider: null,       // resolved PROVIDER_CONFIG entry for this host
     settings: null,       // last known settings object
@@ -215,7 +215,7 @@
     allowOriginHash: null,           // FNV digest of this frame's host, for allow lookups
   };
 
-  // Isolated-world WeakSets, not data-pawsoff-* DOM attributes — attributes
+  // Isolated-world WeakSets, not data-pawsoff-* DOM attributes, attributes
   // would announce "this user runs PawsOff" to the page and any other
   // installed extension. WeakSets are invisible to the page and
   // garbage-collect with the element.
@@ -223,9 +223,7 @@
   const _probed  = new WeakSet(); // images we already attached a 1x1 size-probe to
   const _scanned = new WeakSet(); // containers we already swept
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Small utilities
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Generate a short random suffix for unique storage keys.
@@ -259,11 +257,9 @@
     }
   }
 
-  // ───────────────────────────────────────────────────────────────────────
-  //  Allow-list gate (DOM tier), mirrors the network-tier DNR allow rules —
+  //  Allow-list gate (DOM tier), mirrors the network-tier DNR allow rules,
   //  un-breaking a site or allowing a domain in the popup stops this frame
   //  from neutralizing it too. DNR stays authoritative; this is best-effort.
-  // ───────────────────────────────────────────────────────────────────────
   function _poAllow() {
     return (typeof window !== 'undefined' && window.PawsOffAllow) ? window.PawsOffAllow : null;
   }
@@ -313,7 +309,7 @@
   }
 
   /**
-   * One-way FNV-1a/32 digest of a hostname for local log de-identification —
+   * One-way FNV-1a/32 digest of a hostname for local log de-identification,
    * so the event log can't be read back as a plaintext site list. Never
    * transmitted; a privacy de-identifier, not a security primitive.
    * @param {string} host
@@ -343,9 +339,7 @@
     return false;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  declarativeNetRequest, PRIMARY (network-level) block layer
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Stable DNR rule id for a provider (one rule per provider).
@@ -385,7 +379,7 @@
   function providerSupportsDnr() {
     return !!state.provider && !state.provider.iframeLimited;
   }
-  /** Ask the background to register this provider's DNR rule (top frame only —
+  /** Ask the background to register this provider's DNR rule (top frame only,
    *  rules are extension-global, one registration is enough). */
   function registerDnr() {
     try {
@@ -401,7 +395,7 @@
           removeRuleIds: [rule.id], // replace any stale rule with the same id
         },
         (resp) => {
-          // Only mark registered once confirmed — a dropped message must not
+          // Only mark registered once confirmed, a dropped message must not
           // make us believe DNR is active when only the DOM tier is running.
           if (chrome.runtime.lastError || !resp || !resp.ok) return;
           state.dnrRegistered = true;
@@ -445,9 +439,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Settings
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Build the first-run default settings: protection globally on, every provider
@@ -517,9 +509,7 @@
     return s.providers[p.id] !== false;          // per-provider toggle
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Storage writes (unique-key, race-free) + stats
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Write one record under a unique key. Unique keys mean concurrent writes from
@@ -531,7 +521,11 @@
    * @param {number} max
    * @returns {Promise<void>}
    */
+  // Incognito: chrome.storage.local is shared with the normal profile and
+  // written to disk, so no browsing-activity record is persisted there.
+  const PRIVATE = (function(){ try { return !!(chrome.extension && chrome.extension.inIncognitoContext); } catch (_) { return false; } }());
   async function writeRecord(prefix, record, prunePrefix, max) {
+    if (PRIVATE) return;
     try {
       const key = prefix + Date.now() + '_' + rand();
       await chrome.storage.local.set({ [key]: record });
@@ -632,6 +626,7 @@
    * @param {number} [by]
    */
   function incrementTotal(key, by) {
+    if (PRIVATE) return;
     _pendingTotal += (by || 1);
     if (!_totalTimer) {
       _totalTimer = setTimeout(async () => {
@@ -689,9 +684,7 @@
     return result;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  URL classification + image neutralisation (DOM FALLBACK layer)
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Classify a single image URL.
@@ -699,7 +692,7 @@
    *   'skip'    → not network-relevant (data:, non-http(s), unparseable)
    *   'block'   → known tracker / unambiguous endpoint; rewrite before it fires
    *   'inspect' → unknown / weak signal; let it load, confirm via 1x1 size check
-   * data: URIs are 'skip' — inline, no network request, blocking buys nothing.
+   * data: URIs are 'skip', inline, no network request, blocking buys nothing.
    * @param {string|null} rawUrl
    * @param {Object} provider
    * @returns {'allow'|'skip'|'block'|'inspect'}
@@ -719,8 +712,8 @@
    *   fragment (Gmail):   ci3.googleusercontent.com/meips/<opaque>#https://t.io/x.gif
    *   query    (Proton):  mail.proton.me/api/core/v4/images?Url=https%3A%2F%2Ft.io%2Fx.gif
    *   path     (generic): proxy.host/<opaque>/https://t.io/x.gif
-   * A tracker stays a tracker behind a proxy — the proxy still pings it at
-   * open time — so callers must classify the embedded target too.
+   * A tracker stays a tracker behind a proxy, the proxy still pings it at
+   * open time, so callers must classify the embedded target too.
    * @param {string|null} rawUrl
    * @returns {string} embedded absolute URL, or ''
    */
@@ -833,7 +826,7 @@
   }
 
   /**
-   * Per-element record of the original src/srcset/data-src we replaced —
+   * Per-element record of the original src/srcset/data-src we replaced,
    * isolated-world WeakMap, never written to the page DOM. These values can
    * carry subscriber tokens; a `data-pawsoff-original-*` attribute would leak
    * them to the page and to any other installed extension's content script.
@@ -925,7 +918,7 @@
       // the embedded target's host (e.g. mailtrack.io), not the proxy's.
       const statsHostOf = (raw) => hostOf(extractEmbeddedUrl(raw) || raw);
 
-      // ── src ──
+      // src
       const srcClass = classifyUrl(srcVal, provider);
       if (srcClass === 'block' && !hostAllowedHere(hostOf(srcVal))) {
         reason = matchesTrackerDomain(statsHostOf(srcVal)) ? 'domain' : 'path';
@@ -936,7 +929,7 @@
         inspect = true;
       }
 
-      // ── data-src (lazy) ──
+      // data-src (lazy)
       const dataSrcClass = classifyUrl(dataSrcVal, provider);
       if (dataSrcClass === 'block' && !hostAllowedHere(hostOf(dataSrcVal))) {
         if (!blocked) reason = matchesTrackerDomain(statsHostOf(dataSrcVal)) ? 'domain' : 'path';
@@ -947,7 +940,7 @@
         inspect = true;
       }
 
-      // ── srcset ──
+      // srcset
       if (srcsetVal) {
         const urls = parseSrcset(srcsetVal);
         const trackerUrls = urls.filter((u) => classifyUrl(u, provider) === 'block' && !hostAllowedHere(hostOf(u)));
@@ -1001,8 +994,8 @@
             const usedForLayout = rect.width > 2 || rect.height > 2; // stretched spacer
             const weak = hasWeakTrackerSignal(cur);
             const thirdParty = host && host !== location.hostname;
-            if (usedForLayout && !weak) return;     // genuine spacer — leave it
-            if (!weak && !thirdParty) return;       // no corroboration — leave it
+            if (usedForLayout && !weak) return;     // genuine spacer, leave it
+            if (!weak && !thirdParty) return;       // no corroboration, leave it
             neutralize(img, 'src', cur);
             _blocked.add(img);
             logBlockEvent(provider, 1, host ? [host] : []);
@@ -1062,9 +1055,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Observation + lifecycle
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Locate and scan any email bodies already present (initial open / SPA state).
@@ -1085,7 +1076,7 @@
   /**
    * Start the MutationObserver. Webmail opens emails without a page reload,
    * so watch document.body for added nodes and scan any email body that
-   * appears. No teardown timer — stays alive for the tab's full life,
+   * appears. No teardown timer, stays alive for the tab's full life,
    * disconnected only on explicit disable (standDown) or navigation reset.
    */
   /** MutationObserver yields all node types; we only scan element nodes. */
@@ -1166,7 +1157,7 @@
 
   /**
    * Stop observing. Already-blocked images stay blocked (restoring them is a
-   * future "reveal" feature) — a user who just disabled protection mid-email
+   * future "reveal" feature), a user who just disabled protection mid-email
    * wouldn't want trackers to suddenly fire. Re-enabling re-arms via reevaluate().
    */
   function standDown() {
@@ -1200,9 +1191,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Public API
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Ask the background for the signed+verified PixelBlock remote config and
@@ -1335,9 +1324,7 @@
     return getStats();
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Host detection
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Resolve the PROVIDER_CONFIG entry for the current hostname.
@@ -1356,9 +1343,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  React to settings changes from the popup in real time
-  // ─────────────────────────────────────────────────────────────────────────
   try {
     if (chrome && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {
@@ -1383,10 +1368,8 @@
     // Silent, storage API unavailable.
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  SPA navigation reset (Navigation API, Chrome 102+), same pattern as
   //  consent-ghost.js. Re-scan + re-arm when the user switches views.
-  // ─────────────────────────────────────────────────────────────────────────
   /**
    * Reset and re-arm on client-side navigation.
    */
@@ -1420,10 +1403,10 @@
     }
   }
 
-  // ── Auto-invoke ────────────────────────────────────────────────────────────
+  // Auto-invoke
   window.__pawsOff_pixelBlock_init();
 
-  // ── Test-only export (NO-OP in Chrome; see consent-ghost.js note) ───────────
+  // Test-only export (NO-OP in Chrome; see consent-ghost.js note)
   try {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {

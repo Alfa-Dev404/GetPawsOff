@@ -1,4 +1,4 @@
-/* PawsOff — unit tests for the OBSERVE-ONLY prevalence learner.
+/* PawsOff, unit tests for the OBSERVE-ONLY prevalence learner.
  *
  * These pin the privacy + correctness invariants that the upcoming Complex
  * Method refactor of record()/spotted() must NOT change:

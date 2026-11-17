@@ -28,7 +28,16 @@ keys/
 .env
 .env.*
 
-# Claude Code - personal/local, not shared
+# Local tool settings, not shared
 .claude/settings.local.json
 .claude/*.local.json
 .claude/local/
+
+# Store package built by `npm run pack`
+getpawsoff.zip
+
+# Cache for tools/build-tos-corpus.mjs
+.tos-corpus-cache/
+
+# Output of tools/consent-scoreboard.mjs
+consent-scoreboard.json

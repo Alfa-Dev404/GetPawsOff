@@ -50,6 +50,10 @@
     { id: 'jurisdiction_choiceoflaw', label: 'Disputes governed by their chosen courts' },
     { id: 'consent_by_use', label: 'You agree just by using the site' },
     { id: 'marketing_sharing', label: 'Uses your data for ads or marketing' },
+    { id: 'ai_training', label: 'Uses your data to train AI' },
+    { id: 'profiling', label: 'Builds a profile by combining data' },
+    { id: 'auto_renewal', label: 'Renews and charges automatically' },
+    { id: 'indemnification', label: 'Makes you cover their legal costs' },
   ];
 
   const getAll = () => new Promise((res) => { try { chrome.storage.local.get(null, (r) => res(r || {})); } catch (_) { res({}); } });
@@ -59,8 +63,8 @@
   const msgBg = (o) => new Promise((res) => { try { chrome.runtime.sendMessage(o, (r) => { void chrome.runtime.lastError; res(r); }); } catch (_) { res(); } });
   const removeKeys = (keys) => new Promise((res) => { try { chrome.storage.local.remove(keys, () => res()); } catch (_) { res(); } });
 
-  // ── Per-site pause helpers (pure; mirror popup.js / po-allow.js) ───────────
-  // Reuses the shared allow-list (window.PawsOffAllow) — already respected by
+  // Per-site pause helpers (pure; mirror popup.js / po-allow.js)
+  // Reuses the shared allow-list (window.PawsOffAllow), already respected by
   // the DNR, DOM, and ConsentGhost tiers, so this page just adds a UI over it.
   const ALLOW = (typeof window !== 'undefined' && window.PawsOffAllow) ? window.PawsOffAllow : null;
   const ADAPTIVE = (typeof window !== 'undefined' && window.PawsOffAdaptiveMode) ? window.PawsOffAdaptiveMode : null;
@@ -163,7 +167,7 @@
     return Object.keys(st.hosts).sort((a, b) => st.hosts[b] - st.hosts[a]); // newest first
   }
 
-  // ── Paw toggle factory (returns a <label> wrapping the hidden checkbox) ────
+  // Paw toggle factory (returns a <label> wrapping the hidden checkbox)
   function pawIcon() {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
@@ -213,7 +217,7 @@
     return item;
   }
 
-  // ── Renderers ──────────────────────────────────────────────────────────
+  // Renderers
   async function renderConsent(all) {
     const cb = document.getElementById('cg-enabled');
     cb.checked = all[CG_DISABLED] !== true;
@@ -573,6 +577,37 @@
     renderActivity(await getAll());
   }
 
+  // Bug-report payload. Only boolean and number settings plus `_log_` notes are
+  // copied, so site hashes and tracker hosts never reach a public issue.
+  const DIAG_MAX_LOGS = 50;
+  function buildDiagnostics(all, version, userAgent) {
+    const settings = {};
+    const logs = [];
+    for (const key of Object.keys(all || {})) {
+      const value = all[key];
+      if (key.indexOf('_log_') !== -1) {
+        if (value && typeof value === 'object') {
+          const { domain, ...rest } = value; // drop the site hash
+          logs.push(rest);
+        }
+      } else if (typeof value === 'boolean' || typeof value === 'number') {
+        settings[key] = value;
+      }
+    }
+    logs.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return { version: version, userAgent: userAgent, settings: settings, logs: logs.slice(0, DIAG_MAX_LOGS) };
+  }
+  async function copyDiagnostics(event) {
+    const button = event && event.currentTarget;
+    let ok = false;
+    try {
+      const report = buildDiagnostics(await getAll(), chrome.runtime.getManifest().version, navigator.userAgent);
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      ok = true;
+    } catch (_) { /* clipboard unavailable */ }
+    if (button) button.textContent = ok ? 'Copied' : 'Copy failed';
+  }
+
   async function init() {
     try {
       const all = await getAll();
@@ -584,17 +619,19 @@
       await renderTos(all);
       renderActivity(all);
       document.getElementById('clear-logs').addEventListener('click', clearLogs);
+      document.getElementById('copy-diagnostics').addEventListener('click', copyDiagnostics);
       document.getElementById('cg-count').textContent = '10';
     } catch (_) { /* silent */ }
   }
 
-  // ── Test-only export ──────────────────────────────────────────────────────
+  // Test-only export
   // Inert in the browser (extension pages have no CommonJS `module`); the Node
   // test harness injects a `module` object to read these pure helpers without
   // touching the DOM. Mirrors the content scripts' existing __test hook.
   try {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {
+        buildDiagnostics,
         activityKindOf,
         collectActivityRows,
         activityDetail,

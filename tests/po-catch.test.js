@@ -1,9 +1,9 @@
-/* PawsOff — Tier-1 unit tests for the shared catch recorder (po-catch.js).
+/* PawsOff, Tier-1 unit tests for the shared catch recorder (po-catch.js).
  *
  * po-catch is loaded first in every feature content script and is what feeds the
  * popup's "Today's catch". Two things matter and both are tested here:
  *   1. PRIVACY (the brand promise): the visited site is recorded ONLY as a
- *      one-way FNV-1a digest — never a plaintext host/URL — and nothing is ever
+ *      one-way FNV-1a digest, never a plaintext host/URL, and nothing is ever
  *      transmitted. We assert the page hostname never appears in a written
  *      record and that originHash is the canonical digest.
  *   2. The convenience wrappers (recordTracker/Banner/Wall/Clause) produce the
@@ -12,7 +12,7 @@
  *
  * The harness loads the REAL shipping file with a callback-style in-memory
  * chrome.storage; record() is synchronous under that stub so getStore() reflects
- * writes immediately. No source edit — po-catch exposes window.PawsOffCatch.
+ * writes immediately. No source edit, po-catch exposes window.PawsOffCatch.
  */
 'use strict';
 
@@ -73,7 +73,7 @@ test('record: writes under the catch prefix with ts, feature, and a HASHED origi
   eq(one.originHash, fnv('news.example.com'), 'origin stored as the canonical digest');
 });
 
-test('record: PRIVACY — the plaintext hostname never appears in the record', () => {
+test('record: PRIVACY, the plaintext hostname never appears in the record', () => {
   const { one } = catches((api) => api.record({ feature: 'banner' }), { hostname: 'secret-site.example.org' });
   assert(JSON.stringify(one).indexOf('secret-site.example.org') === -1, 'no plaintext host leaks into storage');
 });
@@ -134,7 +134,7 @@ test('recordClause: humanizes the category id into a Title-Case label', () => {
   eq(catches((api) => api.recordClause()).one.label, 'Risky clause', 'fallback when no id');
 });
 
-// ── prune policy: banners/terms must survive a flood of tracker catches ──────
+// prune policy: banners/terms must survive a flood of tracker catches
 // The popup's "0 banners on tracker-heavy sites" bug: a page rejects ONE banner
 // early, then hundreds of trackers get blocked. The old prune dropped oldest-
 // first, eventually evicting the banner. Prune must reclaim TRACKERS first.
@@ -158,4 +158,15 @@ test('pruneCatches: evicts oldest trackers first, never the rare banner/terms', 
   assert(keys.length <= CATCH_MAX, 'pruned down to the cap');
   assert(after[CATCH_PREFIX + 'banner'], 'the banner survived the tracker flood');
   assert(after[CATCH_PREFIX + 'terms'], 'the terms finding survived too');
+});
+
+test('poCatch: records nothing in an incognito context', () => {
+  // chrome.storage.local is shared with the normal profile and written to disk.
+  eq(catches((api) => api.recordBanner('OneTrust'), { incognito: true }).keys.length, 0, 'no catch persisted in incognito');
+  eq(catches((api) => api.recordBanner('OneTrust')).keys.length, 1, 'normal context still records');
+});
+
+test('poCatch: a terms catch carries the category label it is given', () => {
+  eq(catches((api) => api.recordClause('ai_training', 'Uses your data to train AI')).one.label, 'Uses your data to train AI');
+  eq(catches((api) => api.recordClause('data_sale')).one.label, 'Data Sale', 'falls back to a readable id');
 });

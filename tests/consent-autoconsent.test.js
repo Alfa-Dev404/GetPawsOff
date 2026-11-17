@@ -1,4 +1,4 @@
-/* PawsOff — consent-rules-engine (autoconsent layer) unit tests.
+/* PawsOff, consent-rules-engine (autoconsent layer) unit tests.
  *
  * Exercises PawsOff's OWN DSL interpreter against a tiny hand-rolled fake DOM
  * (no jsdom). Covers: array selector chains that pierce shadow DOM + same-origin
@@ -11,9 +11,9 @@
 const { test, assert, eq } = require('./harness/framework');
 const { createConsentEngine } = require('../src/content/consent-rules-engine.js');
 
-/* ---------------------------------------------------------------------------
+/*
  * Minimal fake DOM
- * ------------------------------------------------------------------------- */
+  */
 function tokenize(sel) {
   const t = { tag: null, id: null, cls: [], attrs: [] };
   let s = sel.trim();
@@ -113,9 +113,9 @@ function engineFor(doc, extra) {
   }, extra || {}));
 }
 
-/* ---------------------------------------------------------------------------
+/*
  * Tests
- * ------------------------------------------------------------------------- */
+  */
 test('selector chain pierces shadow DOM and same-origin iframe', () => {
   const doc = makeDoc();
   const host = append(doc, E('div', { id: 'host' }));
@@ -184,7 +184,7 @@ test('full rule: detect -> opt out -> verified via cookieContains', async () => 
 
 test('NEVER_MATCH pay-wall guard stands down without clicking', async () => {
   const doc = makeDoc();
-  const wall = append(doc, E('div', { id: 'wall', text: 'Subscribe to read — or accept all cookies' }));
+  const wall = append(doc, E('div', { id: 'wall', text: 'Subscribe to read, or accept all cookies' }));
   const rej = append(wall, E('button', { id: 'reject', text: 'Reject' }));
   const eng = engineFor(doc, { neverMatch: [/subscribe/i] });
   const rule = {

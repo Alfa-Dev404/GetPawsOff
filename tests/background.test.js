@@ -1,4 +1,4 @@
-/* PawsOff — Tier-1 unit tests for the background service worker.
+/* PawsOff, Tier-1 unit tests for the background service worker.
  *
  * Covers the PURE, side-effect-free logic that ships in background.js:
  *   - version comparison + config-adoption (anti-rollback) policy
@@ -184,7 +184,7 @@ test('unreadable protection state stands every network blocker down', async () =
   eq(delta.enabled, false, 'signed delta rules stand down');
 });
 
-// ── compareVersions ─────────────────────────────────────────────────────────
+// compareVersions
 test('compareVersions: orders dotted numeric versions (numeric, not lexical)', () => {
   eq(compareVersions('1.0.0', '1.0.0'), 0);
   eq(compareVersions('1.2.0', '1.10.0'), -1, '2 < 10 numerically');
@@ -207,7 +207,7 @@ test('signed client exposes only the release-manifest fetch path', () => {
   assert(typeof api.shouldAdoptConfig === 'undefined', 'legacy config adoption helper is absent');
 });
 
-// ── isValidRuleId + reserved id band ─────────────────────────────────────────
+// isValidRuleId + reserved id band
 test('isValidRuleId: only integers inside the reserved DNR band', () => {
   eq(DNR_ID_MIN, DNR_RULE_ID_BASE);
   eq(DNR_ID_MAX, DNR_RULE_ID_BASE + 99);
@@ -219,7 +219,7 @@ test('isValidRuleId: only integers inside the reserved DNR band', () => {
   assert(!isValidRuleId('9100'), 'string rejected');
 });
 
-// ── buildProviderRule ────────────────────────────────────────────────────────
+// buildProviderRule
 test('buildProviderRule: image-only block rule scoped to the provider origin', () => {
   const p = PIXELBLOCK_PROVIDERS[0];
   const rule = buildProviderRule(p);
@@ -235,7 +235,7 @@ test('buildProviderRule: every provider gets a unique in-band id', () => {
   ids.forEach((id) => assert(isValidRuleId(id), 'id ' + id + ' inside reserved band'));
 });
 
-// ── sanitizeRules — the security-critical defensive layer ────────────────────
+// sanitizeRules, the security-critical defensive layer
 test('sanitizeRules: forces block action (never honours redirect/header intent)', () => {
   const out = sanitizeRules([
     { id: DNR_RULE_ID_BASE, action: { type: 'redirect' }, condition: { requestDomains: ['x.com'] } },
@@ -269,7 +269,7 @@ test('sanitizeRules: defaults requestDomains to the tracker list when absent', (
   eq(out[0].condition.requestDomains.length, TRACKING_DOMAINS.length);
 });
 
-// ── validateConfig (ToS Shield) ──────────────────────────────────────────────
+// validateConfig (ToS Shield)
 function validTosConfig() {
   return {
     schemaVersion: 1,
@@ -379,7 +379,7 @@ test('ToS reputation: rejects unsafe host keys and unconstrained point data', ()
   assert(!validateTosReputationConfig({ ...base, configVersion: 'future', services: {} }), 'non-canonical reputation version rejected');
 });
 
-// ── validateConsentConfig ────────────────────────────────────────────────────
+// validateConsentConfig
 test('validateConsentConfig: needs schema + string version + non-empty frameworks', () => {
   const metadata = {
     configVersion: '1.0.0',
@@ -416,7 +416,7 @@ test('validateConsentConfig: needs schema + string version + non-empty framework
   }), 'unknown v2 selector field rejected');
 });
 
-// ── validatePixelBlockConfig ─────────────────────────────────────────────────
+// validatePixelBlockConfig
 test('validatePixelBlockConfig: needs schema + string version + providers array', () => {
   assert(validatePixelBlockConfig({ schemaVersion: 1, configVersion: '1.0.0', providers: [] }), 'valid (empty providers) ok');
   assert(validatePixelBlockConfig({
@@ -436,14 +436,14 @@ test('validatePixelBlockConfig: needs schema + string version + providers array'
   }), 'duplicate provider ids rejected');
 });
 
-// ── canVerifySignatures — requires BOTH a pinned key AND a WebCrypto impl ─────
+// canVerifySignatures, requires BOTH a pinned key AND a WebCrypto impl
 // Sandbox omits self.crypto.subtle on purpose, to keep exercising the
 // fail-closed path even with the key pinned.
 test('canVerifySignatures: false without a WebCrypto implementation (fail-closed)', () => {
   eq(canVerifySignatures(), false, 'no remote config is trusted without self.crypto.subtle');
 });
 
-// ── PINNED_PUBLIC_KEY_JWK — must stay a well-formed P-256 JWK, never null ─────
+// PINNED_PUBLIC_KEY_JWK, must stay a well-formed P-256 JWK, never null
 // A falsy or malformed key silently disables every signed-config consumer.
 test('PINNED_PUBLIC_KEY_JWK: a well-formed, non-null P-256 verify key', () => {
   assert(PINNED_PUBLIC_KEY_JWK && typeof PINNED_PUBLIC_KEY_JWK === 'object', 'key is pinned, not null');
@@ -462,7 +462,7 @@ test('PINNED_PUBLIC_KEY_JWK: matches the committed tools/config-signing-public-k
   eq(PINNED_PUBLIC_KEY_JWK.kty, committed.kty);
 });
 
-// ── bothResponsesOk ───────────────────────────────────────────────────────
+// bothResponsesOk
 test('bothResponsesOk: true only when both fetches succeeded', () => {
   const bothResponsesOk = loaded.root.PawsOffSignedConfigClient.bothResponsesOk;
   assert(bothResponsesOk({ ok: true }, { ok: true }), 'both ok');
@@ -644,7 +644,7 @@ test('DNR summaries retain the navigation epoch captured with each match', () =>
   assert(entry.ruleIds.has(1), 'rule id is retained beside its epoch');
 });
 
-// ── base64ToBytes ────────────────────────────────────────────────────────────
+// base64ToBytes
 test('base64ToBytes: decodes to the exact byte sequence', () => {
   const bytes = base64ToBytes('AAEC/w==');
   eq(bytes.length, 4);
@@ -654,7 +654,7 @@ test('base64ToBytes: decodes to the exact byte sequence', () => {
   eq(bytes[3], 255);
 });
 
-// ── small structural building blocks ─────────────────────────────────────────
+// small structural building blocks
 test('isPlainObject / hasRequiredArrays / hasRequiredSections behave', () => {
   assert(isPlainObject({}), 'object is plain');
   assert(!isPlainObject(null), 'null is not');

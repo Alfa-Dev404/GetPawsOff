@@ -1,4 +1,4 @@
-/* PawsOff — test sandbox for the local prevalence tier.
+/* PawsOff, test sandbox for the local prevalence tier.
  *
  * Loads the REAL shipping files into a fresh `vm` context so tests exercise the
  * code that actually ships, not a copy.
@@ -34,7 +34,7 @@ function today() {
   return Math.floor(Date.now() / DAY_MS);
 }
 
-// ── Learner: promise-style chrome.storage.local stub ────────────────────────
+// Learner: promise-style chrome.storage.local stub
 function makeChrome() {
   let store = {};
   const local = {
@@ -121,6 +121,7 @@ function loadEnforcer() {
     },
     runtime: {
       id: 'pawsoff-test',
+      getURL(file) { return 'chrome-extension://pawsoff-test/' + (file || ''); },
       onMessage: { addListener(listener) { messageListeners.push(listener); } },
       onInstalled: { addListener() {} },
       onStartup: { addListener() {} },
@@ -154,7 +155,7 @@ function loadEnforcer() {
   };
 }
 
-// ── Collector: callback-style chrome.storage.local stub ─────────────────────
+// Collector: callback-style chrome.storage.local stub
 function makeCollectorChrome(initialStore) {
   let store = initialStore || {};
   const messages = [];
@@ -252,7 +253,7 @@ function loadCollector(options) {
   };
 }
 
-// ── Background service worker: promise-style chrome + SW globals ──────────
+// Background service worker: promise-style chrome + SW globals
 function loadBackground(options) {
   const o = options || {};
   const { chrome, getStore } = makeChrome();
@@ -290,7 +291,7 @@ function loadBackground(options) {
     TextDecoder: global.TextDecoder,
     Uint8Array: global.Uint8Array,
     Date: o.Date || global.Date,
-    // Never expose the real network stack to code under test — a stray fetch must
+    // Never expose the real network stack to code under test, a stray fetch must
     // fail loudly, not silently hit the network. (Top-level fetch only runs in
     // callbacks that don't fire under test; this just hard-guarantees it.)
     fetch: function (url) {
@@ -332,10 +333,10 @@ function loadBackground(options) {
   };
 }
 
-// ── ConsentGhost: content-script DOM + timer stubs + Jest-style module hook ──
+// ConsentGhost: content-script DOM + timer stubs + Jest-style module hook
 // consent-ghost.js already ships a CommonJS test-export (module.exports.__test)
 // intended for Jest. We satisfy it by injecting a `module` object into the vm
-// context — NO source edit required. init() is async, so it defers every DOM /
+// context, NO source edit required. init() is async, so it defers every DOM /
 // observer / scan side effect to microtasks that never run before the file's
 // synchronous export block executes; the inert stubs below keep those deferred
 // calls harmless anyway. `htmlLang` / `navLang` drive detectLangs() so language
@@ -431,11 +432,11 @@ function loadConsentGhost(opts) {
   return { internals, win, document, sandbox, messages };
 }
 
-// ── Generic content-script loader (PixelBlock + ToS Shield) ─────────────────
+// Generic content-script loader (PixelBlock + ToS Shield)
 // Both files use the SAME pattern as consent-ghost.js: an async init() that
 // defers all DOM/observer/scan work to microtasks, plus a CommonJS
 // `module.exports.__test` hook at the very end. We satisfy that hook by
-// injecting a `module` object — NO source edit. Default hostname 'example.com'
+// injecting a `module` object, NO source edit. Default hostname 'example.com'
 // is not a webmail/ToS host, so init() detects no provider and returns early;
 // the pure helpers are still exported. `atob` is provided for tos-shield's
 // base64ToBytes.
@@ -503,7 +504,7 @@ function _runContentScript(fileName, opts) {
 function loadPixelBlock(opts) { return _runContentScript('pixel-block.js', opts); }
 function loadTosShield(opts) { return _runContentScript('tos-shield.js', opts); }
 
-// ── consent-prehide.js loader (document_start flash-suppression script) ──────
+// consent-prehide.js loader (document_start flash-suppression script)
 // Standalone IIFE with a module.exports.__test hook. Custom documentElement +
 // capturable setTimeout so the watchdog can be fired deterministically.
 function loadConsentPrehide(opts) {
@@ -538,7 +539,7 @@ function loadConsentPrehide(opts) {
   return { internals, win, document, sandbox, scheduled };
 }
 
-// ── po-catch.js: shared "catch" recorder (callback-style chrome) ────────────
+// po-catch.js: shared "catch" recorder (callback-style chrome)
 // po-catch attaches its API to `self` (= window) as window.PawsOffCatch and
 // writes catches via callback-style chrome.storage.local. Its record() path is
 // synchronous under our stub, so getStore() reflects writes immediately.
@@ -546,6 +547,7 @@ function loadPoCatch(opts) {
   const o = opts || {};
   const hostname = o.hostname || 'shop.example.com';
   const { chrome, getStore } = makeCollectorChrome(o.initialStore || {});
+  if (o.incognito) chrome.extension = { inIncognitoContext: true };
   const win = {};
   win.location = { hostname };
   const moduleShim = { exports: {} };
@@ -572,7 +574,7 @@ function loadAllow(opts) {
   return { A: win.PawsOffAllow, getStore, chrome, win };
 }
 
-// ── cmp-api-main.js: page MAIN-world programmatic CMP rejecter ──────────────
+// cmp-api-main.js: page MAIN-world programmatic CMP rejecter
 // Runs in the page's MAIN world: NO chrome.* here. Tests inject fake CMP globals
 // via opts.globals; we capture the same-frame CustomEvent the script dispatches
 // on a successful reject. The probe loops run synchronously once on load
@@ -604,7 +606,7 @@ function loadCmpApiMain(opts) {
   const code = fs.readFileSync(path.join(CONTENT_DIR, 'cmp-api-main.js'), 'utf8');
   vm.runInContext(code, sandbox, { filename: 'cmp-api-main.js' });
   // Derive `done` from the dispatched signal event (detail.cmp) rather than a
-  // page-visible window marker — cmp-api-main no longer leaks one to the page.
+  // page-visible window marker, cmp-api-main no longer leaks one to the page.
   return { events, win, done: events.length ? events[events.length - 1].detail.cmp : undefined };
 }
 
@@ -633,9 +635,9 @@ function loadCmpApiMainInternals() {
   return (moduleShim.exports && moduleShim.exports.__test) || {};
 }
 
-// ── Extension-page IIFEs (popup.js / options.js) ───────────────────────────
+// Extension-page IIFEs (popup.js / options.js)
 // Both end with `document.addEventListener('DOMContentLoaded', init)`, so init()
-// (and ALL DOM/storage work) never runs under test — only the synchronous const/
+// (and ALL DOM/storage work) never runs under test, only the synchronous const/
 // function defs and the injected-`module` __test export execute. We satisfy the
 // hook by injecting `module`, exactly like the content scripts.
 function _runPageScript(dir, fileName, options) {

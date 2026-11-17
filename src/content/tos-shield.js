@@ -3,7 +3,7 @@
 // Feature 3 of 4: ToS AI Shield, flags predatory clauses in Terms of Service /
 // privacy pages and highlights them in place, fully locally.
 //
-// ─── DESIGN (Path B: generalised on-page analysis, NOT a ToS;DR lookup) ─────
+// DESIGN (Path B: generalised on-page analysis, NOT a ToS;DR lookup)
 // We do NOT match verbatim third-party quotes. We match MEANING STRUCTURE:
 // each pattern is a set of co-occurring token families (anchors + objects)
 // scored per clause, with negation handling. The taxonomy is informed by
@@ -11,12 +11,12 @@
 // no external dataset is bundled or called, that avoids ToS;DR's CC BY-SA /
 // AGPL licensing entanglement and keeps us fully offline.
 //
-// ─── PIPELINE ───────────────────────────────────────────────────────────────
+// Pipeline
 //   detect page → extract content root → build text index (offset map) →
 //   segment sentences/clauses → token-set matcher (+ negation) → CSS Custom
 //   Highlight API → Shadow-DOM summary panel.
 //
-// ─── HARD RULES (shared across PawsOff) ────────────────────────────────────
+// HARD RULES (shared across PawsOff)
 //  - IIFE, 'use strict', try/catch around every async fn
 //  - window.__pawsOff_* namespace only
 //  - po-ts- CSS prefix for any class we introduce
@@ -27,7 +27,7 @@
 //    API, which paints Ranges WITHOUT mutating nodes; the only nodes we add are
 //    our own <style> and the Shadow-DOM panel host)
 //
-// ─── MANIFEST ───────────────────────────────────────────────────────────────
+// Manifest
 //  - content_scripts: run at document_idle on <all_urls> (ToS lives anywhere);
 //    the page-detection gate ensures we only act on real policy pages.
 //  - host_permissions MUST include the remote-config origin below, or the
@@ -37,10 +37,10 @@
 (function () {
   'use strict';
 
-  // ── Double-run guard ───────────────────────────────────────────────────────
+  // Double-run guard
   if (typeof window.__pawsOff_tosShield_init === 'function') return;
 
-  // ── Versioning / remote config endpoints ──────────────────────────────────
+  // Versioning / remote config endpoints
   const ENGINE_VERSION = '1.0.0';
 
   // Remote config fetch + ECDSA-P256 signature verification is owned ENTIRELY by
@@ -49,7 +49,7 @@
   // or config URLs, those live in exactly one place (background.js) so they can
   // never diverge. We just request the verified result via fetchRemoteConfig().
 
-  // ── Storage keys ───────────────────────────────────────────────────────────
+  // Storage keys
   const SETTINGS_KEY     = '__pawsOff_tosShield_settings';
   const EVENT_PREFIX     = '__pawsOff_tosShield_event_'; // scan results → getStats()
   const LOG_PREFIX       = '__pawsOff_tosShield_log_';   // diagnostics
@@ -61,7 +61,7 @@
   // Monotonic flagged-clauses counter, never pruned, so popup totals never plateau.
   const TS_TOTAL_KEY     = '__pawsOff_ts_total_flagged';
 
-  // ── Scan limits (keep it lightweight on huge pages) ───────────────────────
+  // Scan limits (keep it lightweight on huge pages)
   const MAX_TEXT_CHARS = 500_000; // ignore absurdly large documents
   const MAX_SENTENCES  = 4_000;
   const MAX_FINDINGS   = 300;
@@ -107,7 +107,7 @@
     'MAIN', 'ASIDE', 'NAV', 'BLOCKQUOTE', 'PRE', 'FIGURE', 'FIGCAPTION', 'FORM', 'HR', 'BR',
   ]);
 
-  // ── Bundled default config (offline / first-run authority) ────────────────
+  // Bundled default config (offline / first-run authority)
   // Patterns are TOKEN SETS, never regex, the engine compiles them, so a
   // poisoned remote config cannot inject executable logic or a ReDoS bomb.
   //   anchors  : the action verbs/nouns that signal the category
@@ -115,7 +115,7 @@
   //   modifiers: aggravating qualifiers (boost score, never required)
   const DEFAULT_CONFIG = {
     schemaVersion: 1,
-    configVersion: '2026.6.26',
+    configVersion: '2026.11.16',
     minEngineVersion: '1.0.0',
     locale: 'en',
 
@@ -142,19 +142,13 @@
       presentThreshold: 0.5,
       modifierBoost: 1.5,
       aggravatedModifiers: [
+        // Idioms whose "no" and "without" are not negations. Listed first so the
+        // longer phrase wins over "for any reason" when both could match.
+        'for any reason or no reason', 'for any or no reason', 'for no reason', 'with or without cause', 'with or without notice', 'without cause',
         'perpetual', 'irrevocable', 'worldwide', 'at our sole discretion',
         'for any reason', 'at any time', 'indefinitely',
-        // "without …" intensifier family (Bug 4 fix). In legal prose "without X"
-        // where X is a NOUN almost always INTENSIFIES a predatory action
-        // ("share your data without your consent", "retain data without
-        // limitation", "license your content without compensation") rather than
-        // negating it. Listing them here does two things: (1) they boost the
-        // finding to "aggravated" severity, and (2) they are stripped from a
-        // clause BEFORE the negation test (see compileConfig/matchSentence), so
-        // the bare cue word "without" can no longer flip an otherwise-predatory
-        // clause into a false negative. The bare "without" cue is intentionally
-        // KEPT for genuine protective phrasing where X is a VERB ("without
-        // selling/sharing/disclosing it"), which should still down-weight.
+        // "without <noun>" intensifies a clause, it does not negate it. These are
+        // stripped before the negation test so their "without" cannot clear a finding.
         'without notice', 'without further notice', 'without limitation',
         'without restriction', 'without compensation', 'without your consent',
         'without consent', 'without your knowledge', 'without your permission',
@@ -175,47 +169,57 @@
       { id: 'jurisdiction_choiceoflaw', label: 'Disputes governed by their chosen courts',  description: 'Disputes are bound to a jurisdiction/governing law they pick.',    severity: 'low',  defaultEnabled: true },
       { id: 'consent_by_use',           label: 'You agree just by using the site',          description: 'Continued use is treated as acceptance of the terms.',            severity: 'med',  defaultEnabled: true },
       { id: 'marketing_sharing',        label: 'Uses your data for ads or marketing',       description: 'Your data may be used for advertising or marketing.',             severity: 'low',  defaultEnabled: true },
+      { id: 'ai_training',              label: 'Uses your data to train AI',                description: 'Your content or data may be used to train AI models.',            severity: 'high', defaultEnabled: true },
+      { id: 'profiling',                label: 'Builds a profile by combining data',        description: 'Data from different sources may be combined into a profile.',     severity: 'high', defaultEnabled: true },
+      { id: 'auto_renewal',             label: 'Renews and charges automatically',          description: 'Subscriptions may renew by default or fees may be non-refundable.', severity: 'med',  defaultEnabled: true },
+      { id: 'indemnification',          label: 'Makes you cover their legal costs',         description: 'You may have to indemnify the service against claims.',           severity: 'med',  defaultEnabled: true },
     ],
 
     patterns: [
       { id: 'data_sale.core', categoryId: 'data_sale', enabled: true, weight: 1,
         anchors: ['sell', 'sells', 'selling', 'sold', 'sale', 'rent', 'rents', 'lease', 'monetize', 'monetise', 'trade', 'in exchange for'],
-        objects: ['personal information', 'personal data', 'your data', 'your information', 'information about you', 'user data'],
+        objects: ['personal information', 'personal data', 'your data', 'your information', 'information about you', 'user data', 'information we collect', 'information collected', 'data we collect', 'data collected', 'customer data', 'customer information', 'browsing history'],
         modifiers: ['third parties', 'advertisers', 'for a fee'] },
 
       { id: 'third_party_sharing.core', categoryId: 'third_party_sharing', enabled: true, weight: 1,
         anchors: ['share', 'shares', 'sharing', 'shared', 'disclose', 'discloses', 'disclosed', 'transfer', 'transfers', 'provide', 'communicate', 'communicates', 'communicated'],
-        objects: ['third party', 'third parties', 'partners', 'affiliates', 'advertisers', 'service providers', 'other companies'],
+        objects: ['third party', 'third parties', 'partners', 'affiliates', 'advertisers', 'service providers', 'other companies', 'successor', 'merger', 'acquisition'],
         modifiers: ['for any purpose', 'without your consent'] },
 
       { id: 'tracking_surveillance.core', categoryId: 'tracking_surveillance', enabled: true, weight: 1,
-        anchors: ['track', 'tracks', 'tracking', 'monitor', 'monitors', 'collect', 'collects', 'profile', 'fingerprint'],
+        anchors: ['track', 'tracks', 'tracked', 'tracking', 'monitor', 'monitors', 'collect', 'collects', 'profile', 'fingerprint'],
         objects: ['across websites', 'across other sites', 'across devices', 'your activity', 'browsing history', 'your location', 'your behaviour', 'your behavior', 'cookies', 'unique identifiers', 'precise location'],
         modifiers: ['continuously', 'in real time'] },
 
+      // Plain "we use cookies" is not flagged; only tracking technology and precise location are.
+      { id: 'tracking_surveillance.tech', categoryId: 'tracking_surveillance', enabled: true, weight: 1,
+        anchors: ['use', 'uses', 'used', 'using', 'place', 'places', 'set', 'collect', 'collects', 'obtain', 'receive', 'employ'],
+        objects: ['web beacons', 'web beacon', 'tracking pixels', 'pixel tags', 'pixels', 'fingerprinting', 'mobile ad identifiers', 'advertising identifiers', 'third party cookies', 'third-party cookies', 'gps', 'geolocation', 'precise location', 'location information', 'location data', 'online activity'],
+        modifiers: [] },
+
       { id: 'data_retention.core', categoryId: 'data_retention', enabled: true, weight: 1,
         anchors: ['retain', 'retains', 'retained', 'retention', 'keep', 'keeps', 'store', 'stores', 'maintain'],
-        objects: ['indefinitely', 'as long as necessary', 'for as long as', 'until you delete', 'for a period', 'after termination', 'after you delete'],
+        objects: ['indefinitely', 'as long as necessary', 'for as long as', 'until you delete', 'after termination', 'after you delete'],
         modifiers: ['indefinitely', 'permanently'] },
 
       { id: 'content_license.core', categoryId: 'content_license', enabled: true, weight: 1,
-        anchors: ['grant', 'grants', 'granting', 'license', 'licence', 'royalty-free', 'sublicensable', 'assign'],
-        objects: ['content', 'your content', 'user content', 'materials', 'submissions', 'user-generated content', 'any content you'],
+        anchors: ['grant', 'grants', 'granting', 'license', 'licence', 'royalty-free', 'sublicensable', 'sub-licensable', 'sublicense', 'sub-license', 'assign', 'derivative works'],
+        objects: ['content', 'your content', 'user content', 'materials', 'submissions', 'user-generated content', 'any content you', 'anything you post', 'you post', 'you submit', 'you upload'],
         modifiers: ['perpetual', 'irrevocable', 'worldwide', 'royalty-free', 'transferable'] },
 
       { id: 'unilateral_change.core', categoryId: 'unilateral_change', enabled: true, weight: 1,
         anchors: ['change', 'changes', 'modify', 'modifies', 'update', 'updates', 'amend', 'amends', 'revise', 'alter'],
-        objects: ['these terms', 'this agreement', 'this policy', 'the terms', 'terms of service', 'privacy policy', 'at any time'],
+        objects: ['these terms', 'this agreement', 'the agreement', 'this policy', 'the terms', 'our terms', 'terms of service', 'privacy policy'],
         modifiers: ['without notice', 'at our sole discretion', 'at any time', 'without prior notice'] },
 
       { id: 'unilateral_termination.core', categoryId: 'unilateral_termination', enabled: true, weight: 1,
-        anchors: ['terminate', 'terminates', 'suspend', 'suspends', 'disable', 'restrict', 'delete', 'cancel'],
-        objects: ['your account', 'your access', 'the service', 'your profile'],
+        anchors: ['terminate', 'terminates', 'terminated', 'suspend', 'suspends', 'suspended', 'disable', 'restrict', 'delete', 'cancel', 'close', 'closes', 'closed', 'deactivate', 'deactivated', 'revoke'],
+        objects: ['your account', 'any account', 'your access', 'the service', 'your profile'],
         modifiers: ['without notice', 'for any reason', 'at our sole discretion', 'at any time'] },
 
       { id: 'arbitration_classwaiver.core', categoryId: 'arbitration_classwaiver', enabled: true, weight: 1,
-        anchors: ['arbitration', 'arbitrate', 'binding arbitration', 'waive', 'waiver', 'class action', 'class-action', 'jury trial'],
-        objects: ['dispute', 'disputes', 'claims', 'any claim', 'right to', 'your right'],
+        anchors: ['arbitration', 'arbitrate', 'binding arbitration', 'waive', 'waiver', 'class action', 'class-action', 'class member', 'representative action', 'jury trial'],
+        objects: ['dispute', 'disputes', 'claims', 'any claim', 'a claim', 'right to', 'your right'],
         modifiers: ['binding', 'mandatory', 'waive any right'] },
 
       { id: 'liability_waiver.core', categoryId: 'liability_waiver', enabled: true, weight: 1, ignoreNegation: true,
@@ -223,9 +227,24 @@
         objects: ['damages', 'liability', 'warranties', 'any loss', 'indirect', 'consequential', 'in the event', 'arising', 'resulting from'],
         modifiers: ['to the fullest extent', 'in no event'] },
 
+      { id: 'liability_waiver.asis', categoryId: 'liability_waiver', enabled: true, weight: 1, ignoreNegation: true,
+        anchors: ['as is', 'as available', 'sole risk', 'own risk'],
+        objects: ['provided', 'provide', 'provides', 'basis', 'use', 'uses'],
+        modifiers: [] },
+
+      { id: 'liability_waiver.nowarranty', categoryId: 'liability_waiver', enabled: true, weight: 1, ignoreNegation: true,
+        anchors: ['not warrant', 'no warranty', 'make no warranty', 'makes no warranty', 'not guarantee', 'no guarantee', 'any guarantees', 'without any warranty'],
+        objects: ['uninterrupted', 'error-free', 'free of errors', 'bug free', 'accuracy', 'reliability', 'available', 'loss of data', 'of any kind'],
+        modifiers: [] },
+
+      { id: 'liability_waiver.cap', categoryId: 'liability_waiver', enabled: true, weight: 1, ignoreNegation: true,
+        anchors: ['liability'],
+        objects: ['exceed', 'limited to', 'amount you paid', 'amount paid'],
+        modifiers: [] },
+
       { id: 'jurisdiction_choiceoflaw.core', categoryId: 'jurisdiction_choiceoflaw', enabled: true, weight: 1,
-        anchors: ['governed by', 'governing law', 'jurisdiction', 'venue', 'courts of', 'exclusive jurisdiction'],
-        objects: ['laws of', 'courts', 'state of', 'country', 'these terms', 'this agreement'],
+        anchors: ['governed by', 'governed', 'govern', 'governs', 'governing law', 'jurisdiction', 'venue', 'courts of', 'exclusive jurisdiction'],
+        objects: ['laws of', 'law', 'courts', 'state of', 'country', 'these terms', 'this agreement'],
         modifiers: ['exclusive', 'sole'] },
 
       { id: 'consent_by_use.core', categoryId: 'consent_by_use', enabled: true, weight: 1,
@@ -234,16 +253,37 @@
         modifiers: [] },
 
       { id: 'marketing_sharing.core', categoryId: 'marketing_sharing', enabled: true, weight: 1,
-        anchors: ['marketing', 'advertising', 'promotional', 'targeted', 'personalized ads', 'personalised ads'],
-        objects: ['your data', 'your information', 'your email', 'communications', 'your interests', 'send you', 'personal data', 'personal information'],
+        anchors: ['marketing', 'market', 'advertising', 'advertisements', 'promotional', 'promotions', 'newsletters', 'targeted', 'interest-based', 'personalized ads', 'personalised ads'],
+        objects: ['your data', 'your information', 'this information', 'your email', 'communications', 'your interests', 'send you', 'to you', 'personal data', 'personal information'],
         modifiers: ['third parties'] },
+
+      { id: 'ai_training.core', categoryId: 'ai_training', enabled: true, weight: 1,
+        anchors: ['train', 'trains', 'training', 'fine-tune', 'develop', 'improve'],
+        objects: ['artificial intelligence', 'machine learning', 'ai models', 'ai model', 'language models', 'our models', 'generative ai'],
+        modifiers: ['your content', 'personal information', 'personal data'] },
+
+      { id: 'profiling.core', categoryId: 'profiling', enabled: true, weight: 1,
+        anchors: ['combine', 'combines', 'combined', 'combining', 'creating profiles', 'create a profile', 'build a profile', 'profiling', 'infer', 'inferred'],
+        objects: ['other sources', 'third parties', 'across devices', 'across different', 'other websites', 'other personal data', 'other information', 'with information', 'information we', 'data from', 'about you', 'your interests'],
+        modifiers: ['advertising', 'across devices'] },
+
+      // "non-refundable" and "no refunds" carry their own negative, so negation is ignored.
+      { id: 'auto_renewal.core', categoryId: 'auto_renewal', enabled: true, weight: 1, ignoreNegation: true,
+        anchors: ['automatically renew', 'automatically renews', 'automatically renewed', 'renew automatically', 'renews automatically', 'auto-renew', 'auto-renews', 'auto-renewal', 'automatic renewal', 'recurring', 're-occurring', 'non-refundable', 'non refundable', 'nonrefundable', 'no refund', 'no refunds', 'not refundable', 'not be refunded'],
+        objects: ['subscription', 'subscriptions', 'charge', 'charges', 'charged', 'fee', 'fees', 'payment', 'payments', 'billing', 'membership', 'successive terms', 'credit card', 'payment method', 'purchase', 'purchases', 'paid'],
+        modifiers: ['until you cancel', 'unless you cancel'] },
+
+      { id: 'indemnification.core', categoryId: 'indemnification', enabled: true, weight: 1,
+        anchors: ['indemnify', 'indemnifies', 'indemnification', 'indemnity', 'hold harmless'],
+        objects: ['claim', 'claims', 'losses', 'damages', 'liabilities', 'expenses', 'costs', 'harmless'],
+        modifiers: ["attorneys' fees", 'attorneys fees', 'legal fees'] },
     ],
   };
 
-  // ── Runtime state (closure-private) ───────────────────────────────────────
+  // Runtime state (closure-private)
   const state = {
     config: null,
-    compiled: null,       // compiled patterns (with regex) — never persisted
+    compiled: null,       // compiled patterns (with regex), never persisted
     patternById: null,    // pattern id → compiled matcher for evidence ranges
     categoryById: null,   // id → category meta
     regex: null,          // shared compiled regexes (negation, aggravated, clause)
@@ -251,10 +291,10 @@
     findings: [],         // current page findings (in-memory only; holds text)
     reputation: null,     // optional signed ToS;DR context for this site
     reputationSource: null,
-    policyChange: null,   // local fingerprint comparison; never contains policy text
+    policyChange: null,   // what changed in the flagged clauses since the last visit; no policy text
     ranges: null,         // severity → Range[] for the Highlight API
     panelHost: null,      // Shadow-DOM panel host element (ours)
-    shadowRoot: null,     // CLOSED shadow root ref (ours) — never exposed on the host
+    shadowRoot: null,     // CLOSED shadow root ref (ours), never exposed on the host
     styleEl: null,        // injected ::highlight() <style> (ours)
     scanned: false,
     scanning: false,
@@ -265,9 +305,7 @@
     readinessDeadline: 0,
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Small utilities
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Short random suffix for unique storage keys.
@@ -282,6 +320,7 @@
     engineVersion: ENGINE_VERSION,
     schemaVersion: DEFAULT_CONFIG.schemaVersion,
     policyPrefix: POLICY_PREFIX,
+    categoryLabel: (id) => ((state.categoryById && state.categoryById[id]) || {}).label || id,
   });
   const compareVersions = TOS_CORE_API.compareVersions;
   const base64ToBytes = TOS_CORE_API.base64ToBytes;
@@ -301,9 +340,7 @@
   const policySnapshotKey = TOS_CORE.policySnapshotKey;
   const describePolicyChange = TOS_CORE.describePolicyChange;
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Remote config: fetch + SubtleCrypto verify + validate (fail-closed)
-  // ─────────────────────────────────────────────────────────────────────────
 
 
   /**
@@ -423,9 +460,7 @@
     return spans;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Settings
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Default settings: enabled, every category on. Derived from config so they
@@ -480,9 +515,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Storage writes (unique-key, race-free) + stats
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Write a record under a unique key (no shared mutable array → no lost-update
@@ -493,22 +526,30 @@
    * @param {number} max
    * @returns {Promise<void>}
    */
-  async function preparePolicySnapshot(text, byCategory) {
-    const fingerprint = await policyFingerprint(text);
+  // Hashes the flagged clauses, not the whole page, so only a change to a
+  // flagged clause counts as a policy change. No policy text is stored.
+  async function preparePolicySnapshot(byCategory) {
+    const clauses = state.findings.map((finding) => finding.categoryId + ':' + (finding.text || '')).sort();
+    const fingerprint = await policyFingerprint(clauses.join('\n') || 'no flagged clauses');
     const key = policySnapshotKey(location.hostname, location.pathname);
     if (!key) return null;
     if (!fingerprint) return null;
     return {
       key,
       value: {
-        v: 2,
+        v: 3,
         ts: Date.now(),
+        scanner: ENGINE_VERSION + '/' + state.config.configVersion,
         fingerprint,
         total: state.findings.length,
         byCategory: { ...(byCategory || {}) },
       },
     };
   }
+
+  // Incognito: chrome.storage.local is shared with the normal profile and
+  // written to disk, so no browsing-activity record is persisted there.
+  const PRIVATE = (function(){ try { return !!(chrome.extension && chrome.extension.inIncognitoContext); } catch (_) { return false; } }());
 
   function policySnapshotIsCurrent(generation) {
     return generation === state.scanGeneration;
@@ -534,10 +575,11 @@
     if (state.policyChange && state.panelHost) renderPanel(state.findings);
   }
 
-  async function updatePolicySnapshot(text, byCategory) {
+  async function updatePolicySnapshot(byCategory) {
     const generation = state.scanGeneration;
+    if (PRIVATE) return;
     try {
-      const snapshot = await preparePolicySnapshot(text, byCategory);
+      const snapshot = await preparePolicySnapshot(byCategory);
       if (!snapshot) return;
       if (!policySnapshotIsCurrent(generation)) return;
       const result = await persistPolicySnapshot(snapshot, generation);
@@ -546,6 +588,7 @@
   }
 
   async function writeRecord(prefix, record, prunePrefix, max) {
+    if (PRIVATE) return;
     try {
       const key = prefix + Date.now() + '_' + rand();
       await chrome.storage.local.set({ [key]: record });
@@ -603,6 +646,7 @@
    * @param {number} [by]
    */
   async function incrementTotal(key, by) {
+    if (PRIVATE) return;
     try {
       const s = await chrome.storage.local.get(key);
       const cur = (s && typeof s[key] === 'number') ? s[key] : 0;
@@ -637,9 +681,7 @@
     return result;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Content extraction + text index
-  // ─────────────────────────────────────────────────────────────────────────
 
   // Ancestors whose text is page chrome / non-prose and must never be analysed.
   const EXCLUDE_SELECTOR =
@@ -746,9 +788,7 @@
     return { node: last.node, offset: last.len }; // clamp to end
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Segmentation + matching
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Split flat text into sentence spans (offsets into the flat string), guarding
@@ -816,6 +856,111 @@
    * @param {string} norm
    * @returns {Array<{categoryId: string, level: string, score: number}>}
    */
+  // Categories that are only a risk when the company is the one acting.
+  const COMPANY_ACTOR_CATEGORIES = new Set([
+    'data_sale', 'third_party_sharing', 'tracking_surveillance', 'data_retention',
+    'unilateral_change', 'unilateral_termination', 'marketing_sharing', 'ai_training', 'profiling',
+  ]);
+  // Text that ends just before a verb whose subject is the user: "you may", "if you", "please".
+  const USER_ACTOR_RE = /(?:^|[^a-z])(?:(?:you|users?|customers?)(?:\s+(?:may|can|could|might|will|would|should|must|also|always|then|are able to|are free to|have the right to|are entitled to|wish to|want to|decide to|choose to|need to))*|please)\s+(?:to\s+)?$/;
+  // A user subject earlier in the clause: "you may terminate this agreement and close your account".
+  const USER_SUBJECT_RE = /(?:^|[^a-z])(?:(?:you|users?|customers?)\s+(?:may|can|could|might|will|would|should|must|are able to|are free to|have the right to|are entitled to|wish to|want to|decide to|choose to|need to)(?!\s+(?:be|not)(?:[^a-z]|$))|if you\s|when you\s|please\s)/g;
+  const COMPANY_SUBJECT_RE = /(?:^|[^a-z])we(?:[^a-z]|$)/;
+  // Wording that makes a matched clause benign. Scored like a negation.
+  const NOTICE_CUES = ['notify you', 'notifying you', 'notice to you', 'prior notice', 'advance notice', 'in advance', 'post a notice', 'days notice', "days' notice", 'days before', 'inform you', 'let you know'];
+  const PROTECTIVE_CUES = {
+    data_retention: ['only as long as', 'only for as long as', 'no longer than', 'minimum necessary', 'will be deleted', 'is deleted', 'are deleted', 'delete it', 'delete them'],
+    third_party_sharing: ['on our behalf', 'on behalf of', 'under contract', 'bound by confidentiality', 'confidentiality obligations'],
+    unilateral_change: NOTICE_CUES,
+    unilateral_termination: NOTICE_CUES,
+    indemnification: ['indemnify you', 'we will indemnify', 'we shall indemnify', 'we agree to indemnify'],
+    arbitration_classwaiver: ['may elect', 'may choose', 'can elect', 'can choose', 'not required to'],
+  };
+  const PROTECTIVE_RE = Object.create(null);
+  for (const id of Object.keys(PROTECTIVE_CUES)) PROTECTIVE_RE[id] = buildAltRegex(PROTECTIVE_CUES[id]);
+  // "without prior notice" must not read as the protective cue "prior notice".
+  const NOTICE_STRIP_RE = /without\s+(?:any\s+)?(?:prior\s+|advance\s+|further\s+)?(?:written\s+)?(?:notice|notification|notifying you)/g;
+  // Furthest an anchor and its object may sit apart when no single clause holds both.
+  const PAIR_WINDOW = 200;
+  const NEGATION_LOOKBACK = 25;
+
+  /** Start offsets and lengths of each phrase a global scan regex finds. */
+  function scanPositions(scanRe, text) {
+    const out = [];
+    if (!scanRe) return out;
+    scanRe.lastIndex = 0;
+    let match;
+    while ((match = scanRe.exec(text)) && out.length < 32) {
+      const phrase = match[1] || '';
+      if (!phrase) { scanRe.lastIndex += 1; continue; }
+      const start = match.index + match[0].length - phrase.length;
+      out.push({ start, end: start + phrase.length });
+    }
+    return out;
+  }
+
+  /** Anchor occurrences that the company, not the user, performs. */
+  function companyAnchors(p, text) {
+    const anchors = scanPositions(p.anchorScan, text);
+    if (!COMPANY_ACTOR_CATEGORIES.has(p.categoryId)) return anchors;
+    return anchors.filter((a) => !userActs(text.slice(0, a.start)));
+  }
+
+  /** True when the text leading up to a verb makes the user its subject. */
+  function userActs(prefix) {
+    if (USER_ACTOR_RE.test(prefix.slice(-60))) return true;
+    let last = -1;
+    USER_SUBJECT_RE.lastIndex = 0;
+    let match;
+    while ((match = USER_SUBJECT_RE.exec(prefix))) last = match.index + match[0].length;
+    return last !== -1 && !COMPANY_SUBJECT_RE.test(prefix.slice(last));
+  }
+
+  function isNegated(p, text) {
+    if (p.ignoreNegation || !state.regex.negation) return false;
+    const stripped = state.regex.aggravatedStrip ? text.replace(state.regex.aggravatedStrip, ' ') : text;
+    return state.regex.negation.test(stripped);
+  }
+
+  function isProtected(p, text) {
+    const re = PROTECTIVE_RE[p.categoryId];
+    return re ? re.test(text.replace(NOTICE_STRIP_RE, ' ')) : false;
+  }
+
+  /** The clause that best supports the pattern, or null. A clean clause beats a softened one. */
+  function matchInClauses(p, clauses) {
+    let softened = null;
+    for (let ci = 0; ci < clauses.length; ci++) {
+      const clause = clauses[ci];
+      if (!p.anchorRe.test(clause) || !p.objectRe.test(clause)) continue;
+      if (!companyAnchors(p, clause).length) continue;
+      const weak = isNegated(p, clause) || isProtected(p, clause);
+      if (!weak) return { text: clause, clauseIndex: ci, weak: false };
+      if (!softened) softened = { text: clause, clauseIndex: ci, weak: true };
+    }
+    return softened;
+  }
+
+  /**
+   * Fallback for an anchor and object that a comma split apart, as in
+   * "sell, rent, or share the information". Pairs them across the sentence
+   * when they sit within PAIR_WINDOW characters.
+   */
+  function matchAcrossSentence(p, norm) {
+    const objects = scanPositions(p.objectScan, norm);
+    if (!objects.length) return null;
+    for (const a of companyAnchors(p, norm)) {
+      for (const o of objects) {
+        const start = Math.min(a.start, o.start);
+        const end = Math.max(a.end, o.end);
+        if (end - start > PAIR_WINDOW) continue;
+        const text = norm.slice(Math.max(0, start - NEGATION_LOOKBACK), end);
+        return { text, clauseIndex: -1, weak: isNegated(p, text) || isProtected(p, norm.slice(start, end)) };
+      }
+    }
+    return null;
+  }
+
   function matchSentence(norm) {
     const hits = [];
     if (!norm) return hits;
@@ -823,57 +968,33 @@
     const clauses = norm.split(state.regex.clause);
 
     for (const p of state.compiled) {
-      // Respect per-category toggle.
       if (state.settings.categories[p.categoryId] === false) continue;
+      const found = matchInClauses(p, clauses) || matchAcrossSentence(p, norm);
+      if (!found) continue;
 
-      let matched = false;
-      let negated = true; // assume negated until a clean (non-negated) clause matches
-      let matchedClause = '';
-      let matchedIndex = -1;
-      for (let ci = 0; ci < clauses.length; ci++) {
-        const clause = clauses[ci];
-        if (p.anchorRe.test(clause) && p.objectRe.test(clause)) {
-          matched = true;
-          if (matchedIndex === -1) { matchedClause = clause; matchedIndex = ci; }
-          // Strip aggravator phrases (e.g. "without notice", "without your
-          // consent") BEFORE the negation test so their embedded cue word
-          // ("without") cannot falsely negate an otherwise-predatory clause.
-          const clauseForNegation = state.regex.aggravatedStrip
-            ? clause.replace(state.regex.aggravatedStrip, ' ')
-            : clause;
-          const clauseNegated = (!p.ignoreNegation && state.regex.negation) ? state.regex.negation.test(clauseForNegation) : false;
-          if (!clauseNegated) { negated = false; matchedClause = clause; matchedIndex = ci; break; } // strongest evidence wins
-        }
-      }
-      if (!matched) continue;
-
-      // Severity + modifier boost are bound to the MATCHED CLAUSE, not the whole
-      // sentence, so an aggravator ("without your consent", "at any time") that
-      // belongs to a DIFFERENT clause can no longer escalate this finding to
-      // "severe". That cross-clause bleed was the cause of the bogus "(severe)".
-      const hasModifier = p.modifierRe ? p.modifierRe.test(matchedClause) : false;
-      const clauseAggravated = state.regex.aggravated ? state.regex.aggravated.test(matchedClause) : false;
+      // Modifiers and aggravators count only inside the matched text, so one in
+      // a different clause cannot escalate this finding.
+      const hasModifier = p.modifierRe ? p.modifierRe.test(found.text) : false;
+      const aggravated = state.regex.aggravated ? state.regex.aggravated.test(found.text) : false;
       let score = p.weight * (hasModifier ? cfg.scoring.modifierBoost : 1);
-      // Negation is a confidence REDUCER, not a hard veto, a missed double
-      // negative should down-weight, never silently clear a real clause.
-      if (negated) score *= cfg.negation.penalty;
+      // Negation and protective wording reduce confidence instead of vetoing,
+      // so a missed double negative down-weights and never clears a real clause.
+      if (found.weak) score *= cfg.negation.penalty;
 
       if (score >= cfg.scoring.presentThreshold) {
         hits.push({
           patternId: p.id,
           categoryId: p.categoryId,
-          level: clauseAggravated ? 'aggravated' : 'present',
+          level: aggravated ? 'aggravated' : 'present',
           score,
-          clauseIndex: matchedIndex, // lets the caller show the matched clause, not the whole sentence
+          clauseIndex: found.clauseIndex,
         });
       }
     }
     return hits;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Page detection gate
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Cheap pre-gate: does the URL or the title/first-heading contain a policy
@@ -953,9 +1074,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Highlighting (CSS Custom Highlight API, zero DOM mutation)
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Inject (or refresh) our ::highlight() style rules. The <style> element is
@@ -967,11 +1086,11 @@
       const style = document.createElement('style');
       style.id = 'po-ts-highlight-style';
       // Brand severity tints (translucent, so the site's own text stays readable
-      // on light OR dark pages): orange (high), amber (med), teal (low).
+      // on light OR dark pages): one accent at three strengths.
       style.textContent =
-        '::highlight(po-ts-high){background-color:rgba(232,92,58,.30);text-decoration:underline wavy rgba(232,92,58,.95);}' +
-        '::highlight(po-ts-med){background-color:rgba(240,180,41,.36);}' +
-        '::highlight(po-ts-low){background-color:rgba(45,128,120,.24);}';
+        '::highlight(po-ts-high){background-color:rgba(217,138,106,.42);text-decoration:underline solid rgba(184,84,48,.95) 2px;}' +
+        '::highlight(po-ts-med){background-color:rgba(217,138,106,.26);}' +
+        '::highlight(po-ts-low){background-color:rgba(217,138,106,.14);}';
       (document.head || document.documentElement).appendChild(style);
       state.styleEl = style;
     } catch (_) { /* silent */ }
@@ -1016,45 +1135,60 @@
     } catch (_) { /* silent */ }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Shadow-DOM summary panel (style-isolated, po-ts- prefixed)
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // Styled to the PawsOff DARK brand (same tokens as the popup): deep pine
-  // surfaces, warm paper text, icon-orange accent, hard offset shadows.
-  // Deliberately a FIXED palette (no page/dark-mode inheritance) so it stays
-  // high-contrast and readable on top of any site, light or dark. Tokens are
-  // redeclared on :host because the closed shadow root can't inherit page CSS.
+  // Fixed dark palette, same as the popup, so the panel reads the same on any
+  // site. The one accent marks serious findings only. The site's own wording is
+  // set in a serif to keep it apart from our reading of it. Severity is drawn
+  // as one to three scratch marks, so it never depends on colour alone.
   const PANEL_CSS =
     ':host{all:initial;' +
-    '--paper:#101613;--card:#1c2722;--ink:#f2ede3;--soft:#a7b0a5;--edge:#0a0d0c;' +
-    '--accent:#ff5e3a;--teal:#3fa89e;--head:#223129;--amber:#f5c518;' +
-    '--shadow:4px 5px 0 var(--edge);--radius:16px;' +
-    '--font:"Plus Jakarta Sans","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;}' +
-    '.po-ts-card{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:352px;max-width:calc(100vw - 32px);max-height:68vh;' +
-    'display:flex;flex-direction:column;font:13px/1.45 var(--font);' +
-    'color:var(--ink);background:var(--card);border:2px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}' +
-    '.po-ts-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;background:var(--head);color:var(--ink);border-bottom:2px solid var(--edge);}' +
-    '.po-ts-title{font-weight:800;font-size:13.5px;letter-spacing:-0.015em;display:flex;align-items:center;gap:7px;}' +
-    '.po-ts-title::before{content:"";flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid var(--edge);}' +
-    '.po-ts-actions button{all:unset;cursor:pointer;color:var(--ink);opacity:.6;font-size:18px;line-height:1;padding:1px 6px;border-radius:8px;}' +
-    '.po-ts-actions button:hover{opacity:1;background:rgba(242,237,227,.12);}' +
-    '.po-ts-change{padding:9px 13px;background:rgba(245,197,24,.16);color:var(--ink);border-bottom:2px solid var(--edge);font-size:11px;font-weight:700;}' +
-    '.po-ts-context{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--card);border-bottom:2px solid var(--edge);}' +
-    '.po-ts-grade{display:grid;place-items:center;flex:0 0 34px;height:34px;border:2px solid var(--edge);border-radius:10px;font-weight:900;font-size:17px;color:var(--edge);}' +
-    '.po-ts-grade.good{background:var(--teal);}.po-ts-grade.mixed{background:var(--amber);}.po-ts-grade.poor{background:var(--accent);}.po-ts-grade.unknown{background:var(--soft);}' +
-    '.po-ts-context-copy{min-width:0}.po-ts-context-title{font-weight:800}.po-ts-context-note{color:var(--soft);font-size:11px;}' +
-    '.po-ts-list{overflow-y:auto;padding:7px;background:var(--paper);}' +
-    '.po-ts-item{all:unset;box-sizing:border-box;width:100%;display:flex;gap:9px;padding:9px;border-radius:12px;cursor:pointer;border:2px solid transparent;color:inherit;font:inherit;text-align:left;transition:transform .08s ease,box-shadow .08s ease;}' +
-    '.po-ts-item:hover{background:var(--card);border-color:var(--edge);box-shadow:3px 3px 0 var(--edge);transform:translate(-1px,-1px);}' +
-    '.po-ts-item:focus-visible{outline:3px solid var(--amber);outline-offset:1px;background:var(--card);}' +
-    '.po-ts-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;margin-top:3px;border:1.5px solid var(--edge);}' +
-    '.po-ts-dot.high{background:var(--accent);}.po-ts-dot.med{background:var(--amber);}.po-ts-dot.low{background:var(--teal);}' +
-    '.po-ts-cat{display:block;font-weight:800;letter-spacing:-0.01em;}' +
-    '.po-ts-evidence{display:inline-block;margin-top:3px;padding:1px 6px;border:1px solid rgba(242,237,227,.22);border-radius:999px;color:var(--soft);font-size:10px;font-weight:700;}' +
-    '.po-ts-snip{display:block;color:var(--soft);font-size:12px;margin-top:2px;}' +
-    '.po-ts-foot{display:flex;align-items:center;gap:6px;padding:9px 13px;font-size:11px;color:var(--soft);border-top:2px solid var(--edge);background:var(--card);}' +
-    '.po-ts-empty{padding:16px;color:var(--soft);}';
+    '--card:#1e2227;--raised:#2a2f36;--ink:#e6e8eb;--quote:#c3c9d1;--soft:#9aa3ad;--line:rgba(255,255,255,.09);' +
+    '--accent:#d98a6a;--mark:#7b8590;' +
+    '--ease:cubic-bezier(.2,0,0,1);' +
+    '--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Georgia,"Times New Roman",serif;}' +
+    '.po-ts-card{position:fixed;right:20px;bottom:20px;z-index:2147483647;width:360px;max-width:calc(100vw - 32px);max-height:70vh;' +
+    'display:flex;flex-direction:column;font:13px/1.45 var(--font);color:var(--ink);background:var(--card);' +
+    'border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 16px 40px rgba(0,0,0,.5);}' +
+    '.po-ts-enter{animation:po-ts-in .32s var(--ease) both;}' +
+    '@keyframes po-ts-in{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}' +
+    '.po-ts-head{display:flex;align-items:center;gap:14px;padding:16px 12px 14px 18px;border-bottom:1px solid var(--line);}' +
+    '.po-ts-count{flex:0 0 auto;font-size:44px;line-height:1;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}' +
+    '.po-ts-head.high .po-ts-count{color:var(--accent);}' +
+    '.po-ts-head-copy{flex:1 1 auto;min-width:0;display:grid;gap:2px;}' +
+    '.po-ts-headline{font-weight:600;font-size:15px;line-height:1.25;}' +
+    '.po-ts-title{font-size:12px;color:var(--soft);}' +
+    '.po-ts-actions{align-self:flex-start;}' +
+    '.po-ts-actions button{all:unset;cursor:pointer;color:var(--soft);font-size:20px;line-height:1;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;transition:background-color .18s var(--ease),color .18s var(--ease);}' +
+    '.po-ts-actions button:hover{background:var(--raised);color:var(--ink);}' +
+    '.po-ts-actions button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;color:var(--ink);}' +
+    '.po-ts-change{padding:9px 18px;background:color-mix(in srgb,var(--accent) 16%,var(--card));border-bottom:1px solid var(--line);font-size:12px;font-weight:600;}' +
+    '.po-ts-context{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--line);}' +
+    '.po-ts-grade{display:grid;place-items:center;flex:0 0 32px;height:32px;border-radius:6px;font-weight:700;font-size:15px;background:var(--raised);}' +
+    '.po-ts-grade.poor{color:#14161a;background:var(--accent);}' +
+    '.po-ts-context-copy{min-width:0}.po-ts-context-title{font-weight:600}.po-ts-context-note{color:var(--soft);font-size:11px;}' +
+    '.po-ts-list{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#4a515a transparent;}' +
+    '.po-ts-group{display:flex;align-items:center;gap:9px;padding:14px 18px 6px;font-size:12px;font-weight:600;color:var(--soft);}' +
+    '.po-ts-group.high{color:var(--accent);}' +
+    '.po-ts-group-count{margin-left:auto;font-weight:400;color:var(--soft);font-variant-numeric:tabular-nums;}' +
+    '.po-ts-marks{display:inline-flex;gap:3px;padding:0 2px;color:var(--mark);}' +
+    '.po-ts-group.high .po-ts-marks{color:var(--accent);}' +
+    '.po-ts-marks i{width:2px;height:12px;border-radius:1px;background:currentColor;transform:skewX(-18deg);transform-origin:top;}' +
+    '.po-ts-enter .po-ts-marks i{animation:po-ts-scratch .26s var(--ease) .3s both;}' +
+    '.po-ts-enter .po-ts-marks i:nth-child(2){animation-delay:.36s;}.po-ts-enter .po-ts-marks i:nth-child(3){animation-delay:.42s;}' +
+    '@keyframes po-ts-scratch{from{transform:skewX(-18deg) scaleY(0);}to{transform:skewX(-18deg) scaleY(1);}}' +
+    '.po-ts-item{all:unset;box-sizing:border-box;width:100%;display:block;padding:9px 18px 11px;cursor:pointer;transition:background-color .18s var(--ease);}' +
+    '.po-ts-item + .po-ts-item{box-shadow:inset 0 1px 0 var(--line);}' +
+    '.po-ts-item:hover{background:var(--raised);}' +
+    '.po-ts-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;background:var(--raised);}' +
+    '.po-ts-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}' +
+    '.po-ts-cat{display:block;font-weight:600;}' +
+    '.po-ts-snip{display:block;margin-top:3px;font:italic 13px/1.45 var(--serif);color:var(--quote);}' +
+    '.po-ts-snip::before{content:"\\201C";}.po-ts-snip::after{content:"\\201D";}' +
+    '.po-ts-evidence{display:block;margin-top:4px;color:var(--soft);font-size:11px;}' +
+    '.po-ts-foot{padding:10px 18px;font-size:11px;color:var(--soft);border-top:1px solid var(--line);}' +
+    '.po-ts-empty{padding:16px 18px;color:var(--soft);}' +
+    '@media (prefers-reduced-motion:reduce){.po-ts-enter,.po-ts-enter .po-ts-marks i{animation:none;}.po-ts-item,.po-ts-actions button{transition:none;}}';
 
   /**
    * Remove the panel host (ours).
@@ -1106,9 +1240,7 @@
   const panelTitle = TOS_PANEL.panelTitle;
   const renderPanel = TOS_PANEL.renderPanel;
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Scan orchestration
-  // ─────────────────────────────────────────────────────────────────────────
 
   function indexForScan() {
     if (!state.settings.enabled) return null;
@@ -1189,7 +1321,10 @@
   function recordFindingCatches(byCategory) {
     try {
       if (!window.PawsOffCatch) return;
-      Object.keys(byCategory).forEach((categoryId) => window.PawsOffCatch.recordClause(categoryId));
+      Object.keys(byCategory).forEach((categoryId) => {
+        const category = state.categoryById[categoryId];
+        window.PawsOffCatch.recordClause(categoryId, category && category.label);
+      });
     } catch (_) { /* silent */ }
   }
 
@@ -1199,7 +1334,7 @@
     if (scan.findings.length) applyHighlights(scan.rangesBySeverity);
     renderPanel(scan.findings);
     const byCategory = findingCounts(scan.findings);
-    updatePolicySnapshot(index.text, byCategory);
+    updatePolicySnapshot(byCategory);
     logScanEvent(Object.keys(byCategory), byCategory);
     recordFindingCatches(byCategory);
     if (scan.findings.length) incrementTotal(TS_TOTAL_KEY, scan.findings.length);
@@ -1248,9 +1383,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Readiness: handle policies rendered by JS after load
-  // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * If the first scan didn't find a policy page, watch briefly for late-rendered
@@ -1321,9 +1454,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  Public API
-  // ─────────────────────────────────────────────────────────────────────────
 
   function setReputationContext(context) {
     state.reputation = context ? context.reputation : null;
@@ -1410,9 +1541,7 @@
     return getStats();
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  React to settings changes from the popup in real time
-  // ─────────────────────────────────────────────────────────────────────────
   try {
     if (chrome && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {
@@ -1426,9 +1555,7 @@
     }
   } catch (_) { /* silent */ }
 
-  // ─────────────────────────────────────────────────────────────────────────
   //  SPA navigation reset (Navigation API, Chrome 102+)
-  // ─────────────────────────────────────────────────────────────────────────
   /**
    * Re-run analysis when the user navigates to another in-app route (e.g. from
    * /terms to /privacy in a docs SPA).
@@ -1450,10 +1577,10 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── Auto-invoke ────────────────────────────────────────────────────────────
+  // Auto-invoke
   window.__pawsOff_tosShield_init();
 
-  // ── Test-only export (NO-OP in Chrome; see consent-ghost.js note) ───────────
+  // Test-only export (NO-OP in Chrome; see consent-ghost.js note)
   // Exposes pure helpers + compileConfig/state so tests can compile DEFAULT_CONFIG
   // and exercise matchSentence/pageConfidence without the live DOM/storage.
   try {

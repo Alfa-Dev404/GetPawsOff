@@ -8,7 +8,7 @@
  * and same-origin iframes.
  *
  * Licensing: original PawsOff code, not a port of autoconsent's engine and
- * not a derivative of the MPL-2.0 vendored data in ./vendor/ — it only reads
+ * not a derivative of the MPL-2.0 vendored data in ./vendor/, it only reads
  * that data (rules + phrase banks) at runtime. Keep it that way.
  *
  * Every side-effecting dependency (document, window, the circuit-breaker
@@ -88,7 +88,7 @@
       } catch (_) { return false; } // can't determine visibility → treat as not actionable
     }
 
-    // ---- selector resolution (string | xpath/ | array-chain w/ piercing) ----
+    // selector resolution (string | xpath/ | array-chain w/ piercing)
     function queryAllIn(scope, sel) {
       if (!scope) return [];
       try {
@@ -213,7 +213,7 @@
       try { return (doc && doc.cookie ? doc.cookie : '').indexOf(sub) !== -1; } catch (_) { return false; }
     }
 
-    // ---- step interpreter -----------------------------------------------------
+    // step interpreter
     async function runStep(step, rootNode) {
       if (!step || typeof step !== 'object') return false;
       var negated = !!step.negated;
@@ -263,7 +263,7 @@
       return true;
     }
 
-    // ---- detection helpers (all steps must pass; no waiting in detect) --------
+    // detection helpers (all steps must pass; no waiting in detect)
     async function allTrue(steps, rootNode) {
       if (!Array.isArray(steps) || !steps.length) return false;
       for (var i = 0; i < steps.length; i++) { if (!(await runStep(steps[i], rootNode))) return false; }

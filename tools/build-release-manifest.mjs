@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* PawsOff — assemble an atomic, signed-config-ready release directory.
+/* PawsOff, assemble an atomic, signed-config-ready release directory.
  *
  * The output keeps the legacy URLs used by Store version 0.1.0 while also
  * publishing content-addressed release files plus a small release-manifest.
@@ -283,7 +283,7 @@ function validateEasyPrivacyDelta(feed) {
   return feed.domains.every((item) => validDeltaItem(item, seen));
 }
 
-// ── Bundled-source feeds (ToS clause vocabulary, PixelBlock selectors) ───────
+// Bundled-source feeds (ToS clause vocabulary, PixelBlock selectors)
 // These are generated from our own shipping content scripts rather than an
 // upstream project, but they get the identical treatment: strict key allowlist,
 // bounded strings, no regex source anywhere. The extension compiles the term

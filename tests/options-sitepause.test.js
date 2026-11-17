@@ -1,4 +1,4 @@
-/* PawsOff — settings-page per-site pause helpers (options.js).
+/* PawsOff, settings-page per-site pause helpers (options.js).
  *
  * The popup can pause PawsOff on the CURRENT site ("Unbreak this site"); these
  * helpers give the settings page parity by letting you pause sites by typing a

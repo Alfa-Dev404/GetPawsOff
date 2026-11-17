@@ -1,0 +1,589 @@
+{
+ "schemaVersion": 1,
+ "configVersion": "20261115122657",
+ "minEngineVersion": "1.0.0",
+ "locale": "en",
+ "source": "pawsoff-bundled",
+ "sourceUrl": "https://github.com/Alfa-Dev404/GetPawsOff/blob/main/src/content/tos-shield.js",
+ "sourceLicense": "MPL-2.0",
+ "attribution": "ToS Shield clause vocabulary, PawsOff, MPL-2.0.",
+ "pageDetection": {
+  "urlTokens": [
+   "terms",
+   "tos",
+   "eula",
+   "privacy",
+   "legal",
+   "conditions",
+   "user-agreement",
+   "cookie-policy",
+   "data-policy",
+   "data-protection",
+   "consumer-rights",
+   "subject-access",
+   "do-not-sell",
+   "do-not-share",
+   "ccpa",
+   "gdpr",
+   "dsar"
+  ],
+  "titleTokens": [
+   "terms of service",
+   "terms of use",
+   "terms and conditions",
+   "privacy policy",
+   "user agreement",
+   "cookie policy",
+   "data policy",
+   "privacy choices",
+   "privacy center",
+   "privacy centre",
+   "privacy rights",
+   "privacy notice",
+   "consumer privacy",
+   "data privacy",
+   "data subject rights",
+   "data protection rights",
+   "subject access request",
+   "do not sell my",
+   "do not share my"
+  ],
+  "legaleseMarkers": [
+   "shall",
+   "herein",
+   "hereto",
+   "you agree",
+   "we may",
+   "reserve the right",
+   "governing law",
+   "last updated",
+   "effective date",
+   "these terms"
+  ],
+  "minWordCount": 400,
+  "confidenceThreshold": 0.6
+ },
+ "segmentation": {
+  "abbreviations": [
+   "inc.",
+   "ltd.",
+   "co.",
+   "corp.",
+   "e.g.",
+   "i.e.",
+   "u.s.",
+   "u.k.",
+   "no.",
+   "art.",
+   "sec.",
+   "vs.",
+   "etc."
+  ],
+  "clauseDelimiters": [
+   ";",
+   ",",
+   "except",
+   "unless",
+   "provided that",
+   "notwithstanding"
+  ]
+ },
+ "negation": {
+  "cues": [
+   "not",
+   "never",
+   "no",
+   "without",
+   "except",
+   "unless",
+   "nor",
+   "neither",
+   "cannot",
+   "won't",
+   "don't",
+   "doesn't",
+   "do not",
+   "does not",
+   "will not",
+   "prohibited from",
+   "refrain from"
+  ],
+  "scope": "clause",
+  "penalty": 0.3
+ },
+ "scoring": {
+  "presentThreshold": 0.5,
+  "modifierBoost": 1.5,
+  "aggravatedModifiers": [
+   "perpetual",
+   "irrevocable",
+   "worldwide",
+   "at our sole discretion",
+   "for any reason",
+   "at any time",
+   "indefinitely",
+   "without notice",
+   "without further notice",
+   "without limitation",
+   "without restriction",
+   "without compensation",
+   "without your consent",
+   "without consent",
+   "without your knowledge",
+   "without your permission",
+   "without warranty",
+   "without liability"
+  ]
+ },
+ "categories": [
+  {
+   "id": "data_sale",
+   "label": "Sells or rents your data",
+   "description": "The service may sell, rent or trade your personal data.",
+   "severity": "high",
+   "defaultEnabled": true
+  },
+  {
+   "id": "third_party_sharing",
+   "label": "Shares data with third parties",
+   "description": "Your data may be disclosed to partners or third parties.",
+   "severity": "med",
+   "defaultEnabled": true
+  },
+  {
+   "id": "tracking_surveillance",
+   "label": "Tracks you across sites or devices",
+   "description": "The service may track activity beyond this site.",
+   "severity": "high",
+   "defaultEnabled": true
+  },
+  {
+   "id": "data_retention",
+   "label": "Keeps your data indefinitely",
+   "description": "Personal data may be retained without a clear limit.",
+   "severity": "med",
+   "defaultEnabled": true
+  },
+  {
+   "id": "content_license",
+   "label": "Claims a licence to your content",
+   "description": "You may grant a broad licence over content you submit.",
+   "severity": "high",
+   "defaultEnabled": true
+  },
+  {
+   "id": "unilateral_change",
+   "label": "Can change the terms at any time",
+   "description": "Terms may be changed unilaterally, possibly without notice.",
+   "severity": "high",
+   "defaultEnabled": true
+  },
+  {
+   "id": "unilateral_termination",
+   "label": "Can suspend or delete your account anytime",
+   "description": "Your account or access may be terminated at their discretion.",
+   "severity": "med",
+   "defaultEnabled": true
+  },
+  {
+   "id": "arbitration_classwaiver",
+   "label": "Forces arbitration / waives class action",
+   "description": "You may waive court and class-action rights.",
+   "severity": "high",
+   "defaultEnabled": true
+  },
+  {
+   "id": "liability_waiver",
+   "label": "Disclaims liability",
+   "description": "The service disclaims warranties or liability for damages.",
+   "severity": "low",
+   "defaultEnabled": true
+  },
+  {
+   "id": "jurisdiction_choiceoflaw",
+   "label": "Disputes governed by their chosen courts",
+   "description": "Disputes are bound to a jurisdiction/governing law they pick.",
+   "severity": "low",
+   "defaultEnabled": true
+  },
+  {
+   "id": "consent_by_use",
+   "label": "You agree just by using the site",
+   "description": "Continued use is treated as acceptance of the terms.",
+   "severity": "med",
+   "defaultEnabled": true
+  },
+  {
+   "id": "marketing_sharing",
+   "label": "Uses your data for ads or marketing",
+   "description": "Your data may be used for advertising or marketing.",
+   "severity": "low",
+   "defaultEnabled": true
+  }
+ ],
+ "patterns": [
+  {
+   "id": "data_sale.core",
+   "categoryId": "data_sale",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "sell",
+    "sells",
+    "selling",
+    "sold",
+    "sale",
+    "rent",
+    "rents",
+    "lease",
+    "monetize",
+    "monetise",
+    "trade",
+    "in exchange for"
+   ],
+   "objects": [
+    "personal information",
+    "personal data",
+    "your data",
+    "your information",
+    "information about you",
+    "user data"
+   ],
+   "modifiers": [
+    "third parties",
+    "advertisers",
+    "for a fee"
+   ]
+  },
+  {
+   "id": "third_party_sharing.core",
+   "categoryId": "third_party_sharing",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "share",
+    "shares",
+    "sharing",
+    "shared",
+    "disclose",
+    "discloses",
+    "disclosed",
+    "transfer",
+    "transfers",
+    "provide",
+    "communicate",
+    "communicates",
+    "communicated"
+   ],
+   "objects": [
+    "third party",
+    "third parties",
+    "partners",
+    "affiliates",
+    "advertisers",
+    "service providers",
+    "other companies"
+   ],
+   "modifiers": [
+    "for any purpose",
+    "without your consent"
+   ]
+  },
+  {
+   "id": "tracking_surveillance.core",
+   "categoryId": "tracking_surveillance",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "track",
+    "tracks",
+    "tracking",
+    "monitor",
+    "monitors",
+    "collect",
+    "collects",
+    "profile",
+    "fingerprint"
+   ],
+   "objects": [
+    "across websites",
+    "across other sites",
+    "across devices",
+    "your activity",
+    "browsing history",
+    "your location",
+    "your behaviour",
+    "your behavior",
+    "cookies",
+    "unique identifiers",
+    "precise location"
+   ],
+   "modifiers": [
+    "continuously",
+    "in real time"
+   ]
+  },
+  {
+   "id": "data_retention.core",
+   "categoryId": "data_retention",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "retain",
+    "retains",
+    "retained",
+    "retention",
+    "keep",
+    "keeps",
+    "store",
+    "stores",
+    "maintain"
+   ],
+   "objects": [
+    "indefinitely",
+    "as long as necessary",
+    "for as long as",
+    "until you delete",
+    "for a period",
+    "after termination",
+    "after you delete"
+   ],
+   "modifiers": [
+    "indefinitely",
+    "permanently"
+   ]
+  },
+  {
+   "id": "content_license.core",
+   "categoryId": "content_license",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "grant",
+    "grants",
+    "granting",
+    "license",
+    "licence",
+    "royalty-free",
+    "sublicensable",
+    "assign"
+   ],
+   "objects": [
+    "content",
+    "your content",
+    "user content",
+    "materials",
+    "submissions",
+    "user-generated content",
+    "any content you"
+   ],
+   "modifiers": [
+    "perpetual",
+    "irrevocable",
+    "worldwide",
+    "royalty-free",
+    "transferable"
+   ]
+  },
+  {
+   "id": "unilateral_change.core",
+   "categoryId": "unilateral_change",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "change",
+    "changes",
+    "modify",
+    "modifies",
+    "update",
+    "updates",
+    "amend",
+    "amends",
+    "revise",
+    "alter"
+   ],
+   "objects": [
+    "these terms",
+    "this agreement",
+    "this policy",
+    "the terms",
+    "terms of service",
+    "privacy policy",
+    "at any time"
+   ],
+   "modifiers": [
+    "without notice",
+    "at our sole discretion",
+    "at any time",
+    "without prior notice"
+   ]
+  },
+  {
+   "id": "unilateral_termination.core",
+   "categoryId": "unilateral_termination",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "terminate",
+    "terminates",
+    "suspend",
+    "suspends",
+    "disable",
+    "restrict",
+    "delete",
+    "cancel"
+   ],
+   "objects": [
+    "your account",
+    "your access",
+    "the service",
+    "your profile"
+   ],
+   "modifiers": [
+    "without notice",
+    "for any reason",
+    "at our sole discretion",
+    "at any time"
+   ]
+  },
+  {
+   "id": "arbitration_classwaiver.core",
+   "categoryId": "arbitration_classwaiver",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "arbitration",
+    "arbitrate",
+    "binding arbitration",
+    "waive",
+    "waiver",
+    "class action",
+    "class-action",
+    "jury trial"
+   ],
+   "objects": [
+    "dispute",
+    "disputes",
+    "claims",
+    "any claim",
+    "right to",
+    "your right"
+   ],
+   "modifiers": [
+    "binding",
+    "mandatory",
+    "waive any right"
+   ]
+  },
+  {
+   "id": "liability_waiver.core",
+   "categoryId": "liability_waiver",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "disclaim",
+    "disclaims",
+    "as is",
+    "as available",
+    "no warranty",
+    "not liable",
+    "not responsible",
+    "limitation of liability",
+    "held liable",
+    "be liable",
+    "shall not be liable",
+    "held responsible"
+   ],
+   "objects": [
+    "damages",
+    "liability",
+    "warranties",
+    "any loss",
+    "indirect",
+    "consequential",
+    "in the event",
+    "arising",
+    "resulting from"
+   ],
+   "modifiers": [
+    "to the fullest extent",
+    "in no event"
+   ]
+  },
+  {
+   "id": "jurisdiction_choiceoflaw.core",
+   "categoryId": "jurisdiction_choiceoflaw",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "governed by",
+    "governing law",
+    "jurisdiction",
+    "venue",
+    "courts of",
+    "exclusive jurisdiction"
+   ],
+   "objects": [
+    "laws of",
+    "courts",
+    "state of",
+    "country",
+    "these terms",
+    "this agreement"
+   ],
+   "modifiers": [
+    "exclusive",
+    "sole"
+   ]
+  },
+  {
+   "id": "consent_by_use.core",
+   "categoryId": "consent_by_use",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "by using",
+    "by accessing",
+    "by continuing",
+    "continued use",
+    "your use of"
+   ],
+   "objects": [
+    "you agree",
+    "you accept",
+    "you consent",
+    "constitutes acceptance",
+    "these terms",
+    "this agreement"
+   ],
+   "modifiers": []
+  },
+  {
+   "id": "marketing_sharing.core",
+   "categoryId": "marketing_sharing",
+   "enabled": true,
+   "weight": 1,
+   "anchors": [
+    "marketing",
+    "advertising",
+    "promotional",
+    "targeted",
+    "personalized ads",
+    "personalised ads"
+   ],
+   "objects": [
+    "your data",
+    "your information",
+    "your email",
+    "communications",
+    "your interests",
+    "send you",
+    "personal data",
+    "personal information"
+   ],
+   "modifiers": [
+    "third parties"
+   ]
+  }
+ ]
+}

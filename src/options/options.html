@@ -48,7 +48,7 @@
   <section id="site-recovery">
     <div class="sec-head"><h2 class="po-sticker">Paused sites</h2><span class="section-capsule">Recovery</span></div>
     <div class="po-card po-mt16">
-      <p class="po-sub">GetPawsOff is fully paused on these sites, the same as “Unbreak this site” in the popup. Use this when our blocking breaks a page you trust. Site names are converted to one-way local hashes and are not kept in plaintext.</p>
+      <p class="po-sub">GetPawsOff is fully paused on these sites, the same as “Unbreak this site” in the popup. Use this when our blocking breaks a page you trust. Site names are stored as short local hashes rather than readable text.</p>
       <div class="po-row po-mt8 site-entry">
         <input id="cg-sites-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="example.com" class="po-input site-input" aria-label="Site domain" />
         <button class="po-btn" id="cg-sites-add" type="button">Add</button>
@@ -127,6 +127,7 @@
     <div class="po-card po-mt16">
       <div class="po-row activity-head">
         <p class="po-sub activity-copy">Recent local activity (never leaves your device).</p>
+        <button class="po-btn" id="copy-diagnostics" type="button" title="Copies the version, your toggles and counters, and recent error notes. No site names or page content.">Copy diagnostics</button>
         <button class="po-btn" id="clear-logs" type="button">Clear log</button>
       </div>
       <div class="po-divider"></div>

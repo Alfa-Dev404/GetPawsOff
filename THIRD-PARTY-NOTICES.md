@@ -44,6 +44,15 @@ Only the network-blocking `easyprivacy/` subset is bundled, converted to MV3 DNR
 rules through GetPawsOff's own clean-room converter. No upstream filter text is
 copied verbatim into shipped code.
 
+## ToS;DR (test data only)
+
+- Licence: CC BY-SA 3.0
+- Upstream: https://tosdr.org/
+- `tests/fixtures/tos-corpus.json` holds reviewer-labelled quotes from the
+  policies of reviewed services, used to measure ToS Shield accuracy. It is a
+  test fixture and is not part of the packaged extension. Rebuild it with
+  `tools/build-tos-corpus.mjs`.
+
 ---
 
 If you redistribute GetPawsOff, keep this file and the referenced per-component
