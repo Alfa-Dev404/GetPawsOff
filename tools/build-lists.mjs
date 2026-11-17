@@ -1,11 +1,11 @@
-// build-lists.mjs — community-list fetch + convert orchestrator (run in CI).
+// build-lists.mjs, community-list fetch + convert orchestrator (run in CI).
 //
 // Pulls only approved, commercially usable community data, runs clean-room
 // converters, writes signed-config-ready artifacts to dist-lists/. Signing
 // (ECDSA P-256 detached .sig) and publishing are a separate step so the
 // release private key never lives in this repo.
 //
-// Requires network — CI only, not the offline build sandbox.
+// Requires network, CI only, not the offline build sandbox.
 //   node tools/build-lists.mjs
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -106,7 +106,11 @@ function requireResponseOrigin(response, allowedOrigin) {
 
 function validateFetchedResponse(response, allowedOrigin) {
   if (response.status >= 300 && response.status < 400) throw new Error('redirect response rejected');
-  if (!response.ok) throw new Error('HTTP ' + response.status);
+  if (!response.ok) {
+    const error = new Error('HTTP ' + response.status);
+    error.transient = response.status >= 500 || response.status === 429;
+    throw error;
+  }
   requireResponseOrigin(response, allowedOrigin);
 }
 
@@ -118,10 +122,30 @@ async function fetchWithTimeout(url, ms, maxBytes, allowedOrigin = new URL(url).
     validateFetchedResponse(res, allowedOrigin);
     return await readBoundedText(res, maxBytes);
   } catch (err) {
-    if (err && err.name === 'AbortError') throw new Error('timeout after ' + ms + 'ms fetching ' + url);
+    if (err && err.name === 'AbortError') {
+      const timeout = new Error('timeout after ' + ms + 'ms fetching ' + url);
+      timeout.transient = true;
+      throw timeout;
+    }
+    // fetch reports a dropped or refused connection as a TypeError.
+    if (err instanceof TypeError) err.transient = true;
     throw err;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// Retries server errors, rate limits, timeouts and dropped connections.
+// Redirects, wrong origins and oversized bodies still fail on the first try.
+async function fetchWithRetries(url, ms, maxBytes, delayMs = 5000) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchWithTimeout(url, ms, maxBytes);
+    } catch (error) {
+      if (!error.transient || attempt >= 3) throw error;
+      console.error(`fetch failed (${error.message}), retry ${attempt + 1} of 3: ${url}`);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs * (attempt + 1)));
+    }
   }
 }
 
@@ -129,11 +153,11 @@ async function fetchWithTimeout(url, ms, maxBytes, allowedOrigin = new URL(url).
 // PER-SERVICE basis (aggressively rate-limited), unlike the old bulk
 // all-services/v2 endpoint this used to hit. Fetching detail for all ~10k
 // services isn't CI-friendly, so this paginates the bulk list instead (host +
-// letter grade only); `flagged` stays empty for every entry as a result —
+// letter grade only); `flagged` stays empty for every entry as a result,
 // tosdr-to-grades.js already tolerates a missing `points` array.
 //
 // The API caps at 5 requests per rolling 10s window (X-RateLimit-Limit/Reset
-// response headers, no Retry-After on a 429) — pace requests well under that
+// response headers, no Retry-After on a 429), pace requests well under that
 // and back off using the reset header's own countdown on a 429, rather than a
 // blind fixed delay.
 async function fetchTosdrPage(page, ms) {
@@ -269,7 +293,7 @@ const SOURCES = [
     // The rule fragments live individually under rules/autoconsent/*.json in
     // git; the compiled bundle this used to fetch straight from git is now
     // only produced at publish time and shipped in the npm package instead.
-    fetchText: () => fetchWithTimeout(AUTOCONSENT_RULES_URL, 30000, AUTOCONSENT_MAX_BYTES),
+    fetchText: () => fetchWithRetries(AUTOCONSENT_RULES_URL, 30000, AUTOCONSENT_MAX_BYTES),
     out: 'dist-lists/consent-ghost/consent-config.json',
     run: (text, configVersion) => {
       const result = autoconsent.convert(JSON.parse(text), {
@@ -297,7 +321,7 @@ const SOURCES = [
     feature: 'Signed tracker-list top-up',
     name: 'easyprivacy-delta',
     license: 'GPL-3.0-or-later OR CC-BY-SA-3.0-or-later',
-    fetchText: () => fetchWithTimeout(EASYPRIVACY_URL, 30000, EASYPRIVACY_MAX_BYTES),
+    fetchText: () => fetchWithRetries(EASYPRIVACY_URL, 30000, EASYPRIVACY_MAX_BYTES),
     out: 'dist-lists/easyprivacy-delta/domains.json',
     run: (text, configVersion) => easyPrivacyDelta.convert(text, {
       configVersion,
@@ -329,7 +353,7 @@ const SOURCES = [
   },
 ];
 
-// Intentionally NOT shipped — incompatible with a commercial / source-available
+// Intentionally NOT shipped, incompatible with a commercial / source-available
 // product. Documented here so the decision is auditable.
 const EXCLUDED = [
   { name: 'DuckDuckGo Tracker Radar', reason: 'CC-BY-NC-SA: non-commercial clause' },
@@ -369,6 +393,7 @@ export {
   MAX_TOSDR_PAGES,
   TOSDR_SERVICE_MAX_BYTES,
   appendTosdrServices,
+  fetchWithRetries,
   fetchWithTimeout,
   parseTosdrPage,
   readBoundedText,

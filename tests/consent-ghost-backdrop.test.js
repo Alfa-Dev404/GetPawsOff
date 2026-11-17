@@ -1,4 +1,4 @@
-/* PawsOff — orphaned-backdrop reaper.
+/* PawsOff, orphaned-backdrop reaper.
  *
  * Bug: cross-origin CMPs (Sourcepoint) render the dialog in their OWN iframe, but
  * the full-screen click-blocking VEIL + page scroll-lock live in the TOP document.
@@ -16,7 +16,7 @@ const { loadConsentGhost } = require('./harness/sandbox');
 
 const I = () => loadConsentGhost({ enabled: true, document: makeDoc() }).internals;
 
-// ── fake-DOM helpers ────────────────────────────────────────────────────────
+// fake-DOM helpers
 function camel(k) { return k.replace(/-([a-z])/g, (_, c) => c.toUpperCase()); }
 function styleObj(initial) {
   const s = Object.assign({ _props: {} }, initial || {});
@@ -57,7 +57,7 @@ function makeDoc() {
   };
 }
 
-// ── pure decision ───────────────────────────────────────────────────────────
+// pure decision
 test('shouldReapBackdrop: only when a veil is visible AND no consent surface remains', () => {
   const t = I();
   eq(t.shouldReapBackdrop(true, false), true, 'orphaned veil → reap');
@@ -65,7 +65,7 @@ test('shouldReapBackdrop: only when a veil is visible AND no consent surface rem
   eq(t.shouldReapBackdrop(false, false), false, 'no veil → nothing to do');
 });
 
-// ── reaper neutralizes an orphaned veil + restores scrolling ────────────────
+// reaper neutralizes an orphaned veil + restores scrolling
 test('reapOrphanBackdrops: neutralizes an orphaned veil and restores scroll-lock', () => {
   _state = { veil: veilNode(), iframes: [] };
   const { internals, document } = loadConsentGhost({ enabled: true, document: makeDoc() });
@@ -79,7 +79,7 @@ test('reapOrphanBackdrops: neutralizes an orphaned veil and restores scroll-lock
   assert(document._html.classList.contains('sp-message-open') === false, 'sp-message-open class removed');
 });
 
-// ── reaper leaves the veil alone while the banner is still visible ──────────
+// reaper leaves the veil alone while the banner is still visible
 test('reapOrphanBackdrops: does NOT touch the veil while a consent iframe is on screen', () => {
   _state = { veil: veilNode(), iframes: [iframeNode()] };
   const { internals } = loadConsentGhost({ enabled: true, document: makeDoc() });
@@ -90,7 +90,7 @@ test('reapOrphanBackdrops: does NOT touch the veil while a consent iframe is on 
   eq(veil.style._props['display'], undefined, 'veil untouched');
 });
 
-// ── anyConsentSurfaceVisible reflects a visible CMP iframe ──────────────────
+// anyConsentSurfaceVisible reflects a visible CMP iframe
 test('anyConsentSurfaceVisible: true when a CMP message iframe is visible', () => {
   _state = { veil: null, iframes: [iframeNode()] };
   const { internals } = loadConsentGhost({ enabled: true, document: makeDoc() });
@@ -101,7 +101,7 @@ test('anyConsentSurfaceVisible: true when a CMP message iframe is visible', () =
   eq(in2.anyConsentSurfaceVisible(), false, 'no iframe / no dialog → no surface');
 });
 
-// ── curated selectors only (never a broad overlay matcher) ──────────────────
+// curated selectors only (never a broad overlay matcher)
 test('BACKDROP_SELECTORS are CMP-namespaced, never a blanket [class*=overlay]', () => {
   const t = I();
   assert(Array.isArray(t.BACKDROP_SELECTORS) && t.BACKDROP_SELECTORS.length > 0, 'list present');

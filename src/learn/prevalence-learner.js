@@ -1,4 +1,4 @@
-/* PawsOff, Prevalence Learner — observe-only, service-worker side.
+/* PawsOff, Prevalence Learner, observe-only, service-worker side.
  *
  * A Privacy Badger-style local learner, re-derived from the method only
  * (clean-room, no Privacy Badger code). A third party showing up across many
@@ -13,12 +13,12 @@
  * site-critical domains, and bounded storage (per-tracker site cap + global
  * cap + TTL decay).
  *
- * Observe-only — this file scores, never blocks/cookieblocks/redirects, and
+ * Observe-only, this file scores, never blocks/cookieblocks/redirects, and
  * writes no declarativeNetRequest rule. Enforcement lives elsewhere.
  *
  * Requires self.PawsOffPSL; background.js loads psl-lite.js first via
  * importScripts. Self-registers its own message + alarm listeners
- * (additive — doesn't disturb the main router).
+ * (additive, doesn't disturb the main router).
  */
 'use strict';
 (function (root) {
@@ -30,7 +30,7 @@
   var SIZES_KEY = '__pawsOff_pv_sizes';   // per-domain learned transfer sizes
   var DECAY_ALARM = 'pawsoff_pv_decay';
 
-  // ── Tuning ────────────────────────────────────────────────────────────────
+  // Tuning
   var HALF_LIFE_DAYS = 30;        // a sighting loses half its weight every 30 days
   var BLOCK_THRESHOLD = 3;        // decayed score at/above which we'd act
   var OBSERVE_FLOOR = 1;          // below this = effectively "allow"
@@ -48,7 +48,7 @@
 
   // One-way FNV-1a/32 host digest, byte-identical to the collector/po-catch/
   // popup copies (pinned by tests/hashhost-consistency.test.js). Everything
-  // the learner persists — tracker and first-party alike — is hashed, never
+  // the learner persists, tracker and first-party alike, is hashed, never
   // plaintext. The popup radar still shows real tracker names because
   // spotted() derives them live from the page, not from storage.
   function hashHost(host) {
@@ -63,7 +63,7 @@
   }
   function isHashKey(k) { return typeof k === 'string' && /^h:[0-9a-f]{8}$/.test(k); }
   // A legacy plaintext-keyed store predates hashing; since this is observe-only
-  // data we just discard it rather than re-key — the learner rebuilds from scratch.
+  // data we just discard it rather than re-key, the learner rebuilds from scratch.
   function migrateHashedKeys(raw) {
     if (!raw || typeof raw !== 'object') return { data: {}, changed: false };
     var keys = Object.keys(raw);
@@ -73,8 +73,8 @@
     return { data: raw, changed: false };
   }
 
-  // ── First-party sets: domains owned by the same entity are NOT third-party to
-  //    each other. Tiny seed; extend later via signed remote config. ──────────
+  // First-party sets: domains owned by the same entity are NOT third-party to
+  //   each other. Tiny seed; extend later via signed remote config.
   var FIRST_PARTY_SETS = [
     ['google.com', 'google.co.uk', 'youtube.com', 'gstatic.com', 'googleusercontent.com', 'withgoogle.com', 'goo.gl'],
     ['microsoft.com', 'live.com', 'office.com', 'microsoftonline.com', 'bing.com', 'msn.com', 'azureedge.net'],
@@ -96,9 +96,9 @@
     return (oa !== undefined && oa === ob);
   }
 
-  // ── Yellowlist: domains commonly needed for a site to function. When such a
+  // Yellowlist: domains commonly needed for a site to function. When such a
   //    tracker crosses threshold we'd COOKIEBLOCK (strip its cookies) rather
-  //    than fully BLOCK. Seed; replace/extend via signed remote config. ───────
+  //   than fully BLOCK. Seed; replace/extend via signed remote config.
   var BUNDLED_YELLOWLIST = new Set([
     'youtube.com', 'vimeo.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com',
     'cloudflare.com', 'cloudfront.net', 'jsdelivr.net', 'jquery.com', 'bootstrapcdn.com',
@@ -119,7 +119,7 @@
     return _yellowHash.has(key);
   }
 
-  // ── Serialized mutation queue (no read-modify-write races in the SW) ───────
+  // Serialized mutation queue (no read-modify-write races in the SW)
   var _cache = null;            // in-memory snitch map (rehydrated on demand)
   var _sizeCache = null;        // in-memory per-domain size map { domain: { total, count } }
   var _domainLabels = {};       // hash -> domain, memory-only for the live popup/DNR join
@@ -168,7 +168,7 @@
   }
   function enqueue(fn) { _chain = _chain.then(fn).catch(function () { /* silent */ }); return _chain; }
 
-  // ── Scoring ───────────────────────────────────────────────────────────────
+  // Scoring
   function scoreEntry(entry, t) {
     if (!entry || !entry.s) return 0;
     var score = 0;
@@ -189,7 +189,7 @@
   // For callers that hold the plaintext base (getVerdict / spotted).
   function verdictFor(base, score) { return verdictWith(isYellow(base), score); }
 
-  // ── Record a batch from the collector ──────────────────────────────────────
+  // Record a batch from the collector
   // We can only record a sighting when we know the first-party host and were
   // given at least one observed third-party host to attribute to it.
   function hasReportableHosts(firstPartyHost, hostList) {
@@ -259,7 +259,7 @@
     });
   }
 
-  // ── Transfer size learning ────────────────────────────────────────────────
+  // Transfer size learning
   // Build a running per-domain average of real transferSize bytes observed from
   // the Performance API. Each domain stores { total: bytes, count: observations,
   // avg: bytes }. This data powers the honest "bandwidth saved" estimate in the
@@ -354,7 +354,7 @@
     });
   }
 
-  // ── Daily decay / compaction ───────────────────────────────────────────────
+  // Daily decay / compaction
   function pruneExpiredSites(sites, t) {
     Object.keys(sites).forEach(function (site) {
       if (t - sites[site] > SITE_TTL_DAYS) delete sites[site];
@@ -384,7 +384,7 @@
     });
   }
 
-  // ── Read APIs (for popup / options / diagnostics / SW console) ─────────────
+  // Read APIs (for popup / options / diagnostics / SW console)
   function statsRow(tracker, entry, t) {
     var score = scoreEntry(entry, t);
     return {
@@ -500,12 +500,19 @@
   NS.reset = reset;
   NS.hashHost = hashHost; // exposed so callers/tests can derive the hashed storage keys
 
-  // ── Message listener (additive; coexists with background.js's own router) ──
+  // Message listener (additive; coexists with background.js's own router)
+  // Content scripts report their page URL as sender.url; the popup and options
+  // report the extension origin. Settings messages are accepted from the latter only.
+  function fromExtensionPage(sender) {
+    try { return typeof sender.url === 'string' && sender.url.indexOf(chrome.runtime.getURL('')) === 0; }
+    catch (_) { return false; }
+  }
   try {
     chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       try {
         if (!sender || sender.id !== chrome.runtime.id) return false;
         if (!message || typeof message.type !== 'string') return false;
+        if (message.type !== 'pawsoff_prevalence_observe' && !fromExtensionPage(sender)) return false;
         switch (message.type) {
           case 'pawsoff_prevalence_observe':
             record(message.firstParty, message.hosts).then(function () {
@@ -517,28 +524,10 @@
               function () { try { sendResponse({ ok: false, spotted: [] }); } catch (_) {} }
             );
             return true;
-          case 'pawsoff_prevalence_getStats':
-            getStats(message.topN).then(
-              function (stats) { try { sendResponse({ ok: true, stats: stats }); } catch (_) {} },
-              function () { try { sendResponse({ ok: false, stats: null }); } catch (_) {} }
-            );
-            return true;
-          case 'pawsoff_prevalence_getVerdict':
-            getVerdict(message.host).then(
-              function (v) { try { sendResponse({ ok: true, verdict: v }); } catch (_) {} },
-              function () { try { sendResponse({ ok: false, verdict: null }); } catch (_) {} }
-            );
-            return true;
           case 'pawsoff_prevalence_resolveSpots':
             resolveSpots(message.hashes).then(
               function (labels) { try { sendResponse({ ok: true, labels: labels }); } catch (_) {} },
               function () { try { sendResponse({ ok: false, labels: {} }); } catch (_) {} }
-            );
-            return true;
-          case 'pawsoff_prevalence_reset':
-            reset().then(
-              function (r) { try { sendResponse(r); } catch (_) {} },
-              function () { try { sendResponse({ ok: false }); } catch (_) {} }
             );
             return true;
           case 'pawsoff_prevalence_getSizeEstimate':
@@ -557,7 +546,7 @@
     });
   } catch (_) { /* runtime API unavailable */ }
 
-  // ── Daily decay alarm (chrome.alarms only -- never setInterval in the SW) ──
+  // Daily decay alarm (chrome.alarms only -- never setInterval in the SW)
   function ensureAlarm() {
     try { chrome.alarms.create(DECAY_ALARM, { periodInMinutes: 1440 }); } catch (_) { /* ignore */ }
   }

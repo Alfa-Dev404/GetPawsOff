@@ -141,3 +141,37 @@ test('build lists: ToS;DR pagination has a cumulative raw-service byte budget', 
   assert(rejected, 'aggregate raw service data cannot exceed its budget');
   eq(services.length, 1, 'rejected page is not retained');
 });
+
+test('build lists: upstream downloads retry a 503 but never a redirect', async () => {
+  const { fetchWithRetries } = await buildHelpers();
+  const originalFetch = global.fetch;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    let requests = 0;
+    global.fetch = async () => {
+      requests += 1;
+      if (requests < 3) return { ok: false, status: 503, url: 'https://allowed.example/feed' };
+      return { ok: true, status: 200, ...streamedResponse('rules') };
+    };
+    eq(await fetchWithRetries('https://allowed.example/feed', 100, 100, 1), 'rules', 'third attempt succeeds');
+    eq(requests, 3, 'two 503 responses were retried');
+
+    requests = 0;
+    global.fetch = async () => { requests += 1; return { ok: false, status: 302, url: 'https://allowed.example/feed' }; };
+    let rejected = false;
+    try { await fetchWithRetries('https://allowed.example/feed', 100, 100, 1); } catch (_) { rejected = true; }
+    assert(rejected, 'redirect is rejected');
+    eq(requests, 1, 'redirect is not retried');
+
+    requests = 0;
+    global.fetch = async () => { requests += 1; return { ok: false, status: 503, url: 'https://allowed.example/feed' }; };
+    rejected = false;
+    try { await fetchWithRetries('https://allowed.example/feed', 100, 100, 1); } catch (_) { rejected = true; }
+    assert(rejected, 'a persistent 503 still fails the build');
+    eq(requests, 4, 'one try plus three retries');
+  } finally {
+    global.fetch = originalFetch;
+    console.error = originalError;
+  }
+});

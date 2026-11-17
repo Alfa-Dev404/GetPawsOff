@@ -14,7 +14,7 @@ const { loadEnforcer } = require('./harness/sandbox');
 
 const E = require(path.join(__dirname, '..', 'src', 'learn', 'prevalence-enforcer.js'));
 
-// ── Wiring guard ───────────────────────────────────────────────────────────
+// Wiring guard
 // The enforcer is USELESS unless background.js actually importScripts it (it was
 // historically never wired, so enforcement could not run at all). It must also
 // load AFTER prevalence-learner.js, which it reads as self.__pawsOff_prevalence.
@@ -96,7 +96,7 @@ test('pause feedback persists validated radar hashes without resolving plaintext
   assert(!JSON.stringify(stored).includes('tracker.example'), 'exception feedback remains hash-only');
 });
 
-// [domain, score, verdict, sites?, ageDays?] — sites/age default to values that
+// [domain, score, verdict, sites?, ageDays?], sites/age default to values that
 // PASS the enforcement warm-up gates so the pre-gate tests keep their meaning.
 function rows(list) {
   return list.map((r) => ({
@@ -218,9 +218,9 @@ test('planSync removeRuleIds only ever touches the learner band', () => {
   }
 });
 
-// ── warm-up gates + graduated tiers + cookie-strip (breakage protection) ─────
+// warm-up gates + graduated tiers + cookie-strip (breakage protection)
 
-test('tierFor: hard gates — young or narrow "prevalent" domains are NOT blocked', () => {
+test('tierFor: hard gates, young or narrow "prevalent" domains are NOT blocked', () => {
   // Fresh CDN pattern: high score but only known 2 days → cookie tier, not block.
   eq(E.tierFor({ domain: 'newcdn.com', score: 9, sites: 12, ageDays: 2, verdict: 'block' }), 'cookie');
   // Seen on too few sites → cookie tier.
@@ -311,7 +311,7 @@ test('planSync: dedup keeps the STRONGEST row per base domain, not the first see
   eq(weakFirst.stats.cookieStripped, 0);
   eq(weakFirst.addRules[0].condition.resourceTypes.join(','), 'ping,image,xmlhttprequest,script');
 
-  // Same rows, strongest-first order — result must be identical (order-independent).
+  // Same rows, strongest-first order, result must be identical (order-independent).
   const strongFirst = E.planSync({
     rows: [
       { domain: 'sneaky.com', score: 16, verdict: 'block', sites: 20, ageDays: 60 },
@@ -575,4 +575,16 @@ test('adaptive cleanup failures are surfaced as clear_failed', async () => {
     if (previousChrome === undefined) delete global.chrome;
     else global.chrome = previousChrome;
   }
+});
+
+test('enforcer control messages are accepted from extension pages only', () => {
+  const loaded = loadEnforcer();
+  const listener = loaded.messageListeners[0];
+  const status = { type: 'pawsoff_pv_enforce_status' };
+  // A content script reports its page URL; it must not reach the control surface.
+  eq(listener(status, { id: 'pawsoff-test', url: 'https://evil.example/', tab: { id: 1 } }, () => {}), false,
+    'content-script sender is rejected');
+  eq(listener(status, { id: 'pawsoff-test' }, () => {}), false, 'sender without a URL is rejected');
+  eq(listener(status, { id: 'pawsoff-test', url: 'chrome-extension://pawsoff-test/src/options/options.html' }, () => {}), true,
+    'options page sender is accepted');
 });

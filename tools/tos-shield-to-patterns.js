@@ -1,5 +1,5 @@
 'use strict';
-/* PawsOff — publish the bundled ToS Shield vocabulary as a signed remote feed.
+/* PawsOff, publish the bundled ToS Shield vocabulary as a signed remote feed.
  *
  * background.js has always fetched /tos-shield/patterns.json and has always got
  * a 404, because nothing ever emitted that file. The clause vocabulary only

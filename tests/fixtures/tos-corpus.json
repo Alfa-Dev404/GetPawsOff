@@ -1,0 +1,2004 @@
+{
+ "source": "ToS;DR (https://tosdr.org), CC BY-SA 3.0. Quotes are excerpts of the reviewed services' own policies.",
+ "rows": [
+  {
+   "t": "Meta is not responsible for your use of third party content, services, features, and integrations, and you use these at your own risk. 7. Disclaimer of Warranties and Limitations on Liability A. Disclaimer of WarrantiesAIs and Outputs are provided on an “as is” and “as available” basis, and , to the maximum extent permitted by applicable law, we make no guarantees that they will be safe, secure, or error-free, or will function without disruptions, delays, or imperfections.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Facebook"
+  },
+  {
+   "t": "we make no guarantees that they always will be safe, secure, or error-free",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Facebook"
+  },
+  {
+   "t": "If you are a consumer, or where required by applicable law, the laws of the country in which you reside will apply to any claim, cause of action, or dispute you have against us that arises out of or relates to these Terms or the Meta Products, and you may resolve your claim in any competent court in that country that has jurisdiction over the claim. In all other cases, and for any claim, cause of action, or dispute that Meta files against you, you and Meta agree that any such claim, cause of action or dispute must be resolved exclusively in the U.S. District Court for the Northern District of California or a state court located in San Mateo County.",
+   "not": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You aren’t forced into binding arbitration in case of disputes",
+   "service": "Facebook"
+  },
+  {
+   "t": "We also receive information using cookies and similar technologies, like the Meta Pixel or Social Plugins, when you visit other websites and apps that use our Business Tools or other Meta Products",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Facebook"
+  },
+  {
+   "t": "We share the information we have about you to receive these services, which include: Investigating suspicious activity Detecting and stopping threats to our personnel and property Facilitating payments Providing customer support Improving the functionality of our Products Providing technical infrastructure services Analyzing how our Products are used Conducting research and surveys Marketing and promoting our Products",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Facebook"
+  },
+  {
+   "t": "And if we sell or transfer all or part of our business to someone else, in some cases we’ll give the new owner your information as part of that transaction, but only as the law allows",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Facebook"
+  },
+  {
+   "t": "We use cookies if you have a Facebook or Instagram account, use the Meta Products , including our website and apps, or visit other websites and apps that use the Meta Products (including the Like button). Cookies enable Meta to offer the Meta Products to you and to understand the information that we receive about you, including information about your use of other websites and apps, whether or not you are registered or logged in.",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Facebook"
+  },
+  {
+   "t": "Yes, other companies use cookies on the Meta Products to provide advertising, measurement, marketing and analytics services to us, and to provide certain features and improve our services for you. For example, other companies’ cookies help tailor ads off of Meta Products, measure their performance and effectiveness and support marketing and analytics.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Facebook"
+  },
+  {
+   "t": "You can review Your activity off Meta technologies which is a summary of activity that businesses and organizations share with us about your interactions with them, such as visiting their apps or websites. They use our Business Tools , such as Facebook Login or Meta Pixel, to share this information with us.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "Facebook"
+  },
+  {
+   "t": "Information you’ve shared with us through device settings, like GPS location",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "This service receives your precise location through GPS coordinates",
+   "service": "Facebook"
+  },
+  {
+   "t": "We use location-related information that you allow us to receive if you turn on the Location Services device setting. This includes things like your GPS location and, depending on the operating system you're using, other device signals[31] . We also receive and use some location-related information even if Location Services is turned off.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "Location data may be collected, used and/or shared",
+   "service": "Facebook"
+  },
+  {
+   "t": "Across Meta Company Products, you can interact with Meta’s generative AI features and experiences, collectively called AI at Meta . We collect information when you or others use, or exchange information with, AI at Meta, such as: Prompts that can include questions, messages, media and other information you or others share with or send to AI at Meta Responses and other information you receive from AI at Meta. Sometimes these are provided with the help of our AI integrations Actions you ask AI at Meta to take, like customizing the content or ads you see Feedback you give to AI at Meta about its responses",
+   "e": [
+    "ai_training",
+    "profiling"
+   ],
+   "case": "Your personal data is used for automated decision-making, profiling or AI training",
+   "service": "Facebook"
+  },
+  {
+   "t": "For example: We send messages about the Products we know you use, using the email you register to your account Depending on your settings, we send marketing communications about Products you might like We ask you to participate in research based on things like how you use our Products We let you know about our policies and terms of service",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Facebook"
+  },
+  {
+   "t": "These Terms of Service include an agreement to resolve any disputes through binding arbitration",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "We do not sell your Personal Information to or share your Personal Information with unaffiliated third parties for their own advertising or marketing purposes.",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "These Terms of Service include an agreement to resolve any disputes through binding arbitration that includes a class action waiver, as well as important disclaimers, warranties and limitations on liability.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "We and our partners may use various technologies to collect and store Usage Information in connection with our Services. These may include things like cookies, browser web storage (e.g., HTML5), web beacons and similar technologies.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "We reserve the right to change this Privacy Policy at any time without notice to you.",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "We may disclose and transfer information about you to a third party as part of, or in preparation for, a change of control, restructuring, corporate change, or sale or transfer of assets.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "In connection with these advertising services, we or our Advertising Service Providers, like Google Analytics (more on this below) may use cookies, web beacons, and similar technologies to collect behavioral information about how you use our site or other websites in order to perform tracking and marketing analytics or serve advertisements that are more likely to be of interest to you (“Interest-Based Advertisements”).",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "Due to our recordkeeping and information retention requirements, we do not delete information about you upon deactivation. We will, however, disable your account and stop sending you further communications.",
+   "e": [
+    "data_retention"
+   ],
+   "case": "Some personal data may be kept for business interests or legal obligations",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "You will defend (if requested by any Credit Karma Party), indemnify, and hold harmless the Credit Karma Parties from and against any and all claims, losses, expenses, demands, or liabilities, including attorneys’ fees and costs, incurred by the Credit Karma Parties in connection with any claim by a third party arising out of or in any way related to: (1) your use of our Services, our Content or the Community Content. (2) your violation or alleged violation of the Agreement or your violation or alleged violation of any applicable law",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to defend, indemnify, and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Credit Karma"
+  },
+  {
+   "t": "Any and all disputes arising out of this agreement, its termination, or our relationship with you shall be determined by binding arbitration under the Arbitration Act 1996 in Auckland, New Zealand, by one arbitrator who shall be a lawyer knowledgeable in relevant technology matters appointed by the President for the time being of the Arbitrators’ and Mediators’ Institute of New Zealand Incorporated (AMINZ) on a request by either you or us.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Mega"
+  },
+  {
+   "t": "We will charge the credit card associated with the business account with the applicable fees (including for any specified minimum) at the monthly billing date, on a recurring basis.",
+   "e": [
+    "auto_renewal"
+   ],
+   "case": "You authorise the service to charge a credit card supplied on re-occurring basis",
+   "service": "Mega"
+  },
+  {
+   "t": "We may, but shall not be obliged to, keep Your Files after your account has been suspended or terminated. In particular, we may, but shall not be obliged to, keep Your Files where we consider it necessary for evidential purposes relating to a breach of our Cookie Policy, Terms or with respect to current or anticipated action by any competent enforcement authority or other third party.",
+   "e": [
+    "data_retention"
+   ],
+   "case": "Some personal data may be kept for business interests or legal obligations",
+   "service": "Mega"
+  },
+  {
+   "t": "8.8 You can download your Account Data at https://mega.nz/fm/account/history while you are logged into your account. This will provide your Account Data but not Your Files.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "You can retrieve an archive of your data",
+   "service": "Mega"
+  },
+  {
+   "t": "We will never sell Your Files, Your Chats, any Account Data or any Usage Data.",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "Mega"
+  },
+  {
+   "t": "If you have paid for a subscription that is due to expire after that 30 day notice period and you do not wish to continue to use our services under the new terms, you may terminate your subscription before the new terms come into force. We will then (but not otherwise) refund the unexpired portion of your subscription payment within 30 days and close your account.",
+   "e": [
+    "auto_renewal"
+   ],
+   "case": "This service has a no refund policy with some exceptions",
+   "service": "Mega"
+  },
+  {
+   "t": "We do not make any guarantees that there will be no loss of data or the services will be bug free.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Mega"
+  },
+  {
+   "t": "DESPITE THE ABOVE, IF ANY COURT OR OTHER COMPETENT AUTHORITY HOLDS US (THIS INCLUDES OUR OFFICERS, STAFF AND AGENTS) LIABLE FOR ANY MATTER RELATED TO THESE TERMS OR OUR SERVICES, OUR TOTAL COMBINED LIABILITY WILL BE LIMITED TO THE MOST RECENT SUBSCRIPTION AMOUNT YOU HAVE PAID TO US.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "Mega"
+  },
+  {
+   "t": "You can terminate your access to our services at any time by following the 'Cancel your account' link in the Account section of our websites or the Settings section of our mobile apps.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "Mega"
+  },
+  {
+   "t": "WE DON'T GIVE YOU ANY WARRANTY OR UNDERTAKING ABOUT THE SERVICES WHICH ARE PROVIDED \"AS IS\".",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Mega"
+  },
+  {
+   "t": "Based on the functionality they provide, we classify all the ‘Cookies’ we use (including browser cookies, local storage, web beacons, tracking URLs and device identifiers) into the following categories:",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Mega"
+  },
+  {
+   "t": "YOU SHALL INDEMNIFY US AGAINST ALL CLAIMS, COSTS (INCLUDING ALL OUR LEGAL COSTS), EXPENSES, DEMANDS OR LIABILITY, DAMAGES AND LOSSES WHETHER DIRECT, INDIRECT, CONSEQUENTIAL, OR OTHERWISE, AND WHETHER ARISING IN CONTRACT, TORT (INCLUDING IN EACH CASE NEGLIGENCE), OR EQUITY OR OTHERWISE, ARISING DIRECTLY OR INDIRECTLY FROM BREACH BY YOU OR ANYONE YOU GIVE ACCESS TO YOUR DATA, OF ANY OF THESE TERMS OR ANY POLICY REFERENCED IN THESE TERMS.",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to indemnify and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Mega"
+  },
+  {
+   "t": "Subject to the rights that those in the European Union have under the GDPR, this Policy and its interpretation and operation are governed solely by New Zealand law.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "Mega"
+  },
+  {
+   "t": "We can change these terms at any time by providing you at least 30 days' prior notice of the change, whether via email or via a message in any service we provide.",
+   "not": [
+    "unilateral_change"
+   ],
+   "case": "When the service wants to change its terms, you are notified a week or more in advance",
+   "service": "Mega"
+  },
+  {
+   "t": "You can request correction of Account Data if it is considered incorrect, in accordance with the New Zealand Privacy Act 2020 and the GDPR. Any requests for access to, or correction of, Account Data that is not available to you when you are logged into your account, or if you cannot log in to your account, should be made to privacy@mega.nz specifying the information in question. The information will be provided promptly, and at least within one month, without charge unless the request is manifestly unfounded or excessive. Corrections will be promptly considered and actioned if appropriate.",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "Mega"
+  },
+  {
+   "t": "We collect and keep Usage Data with your consent to provide services and support related to our services, for market and product research and to be able to give users promotional material and special offers on our services.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Mega"
+  },
+  {
+   "t": "YOU EXPRESSLY ACKNOWLEDGE AND AGREE THAT USE OF THE LICENSED APPLICATION IS AT YOUR SOLE RISK.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Apple Services"
+  },
+  {
+   "t": "CHANGES Apple reserves the right at any time to modify this Agreement and to impose new or additional terms or conditions on your use of the Service.",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Apple’s websites, online services, interactive applications, and advertisements may use “cookies” and other technologies such as web beacons.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Apple Services"
+  },
+  {
+   "t": "We may also disclose information about you where there is a lawful basis for doing so, if we determine that disclosure is reasonably necessary to enforce our terms and conditions or to protect our operations or users, or in the event of a reorganization, merger, or sale.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Apple does not sell your personal data including as “sale” is defined in Nevada and California.",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "Apple Services"
+  },
+  {
+   "t": "A dedicated team reviews your inquiry to determine how best to respond to your question or concern, including those inquiries received in response to an access or download request.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "You can retrieve an archive of your data",
+   "service": "Apple Services"
+  },
+  {
+   "t": "When there is a material change to this Privacy Policy, we’ll post a notice on this website at least a week in advance of doing so and contact you directly about the change if we have your data on file.",
+   "not": [
+    "unilateral_change"
+   ],
+   "case": "When the service wants to change its terms, you are notified a week or more in advance",
+   "service": "Apple Services"
+  },
+  {
+   "t": "At Apple, we respect your ability to know, access, correct, transfer, restrict the processing of, and delete your personal data.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "You can retrieve an archive of your data",
+   "service": "Apple Services"
+  },
+  {
+   "t": "IN NO CASE SHALL APPLE, ITS DIRECTORS, OFFICERS, EMPLOYEES, AFFILIATES, AGENTS, CONTRACTORS, OR LICENSORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, PUNITIVE, SPECIAL, OR CONSEQUENTIAL DAMAGES ARISING FROM YOUR USE OR INABILITY TO USE THE SERVICE OR FOR ANY OTHER CLAIM RELATED IN ANY WAY TO YOUR USE OF THE SERVICE, INCLUDING, BUT NOT LIMITED TO, ANY ERRORS OR OMISSIONS IN ANY CONTENT, OR ANY LOSS OR DAMAGE OF ANY KIND INCURRED AS A RESULT OF THE USE OF ANY CONTENT (OR PRODUCT)",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Apple’s Sharing of Personal Data Apple may share personal data with Apple-affiliated companies , service providers who act on our behalf, our partners , developers, and publishers , or others at your direction . Further, Apple does not share personal data with third parties for their own marketing purposes. Service Providers.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Apple Services"
+  },
+  {
+   "t": "In addition, Apple sometimes combines non-personal data collected from these technologies with other personal data Apple holds.",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Apple Services"
+  },
+  {
+   "t": "APPLE DOES NOT GUARANTEE, REPRESENT, OR WARRANT THAT YOUR USE OF THE SERVICES WILL BE UNINTERRUPTED OR ERROR-FREE",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Apple Services"
+  },
+  {
+   "t": "WAIVER AND INDEMNITY BY USING THE SERVICES, YOU AGREE, TO THE EXTENT PERMITTED BY LAW, TO INDEMNIFY AND HOLD APPLE, ITS DIRECTORS, OFFICERS, EMPLOYEES, AFFILIATES, AGENTS, CONTRACTORS, AND LICENSORS HARMLESS WITH RESPECT TO ANY CLAIMS ARISING OUT OF YOUR BREACH OF THIS AGREEMENT, YOUR USE OF THE SERVICES,",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to defend, indemnify, and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Apple retains personal data only for so long as necessary to fulfill the purposes for which it was collected, including as described in this Privacy Policy or in our service-specific privacy notices, or as required by law. We will retain your personal data for the period necessary to fulfill the purposes outlined in this Privacy Policy and our service-specific privacy notices. When assessing retention periods, we first carefully examine whether it is necessary to retain the personal data collected and, if retention is required, work to retain the personal data for the shortest possible period permissible under law.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "The data retention period is kept to the minimum necessary for fulfilling its purposes",
+   "service": "Apple Services"
+  },
+  {
+   "t": "WAIVER AND INDEMNITY BY USING THE SERVICE, YOU AGREE TO INDEMNIFY AND HOLD APPLE, ITS DIRECTORS, OFFICERS, EMPLOYEES, AFFILIATES, AGENTS, CONTRACTORS, AND LICENSORS HARMLESS WITH RESPECT TO ANY CLAIMS ARISING OUT OF YOUR BREACH OF THIS AGREEMENT, YOUR USE OF THE SERVICE, OR ANY ACTION TAKEN BY APPLE AS PART OF ITS INVESTIGATION OF A SUSPECTED VIOLATION OF THIS AGREEMENT OR AS A RESULT OF ITS FINDING OR DECISION THAT A VIOLATION OF THIS AGREEMENT HAS OCCURRED.",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to indemnify and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Such modifications and additional terms and conditions will be effective immediately and incorporated into this Agreement. Your continued use of the Service will be deemed acceptance thereof.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Apple Services"
+  },
+  {
+   "t": "Apple reserves the right, at its sole discretion, to change, modify, add or remove portions of these Terms of Use, at any time. It is your responsibility to check these Terms of Use periodically for changes.",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Apple Services"
+  },
+  {
+   "t": "All transactions on the Service are governed by California law, without giving effect to its conflict of law provisions. Your use of the Service may also be subject to other laws. You expressly agree that exclusive jurisdiction for any claim or dispute with Apple or relating in any way to your use of the Service resides in the courts of the State of California.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "Apple Services"
+  },
+  {
+   "t": "WITHOUT LIMITING THE FOREGOING, FANDANGO DOES NOT WARRANT THAT THE SITE OR SERVICES WILL (1) BE UNINTERRUPTED; (2) BE FREE FROM INACCURACIES, ERRORS, VIRUSES OR OTHER HARMFUL COMPONENTS;",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Your continued access or use of the Services after we post changes to these TOS will be deemed acceptance of these Terms as modiﬁed, or, if notice is required by law, after such notice to you unless you accept the modified Terms earlier.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "We may terminate your account for any or no reason.",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "As such, you hereby irrevocably grant Fandango and its affiliates and licensees a world-wide, perpetual, non-exclusive, royalty-free, fully paid up, assignable, sublicensable through multiple tiers (including to other users of the Services), transferable rights to use, including, but not limited to the right to copy, publicly perform, publicly display, reproduce, adapt, distribute, modify, translate, remove, analyze, commercialize, prepare derivative works based on, incorporate in other works, and/or otherwise exploit, in whole or in part, User Materials",
+   "e": [
+    "content_license"
+   ],
+   "case": "A license is kept on user-generated content even after you close your account",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "FANDANGO PROVIDES THE SITE AND SERVICES ON AN \"AS IS\" AND \"AS AVAILABLE\" BASIS.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "IN NO EVENT WILL THE FANDANGO PARTIES' AGGREGATE LIABILITY TO YOU IN CONNECTION WITH THE SITE AND SERVICES OR THESE TERMS EXCEED THE AMOUNT (IF ANY) PAID BY YOU TO FANDANGO IN THE SIX MONTHS IMMEDIATELY PRECEDING THE EVENT WHICH GAVE RISE TO THE LIABILITY, OR $10, WHICHEVER IS LESS.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "You may terminate your account for any reason through means made accessible through our Site and other Services.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "YOU HEREBY ACKNOWLEDGE AND AGREE THAT BY AGREEING TO THESE TERMS, THE TERMS AND POLICIES, AND ARBITRATION AGREEMENT, YOU AND FANDANGO ARE EACH WAIVING THE RIGHT TO A TRIAL BY JURY TO THE MAXIMUM EXTENT PERMITTED BY LAW.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "The Terms and Policies and the relationship between you and us shall be governed by the laws of the U.S. and the State of New York without regard to its conﬂicts of law provisions.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in a jurisdiction that is less friendly to user privacy protection",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "To the fullest extent permitted by law, you will indemnify and hold harmless the Fandango Parties, and at Fandango's option defend the Fandango Parties, from and against any damage, loss, cost or expense (including without limitation, legal fees and costs) incurred in connection with any third-party claim, demand, proceeding or action (\"Claim\") brought against any of the Fandango Parties arising out of your use of the Services or any alleged breach by you of any provision of these Terms, or the infringement by you, or any other subscriber or user of your account, of any intellectual property or other right of any person or entity.",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to defend, indemnify, and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "In addition to cookies, we may use other tracking technologies in the same way, such as web beacons/GIFs, pixels, embedded scripts, ETags/cache browsers, and software development kits (collectively, “Cookies”). <p",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Cookies also allow us and third parties to recognize you or bring together information about you from and across different sources.",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "YOU AGREE THAT ANY DISPUTE BETWEEN YOU AND FANDANGO THAT IS NOT SUBJECT TO ARBITRATION FOR ANY REASON MAY ONLY BE PURSUED BY YOU ON AN INDIVIDUAL BASIS, AND YOU MAY NOT BRING A CLAIM AS A PLAINTIFF OR A CLASS MEMBER IN A CLASS, COLLECTIVE, OR REPRESENTATIVE ACTION.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You waive your right to a class action",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Third parties (e.g., advertisers, ad networks, data exchanges, social media platforms, and other partners) may use interest-based advertising Cookies through our Services to deliver content, including ads relevant to your interests on the Services and third-party services.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Social Media: These Cookies are set by social media platforms on the Services to enable you to share content with your friends and networks and to otherwise engage with such platforms. Social media platforms have the ability to track your online activity outside of the Services. This may impact the content and messages you see on other services. We and third parties may associate data collected through all of the Cookies identified above with other information we may have collected or received from and about you.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "| Geolocation* For example: city, state, and ZIP code associated with your IP address or derived through Wi-Fi triangulation. We will ask for your permission before collecting your precise location from GPS-based functionality on your mobile or other devices. |",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "This service receives your precise location through GPS coordinates",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "* creating profiles about you, including adding and combining information we obtain from third parties and matching your interests across devices, which may be used by Versant or others for third-party marketing and advertising, including targeted advertising, on the Versant Services, and on third party services including but not limited to television, mobile apps and/or websites, connected devices and offline",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "| Data partnerships * providing personal data to Data Partners who use the data to market and advertise for Versant and for their own purposes, including for marketing and advertising * providing personal data to commercial data resellers who combine the data with other data and make it available to third parties for their own purposes, including marketing and advertising |",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "| Send you Versant marketing and advertising: * sending you customized newsletters, surveys and information about products, services and promotions offered by Versant (with your consent where required) based on your activities and interests including at a household level * providing you with Versant advertising, including targeted advertising, based on your activities and interests including at a household level which will include the creation of audience segments that our partners will use to enable such advertising for Versant and third parties on and off the Services |",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "We engage vendors to perform business purposes on our behalf and may provide data from any of the categories of information we collect to them to enable them to provide us with such business purposes, including research and analytics, hosting, transaction and payment processing, artificial intelligence tools to perform our business functions (e.g., analytics, customer service),",
+   "e": [
+    "ai_training",
+    "profiling"
+   ],
+   "case": "Your personal data is used for automated decision-making, profiling or AI training",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "In the event that Versant or any Versant Affiliate is involved in a merger, acquisition, transfer of control, bankruptcy, reorganization or sale of assets, we may disclose or transfer the information described in this Privacy Policy as part of that transaction or diligence associated with or in contemplation of such matters.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Right to Know/Access: the right to access certain personal data we hold about you, in some cases in a portable format, if technically feasible, including Specific pieces of personal data we maintain about you. Information about the categories of personal data we process about you and how we process it (for California and Oregon residents). </",
+   "not": [
+    "data_retention"
+   ],
+   "case": "You can retrieve an archive of your data",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Right to Know/Access: the right to access certain personal data we hold about you, in some cases in a portable format, if technically feasible, including Specific pieces of personal data we maintain about you. Information about the categories of personal data we process about you and how we process it (for California and Oregon residents). Right to Correct: the right to update or correct inaccurate personal data we maintain about you. Right to Delete: the right to delete certain personal data we have collected from or about you.",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Opt Out of Sale of Personal Data and Processing for Targeted Ads California, Colorado, Connecticut, Delaware, Indiana, Iowa, Kentucky, Minnesota, Montana, Nebraska, New Hampshire, Oregon, Rhode Island, Tennessee, Texas, Utah, and Virginia residents may opt out of the “sale” of their personal data. Such residents may also opt out of the sharing or processing of their personal data for targeted advertising. We disclose data as described below that may considered a “sale” of personal data or share or processing of personal data for targeted ads under certain privacy laws.",
+   "e": [
+    "data_sale"
+   ],
+   "case": "Your personal data may be sold unless you opt out",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "NONE OF THE FANDANGO PARTIES WILL BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY DIRECT, INDIRECT, PUNITIVE, INCIDENTAL, SPECIAL, CONSEQUENTIAL DAMAGES (INCLUDING DAMAGES RELATING TO LOST PROFITS, LOST DATA OR LOSS OF GOODWILL) OR ANY DAMAGES WHATSOEVER THAT RESULT FROM YOUR USE OF OR INABILITY TO USE THE SITE OR SERVICES. THIS LIMITATION APPLIES WHETHER THE ALLEGED LIABILITY IS BASED ON CONTRACT, TORT, NEGLIGENCE, STRICT LIABILITY, OR ANY OTHER LEGAL THEORY, AND EVEN IF FANDANGO HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "Affiliates : Versant Affiliates, to help better tailor services, products, marketing, and advertising for Versant and such Affiliates to you and to other existing and potential customers. We may disclose all categories of information across our Affiliates. In addition, business information may be disclosed for business operational purposes.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Rotten Tomatoes"
+  },
+  {
+   "t": "you may elect to resolve the dispute in a cost effective manner through binding non-appearance-based arbitration.",
+   "not": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You aren’t forced into binding arbitration in case of disputes",
+   "service": "PayPal"
+  },
+  {
+   "t": "This CEA (and the relationships referred to or contemplated by it) shall be governed and construed in accordance with English law and the parties submit to the exclusive jurisdiction of the courts of England and Wales with respect to any dispute hereunder.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in a jurisdiction that is less friendly to user privacy protection",
+   "service": "PayPal"
+  },
+  {
+   "t": "AI and Automated Decision Making . We may use Personal Information to train our artificial intelligence (AI) models that power our Services and help us deliver more secure, efficient, and personalized services.",
+   "e": [
+    "ai_training",
+    "profiling"
+   ],
+   "case": "Your personal data is used for automated decision-making, profiling or AI training",
+   "service": "PayPal"
+  },
+  {
+   "t": "Even if you don’t allow us to track your precise location, we may still use your address to send you location-based options recommended by businesses that are near your address.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "Location data may be collected, used and/or shared",
+   "service": "PayPal"
+  },
+  {
+   "t": "We may use Personal Information to provide you with information, news, and market our Services including where we partner with others to offer similar services to market about our Partners and Merchants. We use Personal Information, including when we associate information about you, to better understand and cater to your interests.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "PayPal"
+  },
+  {
+   "t": "By continuing to use our services after any changes to this user agreement or any of the other applicable terms, agreements, or policies listed above, you agree to abide and be bound by those changes.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "PayPal"
+  },
+  {
+   "t": "You may close your account and terminate your relationship with us at any time without cost or penalty, but you will remain liable for all obligations related to your PayPal account even after the PayPal account is closed.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "PayPal"
+  },
+  {
+   "t": "When you visit or interact with our sites, services, applications, tools or messages, we or our authorized service providers and third parties may use cookies, web beacons, and other similar technologies .",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "PayPal"
+  },
+  {
+   "t": "Location Information. Information from IP-based geolocation such as latitude and longitude data, and Global Positioning System (GPS) information when you give us permission through your device settings.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "Location data may be collected, used and/or shared",
+   "service": "PayPal"
+  },
+  {
+   "t": "Marketing. We may use first-party or third-party cookies to deliver content, including targeted advertising and remarketing, on our sites or on third party sites. This includes using technologies to understand how you interact with our services, the usefulness to you of the advertisements and content that have been delivered to you, such as whether you have clicked on an advertisement, measuring whether ad clicks resulted in successful outcomes, to help optimize our advertisement strategy to reach similar prospects, or help minimize advertisement that is not relevant to some users.",
+   "e": [
+    "marketing_sharing",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data is used to employ targeted third-party advertising",
+   "service": "PayPal"
+  },
+  {
+   "t": "Ad networks and exchanges operated by authorized third parties for interest-based advertising We may use third parties, such as advertising networks and exchanges, to allow us to serve you advertisements. These third-party ad networks and exchange providers may use third-party cookies, web beacons, or similar technologies to collect information about your visit to our site and elsewhere on the Internet. They may also collect your device identifier, IP address, or identifier for advertising. The information that these third parties collect may be used to provide you with more relevant advertising on our sites or elsewhere on the web.",
+   "e": [
+    "marketing_sharing",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data is used to employ targeted third-party advertising",
+   "service": "PayPal"
+  },
+  {
+   "t": "If you Pay without a PayPal account, we may link your transaction information with your PayPal account if you create a PayPal account later.",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "PayPal"
+  },
+  {
+   "t": "Inferred data : Such as gender, income, browsing and purchasing habits, creditworthiness, fraud and risk assessment, your preferences and shopping behavior, which we may infer based on your transactions and interactions with our Services, ads and offers or with our Partners and Merchants.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "PayPal"
+  },
+  {
+   "t": "We may disclose Personal Information with a buyer in connection with a business transfer. For example, if we are involved in a merger, a purchase, or a sale of all or part of our business or assets, including receivables and debts, we may disclose, under appropriate data protection terms, your Personal Information to an interested or actual buyer of those business or assets. If PayPal or a significant portion of PayPal’s assets are acquired by a third party, Personal Information may also be disclosed to that third party.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "PayPal"
+  },
+  {
+   "t": "By submitting, posting, or displaying Content on or through the Products, you grant to Symbaloo a worldwide, non-exclusive, royalty-free license (with the right to sublicense)",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be licensed to third parties",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "This may include, for example, a Unique Device Identifier (“UDID”), a Google Ad ID, a Windows Advertising ID, A Unique ID for Advertisers (“IDFA”), a mobile carrier, a device type, model, and manufacturer",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "Other than as specifically stated herein, the personal information that you supply to Symbaloo will not be given, rented, sold, loaned, or otherwise disclosed to any third party outside of Symbaloo or its agents",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "Your access to and use of the Products or any Content are at your own risk. You understand and agree that the Products are provided to you on an “AS IS” and “AS AVAILABLE” basis.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "to use, host, store, copy, reproduce, process, adapt, modify, publish, transmit, create derivative works, communicate, display, and/or distribute such Content in any and all media or distribution methods as part of providing, promoting, or improving Symbaloo’s Products.",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be distributed through any media known now or in the future",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "and depending on your mobile device settings, geographic location data such as GPS coordinates.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "This service receives your precise location through GPS coordinates",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "When you use our site, pre-selected companies may access and use certain information on your device and about your interests to serve ads or personalized content.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "We may use these cookies to deliver advertisements, to make them more relevant and meaningful to our end-users, and to track the efficiency of our advertising campaigns",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "By continuing to access or use the Products after those revisions become effective, you agree to be bound by the revised Terms.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "THE SYMBALOO ENTITIES SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOOD-WILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM (i) YOUR ACCESS TO OR USE OF OR INABILITY TO ACCESS OR USE THE PRODUCTS. (ii) ANY CONDUCT OR CONTENT OF ANY THIRD PARTY ON,THROUGH, OR ASSOCIATED WITH THE PRODUCTS, INCLUDING WITHOUT LIMITATION, ANY DEFAMATORY, OFFENSIVE OR ILLEGAL CONDUCT OF OTHER USERS OR THIRD PARTIES. (iii) ANY CONTENT OBTAINED FROM THE PRODUCTS. OR (iv) UNAUTHORIZED ACCESS, USE OR ALTERATION OF YOUR TRANSMISSIONS OR CONTENT.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Symbaloo"
+  },
+  {
+   "t": "These third parties may collect information about you and your online activities, either on the Sites or on other websites, through cookies, web beacons, and other technologies to understand your interests and tailor certain advertisements to your interests. <p",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "Continued use of the Service after any amendments to the Terms of Use and after we have provided you notice of the amended Terms of Use constitutes your acceptance of the new Terms of Use.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "The Company may in its sole discretion for any or no reason, with or without notice, including without limitation if it has not received verifiable parental consent and it believes that you are under 13 in the U.S. or under 16 in Europe, terminate your account or profile, delete any content or information that you have posted on the Service, and/or prohibit you from using or accessing the Service (or any portion, aspect or feature of the Service).",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "IN NO EVENT WILL THE COMPANY, ITS AFFILIATES, OR ITS AND THEIR RESPECTIVE DIRECTORS, MANAGERS, OFFICERS, MEMBERS, EMPLOYEES, AGENTS, SUCCESSORS, OR ASSIGNS BE LIABLE FOR ANY INDIRECT, CONSEQUENTIAL, EXEMPLARY, INCIDENTAL, SPECIAL OR PUNITIVE DAMAGES, INCLUDING DAMAGES FOR LOST PROFITS OR LOSS OF DATA, ARISING OUT, IN CONNECTION WITH OF OR RESULTING THESE TERMS OF USE OR FROM YOUR USE OF OUR SERVICE, EVEN IF THE COMPANY IS AWARE OF OR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "NOTWITHSTANDING ANYTHING TO THE CONTRARY SET FORTH HEREIN, THE COMPANY'S AGGREGATE LIABILITY TO YOU FOR ANY CAUSE WHATSOEVER, REGARDLESS OF THE FORM OF THE ACTION, WILL AT ALL TIMES BE LIMITED TO AN AMOUNT NO GREATER THAN THE AMOUNT YOU PAID TO US FOR THE SERVICES, DIGITAL CONTENT (DEFINED BELOW) OR ANY RELATED PRODUCTS.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "Fees for such services are refundable in Company's sole discretion. If we cancel your annual subscription, we will give you a prorated refund based on the amount of time remaining in your pre-paid subscription; provided, however, that Company will not be obligated to grant you a refund if we terminate your account or your subscription because we determine, in our sole discretion, that your actions or your use of the Service violates these Terms of Use or has harmed or damaged another user. Otherwise, there is no prorated refund of any fees upon any termination or cancellation.",
+   "e": [
+    "auto_renewal"
+   ],
+   "case": "This service has a no refund policy with some exceptions",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "By posting any User Content on the Service, you expressly grant, and you represent and warrant that you have a right to grant, to Company a non-exclusive, worldwide, sublicensable, transferable, royalty-free, perpetual, irrevocable, license to use, reproduce, modify, publish, list information regarding, edit, translate, distribute, publicly perform, publicly display, and make derivative works of all such User Content and your name, voice, and/or likeness as contained in your User Content, in whole or in part, and in any form, media or technology, whether now known or hereafter developed, without any further consent, notice and/or compensation to you or others.",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be licensed to third parties",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "If you use or otherwise access a third party's website, application or other service that integrates with our Services through our APIs or otherwise, you understand and agree that we may, in connection with your use, provide the third party with information you have provided through our Services.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "If you wish to delete your account and discontinue your use of the Service, please contact our Customer Support .",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "All matters relating to the Services and these Terms of Use, and any dispute or claim arising therefrom or related thereto (in each case, including non-contractual disputes or claims), shall be governed by and construed in accordance with the internal laws of Japan without giving effect to any choice or conflict of law provision or rule (whether of Japan or any other jurisdiction).",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "USE OF THE MAL ONLINE MANGA STORE AND DIGITAL CONTENT, AND ANY OTHER MAL SOFTWARE OR SYSTEMS IS AT YOUR SOLE RISK. NO ORAL OR WRITTEN INFORMATION OR ADVICE GIVEN BY COMPANY OR AN AUTHORIZED REPRESENTATIVE OF COMPANY CREATES A WARRANTY, AND THE MAL ONLINE MANGA STORE AND DIGITAL CONTENT ARE PROVIDED \"AS IS\" WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "MyAnimeList"
+  },
+  {
+   "t": "Parler may modify the Terms of this Agreement in any way and at any time without ,notice to you",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Parler"
+  },
+  {
+   "t": "The laws of the State of Nevada, excluding its choice ,of law provisions, will govern these Terms and any dispute that arises between you and ,Parler",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in a jurisdiction that is less friendly to user privacy protection",
+   "service": "Parler"
+  },
+  {
+   "t": "The Services are provided to you as-is and at your own risk.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Parler"
+  },
+  {
+   "t": "IN NO EVENT SHALL THE AGGREGATE LIABILITY OF ,PARLER ARISING OUT OF OR RELATING TO THESE TERMS OR THE SERVICES ,EXCEED THE GREATER OF TWO HUNDRED U.S. DOLLARS (U.S. $200.00) OR ,THE AMOUNT YOU PAID PARLER, IF ANY, IN THE PAST SIX MONTHS FOR THE ,SERVICES GIVING RISE TO THE CLAIM.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "Parler"
+  },
+  {
+   "t": "All disputes related to these Terms or the Services will be brought solely in the ,state or federal courts located in Clark County, Nevada, United States, and you consent ,to personal jurisdiction and waive any objection as to inconvenient forum. ,",
+   "not": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You aren’t forced into binding arbitration in case of disputes",
+   "service": "Parler"
+  },
+  {
+   "t": "THE SERVICES ARE PROVIDED “AS IS.” WE DO NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED OR ERROR-FREE. THERE MAY BE DELAYS, OMISSIONS, INTERRUPTIONS, AND INACCURACIES IN THE NEWS, INFORMATION, OR OTHER MATERIALS AVAILABLE THROUGH THE SERVICES.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We may periodically contact you with offers and information about the Services and our affiliates, including in connection with your accounts, online surveys, legal notices, news stories, new features that you are entitled to access, and other important information.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Washington Post"
+  },
+  {
+   "t": "This information may be combined with information collected across different websites, online services, and other linked or associated devices.",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Washington Post"
+  },
+  {
+   "t": "your mobile device’s GPS signal or information about nearby WiFi access points and cell towers that may be transmitted to us when you use certain Services.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "This service receives your precise location through GPS coordinates",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We reserve the right to transfer any information we have about you in the event that we sell or transfer all or a portion of our business or assets to a third party, such as in the event of a merger, acquisition, or in connection with a bankruptcy reorganization.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We may use your information to facilitate the delivery of targeted ads, promotions, and offers to you, on behalf of ourselves and advertisers, on and off the Services.",
+   "e": [
+    "marketing_sharing",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data is used to employ targeted third-party advertising",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We, our service providers, and third parties that provide content, advertising, or functionality or measure and analyze ad performance on our Services, may use cookies, web beacons, mobile ad identifiers, and similar technologies to facilitate administration and navigation on the Site, to better understand and improve our Services, to determine and/or improve the advertising shown to you here or elsewhere",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Washington Post"
+  },
+  {
+   "t": "IN NO EVENT WILL THE WASHINGTON POST OR ITS AFFILIATES OR ANY PARTY INVOLVED IN CREATING, PRODUCING, OR DELIVERING THE SERVICES BE LIABLE FOR ANY DIRECT, INCIDENTAL, CONSEQUENTIAL, INDIRECT, SPECIAL, OR PUNITIVE DAMAGES ARISING OUT OF YOUR ACCESS, USE, MISUSE, OR INABILITY TO USE THE SERVICES OR ANY LINKED SITES, OR IN CONNECTION WITH ANY FAILURE OF PERFORMANCE, ERROR, TRANSMISSION, COMPUTER VIRUS, OR LINE OR SYSTEM FAILURE.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Washington Post"
+  },
+  {
+   "t": "The Washington Post may terminate this agreement for any reason at any time. The Washington Post reserves the right, in its sole discretion, to restrict, suspend, or terminate your access to and use of the Service, with or without prior notice.",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Washington Post"
+  },
+  {
+   "t": "As discussed further below, we and our service providers (which are third party companies that work on our behalf), may use of cookies, web beacons, and other technologies, as detailed in the Online Tracking and Advertising &nbsp. section below, to assist in collecting this information. For example, we may collect: Device information — such as your hardware model, IP address, other unique device identifiers",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We may share the information we collect with vendors providing contractual services to us, such as hosting vendors, advertising service providers, and list managers.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Washington Post"
+  },
+  {
+   "t": "Specifically, you provide us with a royalty-free, irrevocable, perpetual",
+   "e": [
+    "content_license"
+   ],
+   "case": "A license is kept on user-generated content even after you close your account",
+   "service": "Washington Post"
+  },
+  {
+   "t": "to use, reproduce, modify, adapt, publish, translate, create derivative works from, incorporate into other works, distribute, perform, display, and otherwise exploit such content, in whole or in part in any form, media or technology now known or later developed.",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be distributed through any media known now or in the future",
+   "service": "Washington Post"
+  },
+  {
+   "t": "A) THAT THE INFORMATION PROVIDED THROUGH THE SERVICES WILL BE FREE FROM ERROR, OMISSION, INTERRUPTION, DEFECT, OR DELAY IN OPERATION, OR FROM TECHNICAL INACCURACIES OR TYPOGRAPHICAL ERRORS,",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Washington Post"
+  },
+  {
+   "t": "We may share the following categories of information for such advertising with advertising networks and providers, certain analytics providers, and social media networks, which may be considered a sale (as defined by California law) device information and identifiers, such as IP address, and unique advertising identifiers and cookies. usage information, such as browsing history or app usage. location information, such as city. and inference data. If you are a California resident and would like to opt out of our use of your information for such purposes (to the extent this is considered a sale), you may do so as outlined on the following page: Do Not Sell My Personal Information.",
+   "e": [
+    "data_sale"
+   ],
+   "case": "Your personal data may be sold unless you opt out",
+   "service": "Washington Post"
+  },
+  {
+   "t": "4.3.Any User who has registered for the Services may delete such User’s account and cancel the Services at any time",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "When our business partner is equipped with an additional service such as the LINE App login function, your Internal Identifier, profile information, email address or phone number may be shared with the business partner once you use such additional service. In the foregoing case, we will ask for your permission regarding the provision of Personal Data.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "We will collect information related to the device, browser and the app that you are using (ad identifier for identifying the device/browser, Cookie ID and device type, OS, language/time zone setting, browser type, app version, etc.), and network information (telecommunications carrier’s name, IP address, etc.). We may also associate the collected ad identifier with the Internal Identifier.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "If there is any transaction between companies pertaining to our business to which this Policy is applicable, such as acquisition, merger or change of business entity, Personal Data may also be transferred to the successor of the business to the extent permitted under Applicable Laws.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "To the extent permitted under Applicable Laws, regarding your Personal Data that we process, you have the right to access, the right to rectification, the right to erasure",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "In cases where you use the services of our business partner, we may provide, to that business partner, information to be used by the business partner for identifying you (in certain countries or regions (*5), in addition to the Internal Identifier, including an ad identifier, device information such as the language setting, and attribute information).",
+   "e": [
+    "profiling"
+   ],
+   "case": "Your profile is combined across various products",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "Information such as the access history (including date and time of access, URL, etc.) of the website that you accessed from your browser. For example, if our business partner has introduced our tracking service to display ads on our Services only to users who visited a specific page of a website operated by that business partner, we will collect the access history of that business partner’s website, and use such information for the optimal ad distribution on our Services. In order to perform the foregoing optimal ad distribution, we may use cookies and associate your access history with the ad identifier or Internal Identifier.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "Line Corporation"
+  },
+  {
+   "t": "We do not guarantee that access to our Website will always be available or uninterrupted.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "By accepting these Terms of Use through your continued use of the services, you grant Vivaldi an irrevocable license to do so.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "We do not share or sell your data with any third parties and protect user data from disclosure, with exceptions only requested by law or court order.",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Additionally, we may contact you with information regarding our other products and services.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Vivaldi will delete personal information when all purposes of the personal information processing have been fulfilled",
+   "not": [
+    "data_retention"
+   ],
+   "case": "The data retention period is kept to the minimum necessary for fulfilling its purposes",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Vivaldi will delete personal information when all purposes of the personal information processing have been fulfilled, and when deletion is allowed pursuant to applicable laws and regulations.",
+   "e": [
+    "data_retention"
+   ],
+   "case": "Some personal data may be kept for business interests or legal obligations",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "The Software and Services are provided to you “as is” without any warranty of any kind, which hereby is disclaimed.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Even though we do our best to provide You with great Software and Services, we cannot be held liable for any kind of damage, direct or indirect or consequential, resulting from your use of our Software and Services.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Vivaldi’s headquarters are based in the beautiful city of Oslo, Norway.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "We do not share or sell information to any third party and we proactively protect all user data from disclosure, with the only exception being if requested by legitimate law agencies with a court order.",
+   "not": [
+    "third_party_sharing"
+   ],
+   "case": "The service claims that your personal data is not shared with third parties",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "Crash logs may contain personal data that resides in relevant sections of your device’s memory, including passwords and chunks of content from the webpages you visit. This data is however never made available to any of our staff as we immediately process the received data to extract a mere stack trace, which gives us an idea about where in Vivaldi the crash occurred. Once this process is complete, the full log is removed from our services and we only retain, for 60 days, the stack trace and the URL of the page that was active at the time of the crash.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "Logs are deleted after a finite period of time",
+   "service": "Vivaldi"
+  },
+  {
+   "t": "The privacy policy has been adopted on 10 May 2018 and will be modified each time is necessary without prior or future notice of the changes.",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "BitDefender"
+  },
+  {
+   "t": "Bitdefender, like any other website manager, may record this kind of information for a limited period of time.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "Logs are deleted after a finite period of time",
+   "service": "BitDefender"
+  },
+  {
+   "t": "The data is kept only as long as they are necessary for these purposes. The legal basis for this collection is legitimate interest for Improving our website for the ensuring the security of your website.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "The data retention period is kept to the minimum necessary for fulfilling its purposes",
+   "service": "BitDefender"
+  },
+  {
+   "t": "Cookies may also be used for website optimization or marketing.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "BitDefender"
+  },
+  {
+   "t": "According to European Union applicable data protection legislation, data subjects shall have the right to access to data, rectification, erasure, restriction on processing",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "BitDefender"
+  },
+  {
+   "t": "ometimes we might use external Bitdefender services which may place third party cookies when navigating the Bitdefender websites, their purposes are for marketing, traffic analysis and social media sharing, as indicated in website.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "BitDefender"
+  },
+  {
+   "t": "license to copy, display, upload, perform, distribute, store, modify and otherwise use your User Content in connection with the operation of the Service or the promotion, advertising or marketing thereof in any form, medium or technology now known or later developed.",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be distributed through any media known now or in the future",
+   "service": "Gfycat"
+  },
+  {
+   "t": "YOUR USE OF THE SERVICE IS AT YOUR SOLE RISK. THE SERVICE IS PROVIDED ON AN “AS IS” AND “AS AVAILABLE” BASIS.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Gfycat"
+  },
+  {
+   "t": "IN NO EVENT WILL GFYCAT’S TOTAL LIABILITY TO YOU FOR ALL DAMAGES, LOSSES OR CAUSES OF ACTION EXCEED THE AMOUNT YOU HAVE PAID GFYCAT IN THE LAST SIX (6) MONTHS, OR, IF GREATER, ONE HUNDRED DOLLARS ($100).",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "Gfycat"
+  },
+  {
+   "t": "You agree that, by entering into this Terms of Service, you and Gfycat are each waiving the right to a trial by jury or to participate in a class action.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You waive your right to a class action",
+   "service": "Gfycat"
+  },
+  {
+   "t": "GFYCAT MAKES NO WARRANTY THAT (I) THE SERVICE WILL MEET YOUR REQUIREMENTS, (II) THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE, OR ERROR-FREE,",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Gfycat"
+  },
+  {
+   "t": "Gfycat may use this information to contact you in the future to tell you about aspects of the Services we believe will be of interest to you.",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Gfycat"
+  },
+  {
+   "t": "cookie identifiers, mobile carrier, mobile advertising identifiers, MAC address, IMEI, Advertiser ID, and other device identifiers that are automatically assigned to your computer or device when you access the Internet,",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Gfycat"
+  },
+  {
+   "t": "You agree that any and all disputes or claims that have arisen or may arise between you and Gfycat, whether relating to these Terms of Service (including any alleged breach thereof), the Services, any advertising, any aspect of the relationship between us, or otherwise, shall be resolved exclusively through final and binding arbitration, rather than a court in accordance with the terms of this Arbitration Agreement, except that you may assert individual claims in small claims court, if your claims qualify.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Gfycat"
+  },
+  {
+   "t": "You agree that Gfycat, in its sole discretion, may suspend or terminate your account (or any part thereof) or use of the Service and remove and discard any content within the Service, for any reason, including, without limitation, for lack of use or if Gfycat believes that you have violated or acted inconsistently with the letter or spirit of these Terms of Service.",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Gfycat"
+  },
+  {
+   "t": "Data Retention Gfycat retains the Personal Information we receive as described in this Privacy Policy for as long as you use our Services or as necessary to fulfill the purpose(s) for which it was collected, provide our Services, resolve disputes, establish legal defenses, conduct audits, pursue legitimate business purposes, enforce our agreements, and comply with applicable laws.",
+   "e": [
+    "data_retention"
+   ],
+   "case": "Some personal data may be kept for business interests or legal obligations",
+   "service": "Gfycat"
+  },
+  {
+   "t": "We, as well as Third-Parties that provide content, advertising, or other functionality on our Services, may use cookies, pixel tags, local storage, and other technologies (“Technologies”) to automatically collect information through the Services.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Gfycat"
+  },
+  {
+   "t": "Our advertising partners may use this information (and similar information collected from other websites) to deliver targeted advertisements to you when you visit non-Gfycat related websites within their networks. This practice is commonly referred to as “interest-based advertising” or “online behavioral advertising.”",
+   "e": [
+    "marketing_sharing",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data is used to employ targeted third-party advertising",
+   "service": "Gfycat"
+  },
+  {
+   "t": "In accordance with applicable law, you may inquire as to whether Gfycat is Processing Personal Information about you, request access to Personal Information, and ask that we correct, amend or delete your Personal Information.",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "Gfycat"
+  },
+  {
+   "t": "You may also have a right to request restriction of or object to processing of your Personal Information where such requests are permitted by law, and may opt out of our “sale” of data to third parties, as the term “sale” is defined under the California Consumer Privacy Act (CCPA).",
+   "e": [
+    "data_sale"
+   ],
+   "case": "Your personal data may be sold unless you opt out",
+   "service": "Gfycat"
+  },
+  {
+   "t": "perpetual, irrevocable license to copy, display, upload, perform, distribute, store, modify and otherwise use your User Content in connection with the operation of the Service",
+   "e": [
+    "content_license"
+   ],
+   "case": "A license is kept on user-generated content even after you close your account",
+   "service": "Gfycat"
+  },
+  {
+   "t": "We reserve the right, at our sole discretion, to change or modify portions of these Terms of Service at any time. If we do this, we will post the changes on this page and will indicate at the top of this page the date these terms were last revised. We will also notify you, either through the Services user interface, in an email notification or through other reasonable means. Any such changes will become effective no earlier than fourteen (14) days after they are posted, except that changes addressing new functions of the Services or changes made for legal reasons will be effective immediately.",
+   "not": [
+    "unilateral_change"
+   ],
+   "case": "When the service wants to change its terms, you are notified a week or more in advance",
+   "service": "Gfycat"
+  },
+  {
+   "t": "We do not sell or rent your personal information to outside parties.",
+   "not": [
+    "data_sale"
+   ],
+   "case": "This service claims that your personal data is not being sold",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "In no event shall the Postal Service's liability to a user for any loss, damage or claim exceed the amount paid by the user for accessing this site.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "Under no circumstances, including but not limited to negligence, will the Postal Service be liable for special or consequential damages that result from the use or inability to use the materials in this site.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "OR THAT THE SITE WILL BE FREE OF ERRORS OR VIRUSES.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "THE MATERIALS IN THIS SITE ARE PROVIDED \"AS IS\" AND WITHOUT WARRANTIES OF ANY KIND EITHER EXPRESS OR IMPLIED.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "If you have provided personal information to us, you may request to review the information that we have maintained. Please contact the program office that provided you the product or service, the office that handled your inquiry, or the privacy office at the addresses below. We will correct or delete any inaccurate information upon your request.",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "Electronic communications with the Postal Service may be scanned by government-owned or contractor equipment to look for network traffic indicating known or suspected malicious cyber activity, including malicious content or communications.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in a jurisdiction that is less friendly to user privacy protection",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "Ad banner cookies are set when you view or click on an ad banner on usps.com, or an ad banner on another site for a USPS product, and persist for no more than five years.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "On behalf of the USPS, persistent cookies and beacons (described below) may be set and managed by third party advertising suppliers to support ad banners.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "You may terminate this agreement at any time by discontinuing your use of the Postal Service site and destroying all materials obtained from it.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "United States Postal Service"
+  },
+  {
+   "t": "You also agree to submit to the personal jurisdiction of such courts for the purpose of litigating all such disputes.",
+   "not": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You aren’t forced into binding arbitration in case of disputes",
+   "service": "Session"
+  },
+  {
+   "t": "OUR AGGREGATE LIABILITY RELATING TO, ARISING OUT OF, OR IN ANY WAY IN CONNECTION WITH OUR TERMS, US, OR OUR SERVICES WILL NOT EXCEED TEN DOLLARS ($10).",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "Any liability on behalf of the service is only limited to the fees you paid as a user",
+   "service": "Session"
+  },
+  {
+   "t": "THE SESSION PARTIES WILL NOT BE LIABLE TO YOU FOR ANY LOST PROFITS OR CONSEQUENTIAL, SPECIAL, PUNITIVE, INDIRECT, OR INCIDENTAL DAMAGES RELATING TO, ARISING OUT OF, OR IN ANY WAY IN CONNECTION WITH OUR TERMS, US, OR OUR SERVICES, EVEN IF THE SESSION PARTIES HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Session"
+  },
+  {
+   "t": "so all information is deleted within 6 months of being collected.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "Logs are deleted after a finite period of time",
+   "service": "Session"
+  },
+  {
+   "t": "Our Services may be interrupted, including for maintenance, upgrades, or network or equipment failures.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Session"
+  },
+  {
+   "t": "We do not share or sell any data we collect on the Session website with third parties.",
+   "not": [
+    "third_party_sharing"
+   ],
+   "case": "The service claims that your personal data is not shared with third parties",
+   "service": "Session"
+  },
+  {
+   "t": "You agree to resolve any Claim you have with us relating to or arising out of our Terms, us, or our Services exclusively in the state of Victoria, Australia.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "Session"
+  },
+  {
+   "t": "YOU USE OUR SERVICES AT YOUR OWN RISK AND SUBJECT TO THE FOLLOWING DISCLAIMERS. WE PROVIDE OUR SERVICES ON AN “AS IS” BASIS",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Session"
+  },
+  {
+   "t": "Session may update the Terms at any time. When We update our Terms, We will update the “Last Modified” date associated with the updated Terms",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Session"
+  },
+  {
+   "t": "We may modify, suspend, or terminate your access to or use of our Services anytime for any reason, such as if you violate the letter or spirit of our Terms or create harm, risk, or possible legal exposure for Session.",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Session"
+  },
+  {
+   "t": "ID CLOUD SERVICES LTD may change, suspend or discontinue all or any aspect of the Services at any time, including the availability of any feature, database, or Content, without prior notice or liability.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Icedrive"
+  },
+  {
+   "t": "ID CLOUD SERVICES LTD may modify the Agreement which will become effective immediately upon its posting to the website",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Icedrive"
+  },
+  {
+   "t": "Contact Icedrive customer service to request a Refund for unused months of prepaid Services.",
+   "e": [
+    "auto_renewal"
+   ],
+   "case": "This service has a no refund policy with some exceptions",
+   "service": "Icedrive"
+  },
+  {
+   "t": "Icedrive Subscription Accounts Terms and Conditions ID CLOUD SERVICES LTD services are automatically renewed for successive terms, With recurring credit card charges or other payment method selected by you, Unless terminated or cancelled by you or ID CLOUD SERVICES LTD as provided in the agreement.",
+   "e": [
+    "auto_renewal"
+   ],
+   "case": "You authorise the service to charge a credit card supplied on re-occurring basis",
+   "service": "Icedrive"
+  },
+  {
+   "t": "and may terminate your access to the Services, without prior notice and at its sole discretion",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Icedrive"
+  },
+  {
+   "t": "Your continued use of the website and any associated services indicates your acceptance of the Agreement and you agree to be bound by such modification or revisions",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Icedrive"
+  },
+  {
+   "t": "Content is provided to you AS IS. You understand that when using the Services, you will be exposed to Content from a variety of sources, and that ID CLOUD SERVICES LTD is not responsible for the accuracy, usefulness, safety, or intellectual property rights of or relating to such Content.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Icedrive"
+  },
+  {
+   "t": "These Terms will be governed by and construed in accordance with the laws of Romania, without giving effect to any principles of conflicts of laws. <",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "VPN.AC"
+  },
+  {
+   "t": "We do not give your personal info to any third parties.",
+   "not": [
+    "third_party_sharing"
+   ],
+   "case": "The service claims that your personal data is not shared with third parties",
+   "service": "VPN.AC"
+  },
+  {
+   "t": "These connection logs are stored on an encrypted server and are erased permanently on a daily basis.",
+   "not": [
+    "data_retention"
+   ],
+   "case": "Logs are deleted after a finite period of time",
+   "service": "VPN.AC"
+  },
+  {
+   "t": "Therefore, our VPN Service is provided \"as is\" without any guarantees, conditions or warranties as to its quality or suitability for any particular purpose",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "VPN.AC"
+  },
+  {
+   "t": "To request the correction, deletion or limitation of the processing of your personal data",
+   "not": [
+    "unilateral_termination",
+    "data_retention"
+   ],
+   "case": "You can request access, correction and/or deletion of your data",
+   "service": "Replika"
+  },
+  {
+   "t": "YOU AND REPLIKA WAIVE ANY RIGHT TO PARTICIPATE IN A CLASS ACTION LAWSUIT OR CLASS-WIDE ARBITRATION",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You waive your right to a class action",
+   "service": "Replika"
+  },
+  {
+   "t": "Unique identifiers, such as your device ID.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Replika"
+  },
+  {
+   "t": "Remarketing and behavioral targeting service provided by Facebook, Inc. that connects the activity of this Application with the Facebook advertising network.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Replika"
+  },
+  {
+   "t": "You agree to release, indemnify and hold Replika and its affiliates and their officers, employees, directors and agents (collectively, “Indemnitees”) harmless from any from any and all losses, damages, expenses, including reasonable attorneys’ fees, rights, claims, actions of any kind and injury (including death) arising out of or relating to your use of the Services, any User Content, your connection to the Services, your violation of these Terms of Service or your violation of any rights of another.",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to defend, indemnify, and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Replika"
+  },
+  {
+   "t": "You may cancel your Membership at any time by deleting your account in the app. This action is irreversible. As soon as you delete your account, all the data associated with your use of the Services will be removed permanently.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "Replika"
+  },
+  {
+   "t": "YOU EXPRESSLY UNDERSTAND AND AGREE THAT REPLIKA WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY DAMAGES, OR DAMAGES FOR LOSS OF PROFITS INCLUDING BUT NOT LIMITED TO",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Replika"
+  },
+  {
+   "t": "Your continued use of the Services after any changes or revisions to this Privacy Policy shall indicate your agreement with the terms of such revised Privacy Policy.",
+   "e": [
+    "unilateral_change",
+    "consent_by_use"
+   ],
+   "case": "Instead of asking directly, this Service will assume your consent to changes of terms merely from your usage",
+   "service": "Replika"
+  },
+  {
+   "t": "THE SERVICE IS PROVIDED ON AN \"AS IS\" AND \"AS AVAILABLE\" BASIS.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Follow My Health"
+  },
+  {
+   "t": "You may delete your FollowMyHealth account at any time by accessing the My Account -&gt. Preferences section of FollowMyHealth.",
+   "not": [
+    "unilateral_termination"
+   ],
+   "case": "You have the right to leave this service at any time",
+   "service": "Follow My Health"
+  },
+  {
+   "t": "Allscripts reserves the right in its sole discretion to determine who may qualify for an account and reserves the right to reject or revoke any account at any time without liability.",
+   "e": [
+    "unilateral_termination"
+   ],
+   "case": "Your account can be deleted or permanently suspended without prior notice and without a reason",
+   "service": "Follow My Health"
+  },
+  {
+   "t": "This data collection takes place both on SmartThings.com and on third-party websites that participate in the online ad ecosystem.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You may be tracked on other websites",
+   "service": "SmartThings"
+  },
+  {
+   "t": "Products and services purchased or offered through the Services are provided \"AS IS\" and without any warranty of any kind from SmartThings or others, unless a separate written warranty is provided expressly and unambiguously for a specific product or service (and if such a warranty is provided, it will apply only to such specific product or service, and not to the Services generally).",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "SmartThings"
+  },
+  {
+   "t": "sublicensable and transferable license to use, modify, reproduce, distribute, share, prepare derivative works of, display, perform, and otherwise fully exploit the User Submissions and Device Data in connection with the Services, and SmartThings's (and its successors' and assigns') business,",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be licensed to third parties",
+   "service": "SmartThings"
+  },
+  {
+   "t": "When you interact with SmartThings, we may obtain certain information through automated means, such as browser cookies, pixels, web server logs, web beacons and other technologies.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "SmartThings"
+  },
+  {
+   "t": "Subject to our Privacy Policy (where applicable), for all User Submissions and Device Data, you hereby do and shall grant SmartThings a worldwide, non-exclusive, perpetual, irrevocable, royalty-free, fully paid,",
+   "e": [
+    "content_license"
+   ],
+   "case": "A license is kept on user-generated content even after you close your account",
+   "service": "SmartThings"
+  },
+  {
+   "t": "including without limitation for promoting and redistributing part or all of the Services in any media formats and through any media channels (including, without limitation, third party websites and services).",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be distributed through any media known now or in the future",
+   "service": "SmartThings"
+  },
+  {
+   "t": "INDEMNITY You agree to indemnify, defend and hold harmless Discovery Communications, LLC, its affiliates, and their officers, directors, employees, agents, licensors and suppliers, from and against any and all losses, expenses, damages and costs (including reasonable attorneys’ fees) resulting from any violation of this Visitor Agreement or any activity related to your account (including negligent or wrongful conduct) by you or any other person accessing any Discovery Site using your account.",
+   "e": [
+    "indemnification"
+   ],
+   "case": "You agree to defend, indemnify, and hold the service harmless in case of a claim related to your use of the service",
+   "service": "Discovery"
+  },
+  {
+   "t": "Provide our marketing and third-party advertising to you",
+   "e": [
+    "marketing_sharing",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data is used to employ targeted third-party advertising",
+   "service": "Discovery"
+  },
+  {
+   "t": "(in any and all media, now known or hereafter invented, including without limitation television, home video/DVD products, and mobile services)",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be distributed through any media known now or in the future",
+   "service": "Discovery"
+  },
+  {
+   "t": "YOU AGREE THAT YOUR USE OF THE DISCOVERY SITES IS AT YOUR SOLE RISK",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service is provided 'as is' and to be used at your sole risk",
+   "service": "Discovery"
+  },
+  {
+   "t": "you will not have the right to bring or participate in any class action or similar proceeding in court or in arbitration.",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You waive your right to a class action",
+   "service": "Discovery"
+  },
+  {
+   "t": "If you agree, we may collect more specific location information that is provided through the GPS functionality on your mobile device used to access the Services. That location information is used to present information and advertising that is of relevance to you in your geographic area",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "Location data may be collected, used and/or shared",
+   "service": "Discovery"
+  },
+  {
+   "t": "In the event we go through a business transition such as a merger, acquisition, bankruptcy, reorganization, or sale of all or a portion of our assets, or a diligence process in connection with a potential business transaction, the information we collect and maintain may be disclosed, sold, or transferred as part of that transaction.",
+   "e": [
+    "data_sale",
+    "third_party_sharing"
+   ],
+   "case": "Your personal data may be sold or otherwise transferred as part of a bankruptcy proceeding or other type of financial transaction",
+   "service": "Discovery"
+  },
+  {
+   "t": "Send you personalized newsletters, surveys, and information about products, services and promotions offered by us, our partners, and other organizations with which we work;",
+   "e": [
+    "marketing_sharing"
+   ],
+   "case": "Your personal data may be used for marketing purposes",
+   "service": "Discovery"
+  },
+  {
+   "t": "Geolocation information such as city, state and ZIP code associated with your IP address. and precise geolocation information from GPS-based functionality on your mobile devices, in accordance with your mobile device settings",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "This service receives your precise location through GPS coordinates",
+   "service": "Discovery"
+  },
+  {
+   "t": "We may share information with third parties with whom we have business relationships, such as our co-promotional partners, advertisers, ad networks, and data marketing services, for purposes such as offering products and services that may interest you.",
+   "e": [
+    "third_party_sharing"
+   ],
+   "case": "This service shares your personal data with third parties that are not essential to its operation",
+   "service": "Discovery"
+  },
+  {
+   "t": "The Services may contain web beacons/GIFs, pixels, page tags, embedded scripts and other tracking technologies.&nbsp. These technologies consist of small transparent image files or other web programming code that record how you interact with the Services. &nbsp. They are often used in conjunction with web browser cookies or other identifiers associated with your device.",
+   "e": [
+    "tracking_surveillance"
+   ],
+   "case": "You are tracked via web beacons, tracking pixels, browser fingerprinting, and/or device fingerprinting",
+   "service": "Discovery"
+  },
+  {
+   "t": "We, or advertising companies working on our behalf, may use cookies and other tracking technologies to collect information about your interactions with Services.",
+   "e": [
+    "tracking_surveillance",
+    "marketing_sharing"
+   ],
+   "case": "Third-party cookies are used for advertising",
+   "service": "Discovery"
+  },
+  {
+   "t": "or (d) do not want us to&nbsp. share information that identifies you with third parties for such third parties’ direct marketing purposes.",
+   "e": [
+    "data_sale"
+   ],
+   "case": "Your personal data may be sold unless you opt out",
+   "service": "Discovery"
+  },
+  {
+   "t": "This Notice and all disputes arising hereunder or relating hereto shall be governed by, and will be construed under, the laws of the State of New York, without regard to choice of law principles.",
+   "e": [
+    "jurisdiction_choiceoflaw"
+   ],
+   "case": "The court of law governing the terms is in location X",
+   "service": "Discovery"
+  },
+  {
+   "t": "and to use and distribute and license others to use and distribute, your Video Submission, or any portions, reproductions or versions thereof, on the websites, products and/or services",
+   "e": [
+    "content_license"
+   ],
+   "case": "Your content can be licensed to third parties",
+   "service": "Discovery"
+  },
+  {
+   "t": "UNDER NO CIRCUMSTANCES WILL THE DISCOVERY SITES, DISCOVERY COMMUNICATIONS, LLC OR THEIR AFFILIATES, AGENTS OR LICENSORS BE LIABLE TO YOU OR ANYONE ELSE FOR ANY DAMAGES ARISING OUT OF USE OF THE DISCOVERY SITES, INCLUDING, WITHOUT LIMITATION, LIABILITY FOR CONSEQUENTIAL, SPECIAL, INCIDENTAL, INDIRECT OR SIMILAR DAMAGES, EVEN IF WE ARE ADVISED BEFOREHAND OF THE POSSIBILITY OF SUCH DAMAGES.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "The service assumes no liability for any damages the user incurs",
+   "service": "Discovery"
+  },
+  {
+   "t": "We may change this Notice from time to time as our services, technology, and legal obligations change.&nbsp. If we make changes, we will post the updated Notice and revise the “Last Updated” date.&nbsp. Any changes will be effective immediately upon posting of the revised Notice, and your continued use of the Services after that date will indicate your consent to any changes, unless applicable law requires us to provide another form of notice and/or seek your agreement to such changes.",
+   "e": [
+    "unilateral_change"
+   ],
+   "case": "Terms may be changed any time at their discretion, without notice to you",
+   "service": "Discovery"
+  },
+  {
+   "t": "Discovery and its information providers make no warranty as to the reliability, accuracy, timeliness, usefulness or completeness of the information on the Discovery Sites.",
+   "e": [
+    "liability_waiver"
+   ],
+   "case": "No warranty is made regarding an uninterrupted, timely, secure and/or error-free experience",
+   "service": "Discovery"
+  },
+  {
+   "t": "We will make every reasonable effort to informally resolve any complaints, disputes, or disagreements that you may have with us. If those efforts fail, by using the Discovery Sites, you agree that any complaint, dispute, or disagreement you may have against Discovery, and any claim that Discovery may have against you, arising out of, relating to, or connected in any way with this Visitor Agreement, our Privacy Notice, or any Discovery Transactions or Relationships shall be resolved exclusively by final and binding arbitration",
+   "e": [
+    "arbitration_classwaiver"
+   ],
+   "case": "You are forced into binding arbitration in case of disputes",
+   "service": "Discovery"
+  },
+  {
+   "t": "it is not always possible to completely change, remove, or delete all information about you from our databases for legal and other reasons.",
+   "e": [
+    "data_retention"
+   ],
+   "case": "Some personal data may be kept for business interests or legal obligations",
+   "service": "Discovery"
+  }
+ ]
+}

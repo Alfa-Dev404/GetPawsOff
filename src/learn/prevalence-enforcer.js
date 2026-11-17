@@ -1,4 +1,4 @@
-/* PawsOff, Prevalence Enforcer — service-worker side.
+/* PawsOff, Prevalence Enforcer, service-worker side.
  *
  * Turns the observe-only learner's verdicts into active, self-cleaning
  * declarativeNetRequest rules. The learner only scores; this module decides
@@ -8,8 +8,8 @@
  *     covered by the static EasyPrivacy ruleset, or a user exception (the
  *     "this broke a site" feedback loop); yellowlisted domains stay
  *     cookieblock, never a hard block
- *   - every sync fully reconciles its own rule band — clears it, re-adds only
- *     what's currently desired — so a decayed score naturally un-blocks with
+ *   - every sync fully reconciles its own rule band, clears it, re-adds only
+ *     what's currently desired, so a decayed score naturally un-blocks with
  *     zero drift between Chrome's rules and our state
  *   - the 30,000 dynamic+session rule cap is shared with allow/pause; budget
  *     is computed from what's actually free, and updateDynamicRules rejects
@@ -19,12 +19,12 @@
  *
  * Dormant by default (__pawsOff_pv_enforce_enabled), and even once enabled,
  * shadow mode (__pawsOff_pv_enforce_shadow, default true) computes the plan
- * into storage without applying a single rule — real would-block data before
+ * into storage without applying a single rule, real would-block data before
  * any rollout decision. Warm-up gates hold a stricter bar than the learner's
  * own verdict threshold: a hard block needs score>=8 on >=10 sites known
  * >=14 days, starts beacon-only, adds scripts only at score>=15, and never
- * touches sub_frame/websocket/media. Anything below that bar — plus every
- * yellowlisted verdict — gets cookies stripped instead of blocked, so the
+ * touches sub_frame/websocket/media. Anything below that bar, plus every
+ * yellowlisted verdict, gets cookies stripped instead of blocked, so the
  * resource still loads but the tracker goes anonymous. Pausing a site
  * auto-excepts its flagged domains (self-healing). Candidates are named by
  * joining hash-only radar entries to the learner's memory-only live labels,
@@ -32,14 +32,14 @@
  *
  * Requires self.PawsOffPSL and self.__pawsOff_prevalence; background.js
  * loads both first via importScripts. Self-registers its own message +
- * alarm listeners (additive — the main router is undisturbed).
+ * alarm listeners (additive, the main router is undisturbed).
  */
 'use strict';
 (function (root) {
   var NS = {};
   try { root.__pawsOff_enforcer = NS; } catch (_) { /* ignore */ }
 
-  // ── Storage keys ─────────────────────────────────────────────────────
+  // Storage keys
   var ENABLED_KEY = '__pawsOff_pv_enforce_enabled'; // boolean, default false
   var SHADOW_KEY  = '__pawsOff_pv_enforce_shadow';  // boolean, default TRUE: compute, never apply
   var IDMAP_KEY   = '__pawsOff_pv_enforce_idmap';   // legacy key, overwritten with an empty object
@@ -51,7 +51,7 @@
   var ENFORCE_ALARM = 'pawsoff_pv_enforce';
   var ENFORCE_SOON_ALARM = 'pawsoff_pv_enforce_soon';
 
-  // ── Warm-up gates (breakage protection) ─────────────────────────────
+  // Warm-up gates (breakage protection)
   // Stricter than the learner's own BLOCK_THRESHOLD (3), so a merely-popular
   // newcomer (a fresh CDN) never gets blocked outright.
   var ENFORCE_MIN_SCORE    = 8;
@@ -61,7 +61,7 @@
   var COOKIE_MIN_SCORE     = 3;   // matches the learner's verdict threshold
   var MAX_EXCEPTIONS       = 500; // LRU cap on the "this broke a site" list
 
-  // ── Rule band + tuning ───────────────────────────────────────────
+  // Rule band + tuning
   // Learner band 40000–69999 is well clear of the existing PawsOff bands:
   //   9100–9199 pixel-block providers, 9300–9499 site-pause, 9500–9999 allow.
   var LEARN_ID_BASE = 40000;
@@ -90,7 +90,7 @@
     'script', 'xmlhttprequest', 'image', 'ping', 'media', 'websocket', 'sub_frame', 'other'
   ];
 
-  // ── ESSENTIAL_DOMAINS safelist (base domains, NEVER auto-blocked) ──────────
+  // ESSENTIAL_DOMAINS safelist (base domains, NEVER auto-blocked)
   // Infrastructure that appears on many sites but is needed for them to work.
   // Extend/replace later via signed remote config (same channel as the lists).
   var ESSENTIAL_DOMAINS = new Set([
@@ -110,7 +110,7 @@
     'youtube.com', 'ytimg.com', 'vimeo.com', 'vimeocdn.com', 'brightcove.net', 'jwpcdn.com', 'jwplayer.com'
   ]);
 
-  // ── base-domain helper (uses PSL-lite when present) ───────────────────────
+  // base-domain helper (uses PSL-lite when present)
   function pslBase(host) {
     try {
       if (root.PawsOffPSL) return root.PawsOffPSL.getBaseDomain(host) || host;
@@ -135,7 +135,7 @@
     return !!set && set.has(domain);
   }
 
-  // ── PURE: is this domain eligible for an auto-block rule? ──────────────────
+  // PURE: is this domain eligible for an auto-block rule?
   function isEnforceableDomain(domain, sets) {
     if (!domain) return false;
     sets = sets || {};
@@ -146,7 +146,7 @@
     return true;
   }
 
-  // ── PURE: how many learner rules may we add right now? ─────────────────────
+  // PURE: how many learner rules may we add right now?
   function computeBudget(o) {
     o = o || {};
     var maxDynamic   = typeof o.maxDynamic === 'number' ? o.maxDynamic : MAX_DYNAMIC;
@@ -159,7 +159,7 @@
     return budget > 0 ? budget : 0;
   }
 
-  // ── PURE: build one block rule ──────────────────────────────────────
+  // PURE: build one block rule
   // requestDomains:[base] also matches subdomains, so one rule covers the
   // registrable domain. priority 1 keeps it below the user's allow rules (2).
   // domainType 'thirdParty' guarantees the rule can never fire when the user
@@ -176,10 +176,10 @@
       }
     };
   }
-  // ── PURE: build one cookie-strip rule ────────────────────────────────
+  // PURE: build one cookie-strip rule
   // modifyHeaders (possible since the manifest gained http/https host
   // permissions): the resource still loads so nothing breaks, but the request
-  // carries no cookies and the response can't set any — the tracker sees an
+  // carries no cookies and the response can't set any, the tracker sees an
   // anonymous fetch. Used for yellowlisted/cookieblock verdicts and for block
   // candidates still inside their warm-up window.
   function buildCookieStripRule(domain, id) {
@@ -198,7 +198,7 @@
       }
     };
   }
-  // ── PURE: which enforcement tier does a scored row earn? ─────────────
+  // PURE: which enforcement tier does a scored row earn?
   // Returns 'block-script' | 'block-beacon' | 'cookie' | null. Rows must carry
   // {score, sites, ageDays, verdict}; missing fields fail toward the safer tier.
   function numericRowValue(value) {
@@ -317,7 +317,7 @@
     return Object.keys(removeSet).map(Number);
   }
 
-  // ── PURE: compute the full DNR update from learner scores ──────────────────
+  // PURE: compute the full DNR update from learner scores
   // Full-reconcile strategy: removeRuleIds = everything currently in our band;
   // addRules = the top-scoring desired domains. Deterministic, drift-free.
   function planSync(args) {
@@ -349,7 +349,7 @@
     };
   }
 
-  // ══════════════════ ASYNC ORCHESTRATION (chrome-dependent) ═════════════════
+  // ASYNC ORCHESTRATION (chrome-dependent)
   var _coveredCache = null; // Set<baseDomain> from packaged easyprivacy-domains.json
 
   function canLoadCoveredSet() {
@@ -847,9 +847,15 @@
   NS.getStatus = getStatus;
   NS.reset = reset;
 
-  // ── Message listener (additive; coexists with background.js's router) ──────
+  // Message listener (additive; coexists with background.js's router)
   // Explicit opt-in control surface. Settings exposes Standard (off), Preview
   // (shadow), and Adaptive (active); the default remains Standard.
+  // Content scripts report their page URL as sender.url; the popup and options
+  // report the extension origin. Settings messages are accepted from the latter only.
+  function fromExtensionPage(sender) {
+    try { return typeof sender.url === 'string' && sender.url.indexOf(chrome.runtime.getURL('')) === 0; }
+    catch (_) { return false; }
+  }
   try {
     chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       try {
@@ -859,8 +865,9 @@
           scheduleSoon();
           return false; // learner owns and answers this message
         }
+        if (!fromExtensionPage(sender)) return false;
         // Passive breakage feedback: observe the popup's pauseSite op (owned +
-        // answered by background.js — we never sendResponse for it).
+        // answered by background.js, we never sendResponse for it).
         if (message.type === 'pawsoff_allow_apply' && message.op === 'pauseSite' && typeof message.site === 'string') {
           try { exceptSpottedOnSite(message.site); } catch (_) { /* silent */ }
           return false;
@@ -870,28 +877,12 @@
             setMode(message.mode).then(function (r) { try { sendResponse(r); } catch (_) {} },
               function () { try { sendResponse({ ok: false }); } catch (_) {} });
             return true;
-          case 'pawsoff_pv_enforce_setShadow':
-            setShadow(!!message.shadow).then(function (r) { try { sendResponse(r); } catch (_) {} },
-              function () { try { sendResponse({ ok: false }); } catch (_) {} });
-            return true;
           case 'pawsoff_pv_enforce_sync':
             syncLearnerRules().then(function (r) { try { sendResponse(r); } catch (_) {} },
               function () { try { sendResponse({ ok: false }); } catch (_) {} });
             return true;
-          case 'pawsoff_pv_enforce_setEnabled':
-            setEnabled(!!message.enabled).then(function (r) { try { sendResponse(r); } catch (_) {} },
-              function () { try { sendResponse({ ok: false }); } catch (_) {} });
-            return true;
-          case 'pawsoff_pv_enforce_addException':
-            addException(message.domain).then(function (r) { try { sendResponse(r); } catch (_) {} },
-              function () { try { sendResponse({ ok: false }); } catch (_) {} });
-            return true;
           case 'pawsoff_pv_enforce_status':
             getStatus().then(function (r) { try { sendResponse({ ok: true, status: r }); } catch (_) {} },
-              function () { try { sendResponse({ ok: false }); } catch (_) {} });
-            return true;
-          case 'pawsoff_pv_enforce_reset':
-            reset().then(function (r) { try { sendResponse(r); } catch (_) {} },
               function () { try { sendResponse({ ok: false }); } catch (_) {} });
             return true;
           default:
@@ -901,7 +892,7 @@
     });
   } catch (_) { /* runtime API unavailable */ }
 
-  // ── Daily reconcile alarm (chrome.alarms only) + sync on SW wake ───────────
+  // Daily reconcile alarm (chrome.alarms only) + sync on SW wake
   function ensureAlarm() {
     try { chrome.alarms.create(ENFORCE_ALARM, { periodInMinutes: 1440 }); } catch (_) {}
   }
@@ -924,7 +915,7 @@
     });
   } catch (_) {}
 
-  // ── Test-only export hook (inert in the service worker) ───────────────────
+  // Test-only export hook (inert in the service worker)
   var TESTAPI = {
     planSync: planSync,
     computeBudget: computeBudget,

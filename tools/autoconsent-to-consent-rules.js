@@ -153,7 +153,7 @@ function collectStepClicks(step, out, state, depth) {
   collectClickSelectors(step.else, out, state, depth + 1);
 }
 
-// Container indicators come from detectPopup (preferred — it is the visible
+// Container indicators come from detectPopup (preferred, it is the visible
 // banner) then detectCmp (presence of the CMP at all).
 function collectDetectorSelectors(rule, state = ruleBudget()) {
   const out = [];

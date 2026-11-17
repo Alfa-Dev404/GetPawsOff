@@ -11,12 +11,59 @@
       return 'GetPawsOff · ' + findingCount + ' ' + noun + ' flagged';
     }
 
-    function panelHeader(findingCount) {
+    const SEVERITY_ORDER = ['high', 'med', 'low'];
+    const SEVERITY_WORD = { high: 'Serious', med: 'Moderate', low: 'Minor' };
+
+    function severityOf(finding) {
+      const category = state.categoryById[finding.categoryId];
+      return category && SEVERITY_WORD[category.severity] ? category.severity : 'low';
+    }
+
+    function severityCounts(findings) {
+      const counts = { high: 0, med: 0, low: 0 };
+      for (const finding of findings) counts[severityOf(finding)] += 1;
+      return counts;
+    }
+
+    function worstSeverity(counts) {
+      return SEVERITY_ORDER.find((severity) => counts[severity] > 0) || 'clear';
+    }
+
+    // The figure is set large beside the words, so the two read as one sentence.
+    function panelHeadline(counts) {
+      const total = counts.high + counts.med + counts.low;
+      if (!total) return { figure: '', words: 'Nothing risky found' };
+      if (counts.high) return { figure: String(counts.high), words: (counts.high === 1 ? 'serious clause' : 'serious clauses') + ' in these terms' };
+      return { figure: String(total), words: (total === 1 ? 'clause' : 'clauses') + ' worth a look' };
+    }
+
+    // One to three scratch marks: minor, moderate, serious.
+    function severityMarks(severity) {
+      const marks = document.createElement('span');
+      marks.className = 'po-ts-marks';
+      marks.setAttribute('aria-hidden', 'true');
+      for (let i = SEVERITY_ORDER.length - SEVERITY_ORDER.indexOf(severity); i > 0; i -= 1) marks.appendChild(document.createElement('i'));
+      return marks;
+    }
+
+    function panelHeader(findings) {
+      const counts = severityCounts(findings);
       const head = document.createElement('div');
-      head.className = 'po-ts-head';
+      head.className = 'po-ts-head ' + worstSeverity(counts);
+      const said = panelHeadline(counts);
+      const count = document.createElement('span');
+      count.className = 'po-ts-count';
+      count.textContent = said.figure;
+      const copy = document.createElement('span');
+      copy.className = 'po-ts-head-copy';
+      const headline = document.createElement('span');
+      headline.className = 'po-ts-headline';
+      headline.textContent = said.words;
       const title = document.createElement('span');
       title.className = 'po-ts-title';
-      title.textContent = panelTitle(findingCount);
+      title.textContent = panelTitle(findings.length);
+      copy.appendChild(headline);
+      copy.appendChild(title);
       const actions = document.createElement('span');
       actions.className = 'po-ts-actions';
       const closeBtn = document.createElement('button');
@@ -27,9 +74,24 @@
         options.removePanel();
       });
       actions.appendChild(closeBtn);
-      head.appendChild(title);
+      if (said.figure) head.appendChild(count);
+      head.appendChild(copy);
       head.appendChild(actions);
       return head;
+    }
+
+    function severityGroup(severity, size) {
+      const group = document.createElement('div');
+      group.className = 'po-ts-group ' + severity;
+      group.appendChild(severityMarks(severity));
+      const word = document.createElement('span');
+      word.textContent = SEVERITY_WORD[severity];
+      const count = document.createElement('span');
+      count.className = 'po-ts-group-count';
+      count.textContent = String(size);
+      group.appendChild(word);
+      group.appendChild(count);
+      return group;
     }
 
     function appendPolicyChange(card) {
@@ -75,11 +137,13 @@
       const category = state.categoryById[finding.categoryId] || { label: finding.categoryId, severity: 'low' };
       const item = document.createElement('button');
       item.type = 'button';
-      item.className = 'po-ts-item';
-      const dot = document.createElement('span');
-      dot.className = 'po-ts-dot ' + category.severity;
-      item.appendChild(dot);
+      const severity = severityOf(finding);
+      item.className = 'po-ts-item ' + severity;
       const body = document.createElement('span');
+      const tag = document.createElement('span');
+      tag.className = 'po-ts-vh';
+      tag.textContent = SEVERITY_WORD[severity] + ': ';
+      body.appendChild(tag);
       const categoryElement = document.createElement('span');
       categoryElement.className = 'po-ts-cat';
       categoryElement.textContent = category.label + (finding.level === 'aggravated' ? ' (severe)' : '');
@@ -106,32 +170,42 @@
         empty.textContent = 'No risky clauses found.';
         list.appendChild(empty);
       }
-      for (const finding of findings) list.appendChild(findingListItem(finding));
+      // Worst first, page order within a severity.
+      const counts = severityCounts(findings);
+      for (const severity of SEVERITY_ORDER) {
+        if (!counts[severity]) continue;
+        list.appendChild(severityGroup(severity, counts[severity]));
+        for (const finding of findings) if (severityOf(finding) === severity) list.appendChild(findingListItem(finding));
+      }
       return list;
     }
 
-    function panelFooter() {
+    function panelFooter(hasFindings) {
       const foot = document.createElement('div');
       foot.className = 'po-ts-foot';
       const attribution = state.reputationSource && state.reputationSource.attribution;
       const suffix = attribution ? ' ' + attribution : '';
-      foot.textContent = 'Informational only, not legal advice. Clauses analysed locally.' + suffix;
+      foot.textContent = (hasFindings ? 'Select a clause to jump to it. ' : '') + 'Read on this device, not legal advice.' + suffix;
       return foot;
     }
 
-    function panelCard(findings) {
+    function panelCard(findings, entering) {
       const card = document.createElement('div');
-      card.className = 'po-ts-card';
-      card.appendChild(panelHeader(findings.length));
+      card.className = entering ? 'po-ts-card po-ts-enter' : 'po-ts-card';
+      card.setAttribute('role', 'region');
+      card.setAttribute('aria-label', 'GetPawsOff terms scan');
+      card.appendChild(panelHeader(findings));
       appendPolicyChange(card);
       appendReputationContext(card);
       card.appendChild(findingsList(findings));
-      card.appendChild(panelFooter());
+      card.appendChild(panelFooter(findings.length > 0));
       return card;
     }
 
     function renderPanel(findings) {
       try {
+        // Animate only the first appearance, not the re-render after a snapshot update.
+        const entering = !state.panelHost;
         options.removePanel();
         const host = document.createElement('div');
         host.className = 'po-ts-root';
@@ -140,7 +214,7 @@
         const style = document.createElement('style');
         style.textContent = options.panelCss;
         shadow.appendChild(style);
-        shadow.appendChild(panelCard(findings));
+        shadow.appendChild(panelCard(findings, entering));
         (document.documentElement || document.body).appendChild(host);
         state.panelHost = host;
       } catch (error) {

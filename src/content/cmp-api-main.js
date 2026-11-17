@@ -1,7 +1,7 @@
 // cmp-api-main.js, PawsOff (ConsentGhost CMP API tier)
 //
 // Runs in the PAGE's MAIN world ("world": "MAIN" in manifest.json) to call CMP
-// JS APIs directly — rejects consent programmatically, independent of DOM
+// JS APIs directly, rejects consent programmatically, independent of DOM
 // structure or cross-origin iframes. Highest-reliability tier; falls back to
 // consent-ghost.js's selector click and heuristic scan (isolated world, same
 // frame) if no CMP API matches. On success, dispatches a CustomEvent on
@@ -26,14 +26,14 @@
 (function () {
   'use strict';
 
-  // ── Coordination state ───────────────────────────────────────────────────
-  // Kept in-closure, not on window — a page-visible global would let sites
+  // Coordination state
+  // Kept in-closure, not on window, a page-visible global would let sites
   // fingerprint the extension or tamper with state.
   let _cmpApiConfirmed = false;  // Tier A positive read-back only → HARD stop
   let _signalDispatched = false; // signal() fires at most once (first tier wins)
   let _cmpGiveUp = false;        // watchdog: no CMP on this page → stop all probes
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // Helpers
 
   /**
    * Dispatch the success signal to the isolated-world listener in
@@ -44,7 +44,7 @@
   function signal(cmpName) {
     if (_signalDispatched) return;
     _signalDispatched = true;
-    // No window.* marker — page-visible, would fingerprint the extension.
+    // No window.* marker, page-visible, would fingerprint the extension.
     try {
       document.dispatchEvent(
         new CustomEvent('pawsoff:cmp:rejected', {
@@ -57,7 +57,7 @@
   }
 
   /**
-   * Invoke obj[method](...args) without throwing. Returns true iff invoked —
+   * Invoke obj[method](...args) without throwing. Returns true iff invoked,
    * "invoked" is not "applied", a method can silently no-op, so this return
    * value alone never drives a signal (see runProbe).
    */
@@ -75,7 +75,7 @@
   function stopAll() { return _cmpApiConfirmed || _signalDispatched || _cmpGiveUp; }
 
   /**
-   * Probe runner — the single place that decides when to signal.
+   * Probe runner, the single place that decides when to signal.
    *
    * spec = { name, ready(), apply(), confirm()?, deferSignal?, budget?, interval? }
    *
@@ -84,7 +84,7 @@
    * Tier A (confirm): ready → apply once → poll confirm() → signal only on
    * confirm()===true. 'abort' or budget-elapsed → no signal, DOM tier runs instead.
    *
-   * setTimeout is fine here — content scripts run in the page process, not the
+   * setTimeout is fine here, content scripts run in the page process, not the
    * evictable service worker.
    */
   function runProbe(spec) {
@@ -99,11 +99,11 @@
           if (spec.ready()) {
             applied = true;                       // apply AT MOST ONCE
             const invoked = spec.apply();
-            if (!spec.confirm) {                  // ── Tier B ──
+            if (!spec.confirm) {                  // Tier B
               if (invoked !== false && !spec.deferSignal) signal(spec.name);
               return;                             // applied once → STOP
             }
-            // ── Tier A ── fall through to confirm polling on the next tick
+            // Tier A: fall through to confirm polling on the next tick
           }
         } else {
           const r = spec.confirm();
@@ -116,7 +116,7 @@
     tick();
   }
 
-  // ── Pure predicates (no side effects), unit-tested via module.exports.__test ─
+  // Pure predicates (no side effects), unit-tested via module.exports.__test
 
   /** True iff a TCF TCData object grants NO purpose consent (all rejected). An
    *  empty/absent consents map means nothing was granted → rejected. */
@@ -124,7 +124,7 @@
     if (!tcData || typeof tcData !== 'object') return false;
     const purpose = tcData.purpose;
     if (!purpose || typeof purpose !== 'object') return true;
-    // Requires no granted consent AND no asserted legitimate interest — a CMP
+    // Requires no granted consent AND no asserted legitimate interest, a CMP
     // can keep tracking on LI grounds even with consent off.
     const maps = [purpose.consents, purpose.legitimateInterests];
     for (let m = 0; m < maps.length; m++) {
@@ -175,8 +175,8 @@
     return s;
   }
 
-  // ── Early-out watchdog ───────────────────────────────────────────────────
-  // Most pages run no CMP at all — watch for any known CMP global within a
+  // Early-out watchdog
+  // Most pages run no CMP at all, watch for any known CMP global within a
   // short grace window; if none appears, set the give-up flag so every probe
   // stops at its next tick instead of polling its full budget for nothing.
   const CMP_GLOBALS = [
@@ -197,7 +197,7 @@
     setTimeout(() => watchdog(start), 300);
   }(Date.now()));
 
-  // ── 1. OneTrust ──────────────────────────────────────────────────────────────
+  // 1. OneTrust
   // Used by: BBC, Reuters, Adobe, Salesforce, SAP, many US/EU enterprises.
   // SDK method: window.OneTrust.RejectAll() (older banner SDK: OneTrustStub).
   runProbe({
@@ -209,7 +209,7 @@
     apply: () => call(window.OneTrust || window.OneTrustStub, 'RejectAll'),
   });
 
-  // ── 2. Cookiebot / CookieConsent ──────────────────────────────────────────
+  // 2. Cookiebot / CookieConsent
   // Used by: millions of small/medium EU sites (Cybot Cookiebot SaaS).
   // SDK method: window.Cookiebot.decline() / window.CookieConsent.decline().
   runProbe({
@@ -224,7 +224,7 @@
     },
   });
 
-  // ── 3. Didomi ─────────────────────────────────────────────────────────────
+  // 3. Didomi
   // Used by: arte.tv, Le Figaro, L'Équipe, M6, many FR/EU publishers.
   // setUserDisagreeToAll() is a no-op until consent state initialises, so we
   // use the race-free didomiOnReady queue as primary, with a polling backstop
@@ -262,7 +262,7 @@
     apply: () => rejectDidomi(window.Didomi),
   });
 
-  // ── 4. Osano ──────────────────────────────────────────────────────────────
+  // 4. Osano
   // SDK method: window.Osano.cm.deny('all').
   runProbe({
     name: 'Osano',
@@ -270,7 +270,7 @@
     apply: () => call(window.Osano.cm, 'deny', ['all']),
   });
 
-  // ── 5. Usercentrics UC_UI ─────────────────────────────────────────────────
+  // 5. Usercentrics UC_UI
   // Used by: Axel Springer brands, ProSiebenSat.1, many DE publishers.
   // SDK method: window.UC_UI.denyAllConsents().
   runProbe({
@@ -279,7 +279,7 @@
     apply: () => call(window.UC_UI, 'denyAllConsents'),
   });
 
-  // ── 6. TrustArc ───────────────────────────────────────────────────────────
+  // 6. TrustArc
   // API: window.truste.api.clickListener('rejectall') (v1) or
   //      window.TrustArc.consent.reject() (v2).
   runProbe({
@@ -296,7 +296,7 @@
     },
   });
 
-  // ── 7. CookieYes ──────────────────────────────────────────────────────────
+  // 7. CookieYes
   // API: window.CookieYes.reject() / .decline().
   runProbe({
     name: 'CookieYes',
@@ -304,7 +304,7 @@
     apply: () => call(window.CookieYes, 'reject') || call(window.CookieYes, 'decline'),
   });
 
-  // ── 8. consentmanager.net ─────────────────────────────────────────────────
+  // 8. consentmanager.net
   // API: window.__cmp('setConsent', 0, cb) (proprietary command, non-IAB). The
   // callback acknowledges the command, so we signal from the ack (deferSignal)
   // rather than on a bare invoke.
@@ -323,7 +323,7 @@
     },
   });
 
-  // ── 9. Axeptio ────────────────────────────────────────────────────────────
+  // 9. Axeptio
   // API: window.axeptioSDK.decline().
   runProbe({
     name: 'Axeptio',
@@ -331,7 +331,7 @@
     apply: () => call(window.axeptioSDK, 'decline'),
   });
 
-  // ── 10. Borlabs Cookie (WordPress) ────────────────────────────────────────
+  // 10. Borlabs Cookie (WordPress)
   // API: window.BorlabsCookie.doDeclineAllCookies().
   runProbe({
     name: 'Borlabs',
@@ -339,15 +339,15 @@
     apply: () => call(window.BorlabsCookie, 'doDeclineAllCookies'),
   });
 
-  // ── 11. IAB TCF v2.2, Tier A: setConsent, then confirm via getTCData ──────
+  // 11. IAB TCF v2.2, Tier A: setConsent, then confirm via getTCData
   // Standard TCF v2.2 has no "reject" command, but Sourcepoint, Quantcast,
   // AppConsent, and Didomi implement a proprietary setConsent extension on
   // their top-frame __tcfapi stub. Apply it, then read back via the standard
   // getTCData and only signal when no purpose consent remains. Readiness pings
-  // until cmpStatus === 'loaded'. gdprApplies === false aborts (no signal) —
+  // until cmpStatus === 'loaded'. gdprApplies === false aborts (no signal),
   // GDPR doesn't apply, so the DOM tier handles any visible banner instead.
   // The reject payload also clears purpose legitimate interests (LI is
-  // opt-out; consent-only reject leaves it granted) — strictly more rejection,
+  // opt-out; consent-only reject leaves it granted), strictly more rejection,
   // never less, so it can't weaken the tier's success condition.
   let _tcfLoaded = false;
   const _tcf = { result: null }; // null=pending | true | false | 'abort'
@@ -358,7 +358,7 @@
   const TCF_PURPOSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
   const TCF_LI_PURPOSES = [2, 7, 8, 9, 10, 11];
 
-  // Pure: reject-all payload for the proprietary __tcfapi('setConsent') call —
+  // Pure: reject-all payload for the proprietary __tcfapi('setConsent') call,
   // clears consent for all 11 purposes and legitimate interest for the
   // LI-eligible ones. vendor.* stays empty; the GVL is open-ended and not
   // enumerated here.
@@ -402,10 +402,10 @@
     confirm: () => _tcf.result,
   });
 
-  // ── 12. IAB GPP (Global Privacy Platform) ────────────────────────────────
+  // 12. IAB GPP (Global Privacy Platform)
   // Multi-jurisdiction standard; the reject command is proprietary with no
   // standard cross-vendor read-back, so this is best-effort and never signals
-  // — the DOM tier remains responsible for dismissing any banner.
+  //, the DOM tier remains responsible for dismissing any banner.
   runProbe({
     name: 'GPP',
     budget: 5000,
@@ -427,10 +427,10 @@
     },
   });
 
-  // ── 13. CCPA / US Privacy (IAB USP 1.0) ──────────────────────────────────
+  // 13. CCPA / US Privacy (IAB USP 1.0)
   // window.__uspapi opt-out; '1YYN' = CCPA applies, opted out of sale and
   // sharing (see uspConfirmed()). A background data-rights call, not a banner
-  // dismissal — never signals "handled"; the DOM tier still runs.
+  // dismissal, never signals "handled"; the DOM tier still runs.
   runProbe({
     name: 'USP',
     budget: 3000,
@@ -444,7 +444,7 @@
     },
   });
 
-  // ── Test hook ─────────────────────────────────────────────────────────────
+  // Test hook
   // Skipped in the real MAIN world (`module` is undefined there), so it adds no
   // page-visible global. The harness injects a `module` shim to read these.
   if (typeof module !== 'undefined' && module.exports) {

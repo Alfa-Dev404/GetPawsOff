@@ -1,12 +1,12 @@
 /**
- * consent-ghost.js — PawsOff ConsentGhost
+ * consent-ghost.js, PawsOff ConsentGhost
  *
  * Content script: silently auto-rejects cookie consent banners before the
  * user sees them. Runs on every page via Manifest V3.
  *
  * Public API: window.__pawsOff_consentGhost_init()
  * Rules: IIFE, try/catch around every async fn, no setTimeout/setInterval in
- * the background service worker (content scripts are exempt — they run in
+ * the background service worker (content scripts are exempt, they run in
  * the page process), all window props namespaced window.__pawsOff_*, silent
  * failures only (errors → chrome.storage.local, never surfaced on the host
  * page), never mutate or remove host DOM beyond clicking a verified reject
@@ -16,12 +16,12 @@
 (function () {
   'use strict';
 
-  // ── Double-run guard ───────────────────────────────────────────────────────
+  // Double-run guard
   // Same extension injected twice into one frame shares the isolated world, so
   // the namespace persists and this guard is authoritative.
   if (typeof window.__pawsOff_consentGhost_init === 'function') return;
 
-  // ── Internal namespace on window ────────────────────────────────────────────
+  // Internal namespace on window
   // These live in the content script's isolated world, not the page's global,
   // so hostile page scripts cannot read or mutate them.
   window.__pawsOff_consentGhost_startedAt = Date.now(); // ms since epoch, set on init
@@ -36,7 +36,7 @@
   let _scanning = false;
 
   // Generation guard (closes the double-click race the bare `_scanning` boolean
-  // left open, TODO v2 2c). Every scan captures the current generation when it
+  // left open). Every scan captures the current generation when it
   // takes the lock; a navigation/disable reset INVALIDATES any in-flight scan by
   // bumping the generation. A scan that finds its generation stale after an
   // await bails BEFORE clicking, and refuses to clear the newer scan's lock in
@@ -51,21 +51,21 @@
   }
   const _scanGuard = makeScanGuard();
 
-  // ── Observer lifetime ───────────────────────────────────────────────────────
+  // Observer lifetime
   // Torn down after 15s so it never leaks on pages that go quiet. setTimeout is
-  // fine here — content scripts run in the page process, not the evictable
-  // service worker — and a quiet page never fires a mutation callback to check
+  // fine here, content scripts run in the page process, not the evictable
+  // service worker, and a quiet page never fires a mutation callback to check
   // Date.now() against, so a real timer is the only thing that works.
   const OBSERVER_LIFETIME_MS = 15_000;
 
-  // ── Log storage tuning ─────────────────────────────────────────────────────
+  // Log storage tuning
   const LOG_KEY_PREFIX = '__pawsOff_consentGhost_log_';
   const LOG_MAX_ENTRIES = 200;     // retention cap across all frames/tabs
   const LOG_PRUNE_SAMPLE = 0.1;    // prune on ~1 in 10 writes (see logToStorage)
   // Monotonic reject counter, never pruned, so the popup total never plateaus.
   const CG_TOTAL_KEY = '__pawsOff_cg_total_rejected';
 
-  // ── Reload-loop breaker ────────────────────────────────────────────────────
+  // Reload-loop breaker
   // Some CMPs reload the page to apply a consent choice (e.g. check24.de). The
   // "handled" guard lives only in page memory, so a naive implementation would
   // reject → reload → reject forever. We stamp a per-origin key after acting;
@@ -75,23 +75,23 @@
   const REJECT_COOLDOWN_MS = 15000; // sliding window for the reload-loop guard
   const LOOP_MAX_REJECTS = 3;       // rejects per origin per window before standing down (a clear reload loop)
 
-  // ── Banner-regeneration breaker (nav-resistant, synchronous) ────────────────
+  // Banner-regeneration breaker (nav-resistant, synchronous)
   // Some CMPs don't reload, they re-inject a fresh banner after each dismissal
   // (focus.de/contentpass, repubblica.it), often via a pushState that wipes the
   // reload guard's sessionStorage budget. That guard is async chrome.storage,
   // so a sub-second re-inject loop races past it. This one counts rejections
   // per origin in sessionStorage instead (synchronous, survives SPA nav), and
   // stands down for a cool-off once a loop is confirmed rather than flickering
-  // forever — the right response to a pay-or-consent wall with no free reject.
+  // forever, the right response to a pay-or-consent wall with no free reject.
   const REGEN_KEY = 'pawsoff_cg_regen';
   const REGEN_MAX_REJECTS = 3;      // rejects per origin within the window before standing down
   const REGEN_WINDOW_MS = 15000;    // sliding window for counting rejections
   const REGEN_STANDDOWN_MS = 60000; // cool-off once the loop is confirmed
 
-  // ── Enable/disable (driven by the popup + options UI) ──────────────────────
+  // Enable/disable (driven by the popup + options UI)
   // The UI writes a single boolean flag; defaults to enabled on a fresh
   // install. A storage READ failure instead sets _stateLoadFailed and stands
-  // down (see below) — we can't trust an incomplete pause/disable state, so
+  // down (see below), we can't trust an incomplete pause/disable state, so
   // fail-open here means "don't act," not "protect anyway." `_disabled` is
   // cached so the synchronous scan path can short-circuit without an await.
   const DISABLED_KEY = '__pawsOff_consentGhost_disabled';
@@ -100,7 +100,40 @@
   let _sitePaused = false;
   let _stateLoadFailed = false; // couldn't read pause/disable state → stand down
   let _cmpApiRequested = false;
-  let _cmpApiVisibleBefore = [];
+  // Named CMPs whose container has been laid out on this page. Feeds the
+  // MAIN-world signal check below.
+  const _cmpBannerSeen = new Set();
+  let _cmpApiUnprovenLogged = false;
+
+  // Size, not visibility: our own prehide sets visibility:hidden on these
+  // containers, and an empty wrapper on a page that shows no banner has no box.
+  function hasBox(el) {
+    try {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Whether a MAIN-world API signal counts as a rejected banner. An early
+  // RejectAll stops OneTrust before the banner is laid out, but it still inserts
+  // the banner element, hidden. It inserts none where it would not have shown one.
+  function cmpSignalProven(cmp, seenCount, doc) {
+    if (seenCount > 0) return true;
+    try {
+      return cmp === 'OneTrust' && !!doc.querySelector('#onetrust-banner-sdk');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function noteCmpBanners() {
+    for (const framework of activeConfig) {
+      if (_cmpBannerSeen.has(framework.name)) continue;
+      if (frameworkContainers(framework, framework.pierceShadow === true).some(hasBox)) _cmpBannerSeen.add(framework.name);
+    }
+  }
 
   /**
    * Load the disabled flag once at init. Fail-open: any error → stay enabled.
@@ -131,9 +164,7 @@
   function requestCmpApiMain() {
     try {
       if (protectionPaused() || _cmpApiRequested || window.top !== window) return;
-      _cmpApiVisibleBefore = activeConfig
-        .filter((framework) => frameworkContainers(framework, false).some(isVisible))
-        .map((framework) => framework.name);
+      noteCmpBanners();
       _cmpApiRequested = true;
       chrome.runtime.sendMessage({ type: 'pawsoff_consentGhost_runMain' }, (resp) => {
         try {
@@ -146,7 +177,7 @@
     }
   }
 
-  // ── Master selector config ─────────────────────────────────────────────────
+  // Master selector config
   //   containerSelector → confirms the framework is active on this page.
   //   rejectSelectors   → tried in order; first visible, non-accept match wins.
   //   pierceShadow      → walk open shadow roots when matching (web-component CMPs).
@@ -154,14 +185,14 @@
   //
   // This array is the bundled/offline fallback. At runtime loadRemoteConfig()
   // asks background.js for a signed+verified consent-config.json and, if
-  // valid, swaps it into `activeConfig` — selector breakage can be patched
+  // valid, swaps it into `activeConfig`, selector breakage can be patched
   // without a Web Store re-review (remote data is allowed under MV3, remote
   // code is not). The text fallback below is multilingual (REJECT_PHRASES_BY_LANG
   // / ACCEPT_PHRASES_BY_LANG), keyed off document.documentElement.lang →
   // navigator.language → every language as a last resort.
   const BUNDLED_CONSENT_CONFIG = [
 
-    // ── 1. OneTrust ─────────────────────────────────────────────────────────
+    // 1. OneTrust
     {
       name: 'OneTrust',
       containerSelector: '#onetrust-banner-sdk, #onetrust-consent-sdk, .onetrust-pc-dark-filter',
@@ -169,13 +200,13 @@
         '#onetrust-reject-all-handler',
         '.onetrust-reject-btn-handler',
         'button[class*="onetrust-reject"]',
-        // '#onetrust-pc-btn-handler' is "Save Settings"/"Confirm My Choices" —
+        // '#onetrust-pc-btn-handler' is "Save Settings"/"Confirm My Choices",
         // persists whatever toggles are currently set, not a reject. Never click it.
         '.ot-pc-refuse-all-handler',
       ],
     },
 
-    // ── 2. CookieYes ────────────────────────────────────────────────────────
+    // 2. CookieYes
     {
       name: 'CookieYes',
       containerSelector: '.cky-consent-container, .cky-modal, #cky-consent-elem',
@@ -186,9 +217,9 @@
       ],
     },
 
-    // ── 3. Cookiebot ────────────────────────────────────────────────────────
+    // 3. Cookiebot
     // Cookiebot often ships the dialog hidden in the initial HTML and reveals
-    // it by toggling display/class — handled by the attribute-aware observer,
+    // it by toggling display/class, handled by the attribute-aware observer,
     // not by added-node detection.
     {
       name: 'Cookiebot',
@@ -201,7 +232,7 @@
       ],
     },
 
-    // ── 4. TrustArc ─────────────────────────────────────────────────────────
+    // 4. TrustArc
     {
       name: 'TrustArc',
       containerSelector: '#truste-consent-content, .truste_overlay, #trustarc-irb-container',
@@ -215,7 +246,7 @@
       ],
     },
 
-    // ── 5. Quantcast Choice ──────────────────────────────────────────────────
+    // 5. Quantcast Choice
     {
       name: 'Quantcast',
       containerSelector: '#qc-cmp2-ui, .qc-cmp2-container',
@@ -228,7 +259,7 @@
       ],
     },
 
-    // ── 6. Osano ────────────────────────────────────────────────────────────
+    // 6. Osano
     {
       name: 'Osano',
       containerSelector: '.osano-cm-window, .osano-cm-dialog',
@@ -239,7 +270,7 @@
       ],
     },
 
-    // ── 7. Didomi ────────────────────────────────────────────────────────────
+    // 7. Didomi
     // window.Didomi is only present on sites actually running the Didomi SDK
     // (Le Monde runs its own gdpr-lmd CMP instead, see below). The notice uses
     // #didomi-host as the host element; the disagree button is identified by
@@ -253,26 +284,26 @@
         '[data-testid="didomi-notice-disagree-button"]',
         // Deliberately no 'button#didomi-notice-learn-more-button ~ button':
         // that matches every sibling after "learn more" blindly, and in many
-        // Didomi layouts that sibling is Agree/Accept — would opt the user in.
+        // Didomi layouts that sibling is Agree/Accept, would opt the user in.
         '.didomi-components-button--variant-link-secondary',
         // Modern Didomi SDK (v2) uses data-testid on the disagree CTA; some
         // publishers override the id, so also match the SDK class pattern.
         // Deliberately no onclick*="Didomi.notice.hide" match: that API call
         // only dismisses the notice UI, it doesn't confirm the user rejected
-        // tracking — behavior on a bare dismiss varies by publisher config,
+        // tracking, behavior on a bare dismiss varies by publisher config,
         // so it's not a verified reject and we stand down rather than risk
         // it acting like a soft-accept.
         '[data-purpose="disagree"]',
       ],
     },
 
-    // ── 7b. Le Monde / gdpr-lmd ──────────────────────────────────────────────
+    // 7b. Le Monde / gdpr-lmd
     // Le Monde runs an in-house CMP under the `gdpr-lmd-*` CSS namespace,
-    // deployed across the whole Le Monde Group (telerama.fr, etc.) — not
+    // deployed across the whole Le Monde Group (telerama.fr, etc.), not
     // Didomi, despite similar branding. Reject:
     // <a class="gdpr-lmd-wall__refuse-link js-gdpr-deny-subscribe"
     //    data-gdpr-expression="denyAll">Reject all cookies</a>.
-    // The reject class includes `js-gdpr-deny-subscribe` — on Le Monde,
+    // The reject class includes `js-gdpr-deny-subscribe`, on Le Monde,
     // rejecting cookies routes into their subscription flow. We still
     // complete the privacy action; the subscribe prompt after is the
     // publisher's own design, not a PawsOff failure.
@@ -288,7 +319,7 @@
       ],
     },
 
-    // ── 8. Usercentrics ──────────────────────────────────────────────────────
+    // 8. Usercentrics
     // Renders its UI inside an open shadow root on <uc-ui-container> /
     // #usercentrics-root. document.querySelector can't cross that boundary,
     // so this entry is flagged pierceShadow:true and matching goes through
@@ -301,15 +332,15 @@
         '[data-testid="uc-deny-all-button"]',
         'button#uc-btn-deny-all',
         '[id="usercentrics-reject-all"]',
-        // Deliberately no 'button[data-testid="uc-save-settings-button"]' —
+        // Deliberately no 'button[data-testid="uc-save-settings-button"]',
         // that's "Save Settings", it persists the current toggles, not a reject.
       ],
     },
 
-    // ── 8b. Sourcepoint ──────────────────────────────────────────────────────
+    // 8b. Sourcepoint
     // Used by many large EU publishers (Spiegel, Bild, The Guardian, etc.).
     // Renders in a container/iframe whose id starts with "sp_message_container_".
-    // Reject buttons carry a stable "sp_choice_type_N" class — type 13 =
+    // Reject buttons carry a stable "sp_choice_type_N" class, type 13 =
     // "Reject all" on most configs. Some publishers hide reject behind a
     // "Preferences" second layer with no one-click reject; the heuristic tier
     // below is the backstop for those.
@@ -317,14 +348,14 @@
       name: 'Sourcepoint',
       containerSelector: '[id^="sp_message_container"], [class*="sp_message_container"], .sp_veil + [class*="sp_message"], .message-stacks, .message-overlay, .sp_choice_type_13',
       rejectSelectors: [
-        // ── Stable Sourcepoint choice classes (publisher-config-independent) ──
+        // Stable Sourcepoint choice classes (publisher-config-independent)
         'button.sp_choice_type_13',             // "Reject all" (most Sourcepoint configs)
         'button.sp_choice_type_REJECT_ALL',
         '.sp_choice_type_REJECT_ALL',
         '.sp_choice_type_13',
         '[data-sp-choice-type="13"]',           // data-attr variant
         '[data-sp_choice_type="13"]',
-        // ── English title / aria reject labels (Guardian, WaPo, Bloomberg…) ──
+        // English title / aria reject labels (Guardian, WaPo, Bloomberg…)
         'button[aria-label="Reject All" i]',
         'button[aria-label*="Reject all" i]',
         'button[aria-label*="Reject" i]',
@@ -346,7 +377,7 @@
         'button[title*="Necessary only" i]',
         'button[title*="Only necessary" i]',
         'button[title*="Essential only" i]',
-        // ── High-volume localized reject titles (DE/FR/ES/IT/NL/DA/SV) ──
+        // High-volume localized reject titles (DE/FR/ES/IT/NL/DA/SV)
         'button[title*="Ablehnen" i]',
         'button[aria-label*="Ablehnen" i]',
         'button[title*="Tout refuser" i]',
@@ -357,16 +388,16 @@
         'button[title*="Weigeren" i]',
         'button[title*="Afvis" i]',
         'button[title*="Neka" i]',
-        // ── Generic data hook (last resort; still accept-vetoed) ──
+        // Generic data hook (last resort; still accept-vetoed)
         '[data-action="reject"]',
       ],
     },
 
-    // ── 8a. Check24 (bespoke in-house CMP) ────────────────────────────────
+    // 8a. Check24 (bespoke in-house CMP)
     // Custom banner: .c24-cookie-consent-notice. Reject = "Nur notwendige
     // Cookies" → a.c24-cookie-consent-functional (functional-only consent).
     // Accept label "geht klar" matches no generic accept phrase, so the
-    // accept-veto can't recognise it — an explicit named rule is the safe way.
+    // accept-veto can't recognise it, an explicit named rule is the safe way.
     {
       name: 'Check24',
       containerSelector: '.c24-cookie-consent-notice',
@@ -375,9 +406,9 @@
       ],
     },
 
-    // ── 8b. consentmanager.net (#cmpbox), common on DE/EU sites ─────────────
+    // 8b. consentmanager.net (#cmpbox), common on DE/EU sites
     // Reject ("Ablehnen") is a.cmpboxbtnno, often a plain <a href="#"> with
-    // no role="button" — a button-only text fallback would miss it.
+    // no role="button", a button-only text fallback would miss it.
     {
       name: 'ConsentManager.net',
       containerSelector: '#cmpbox, .cmpbox, [id^="cmpbox"], [class*="cmpbox"], #cmpwrapper, .cmpwrapper',
@@ -390,7 +421,7 @@
       ],
     },
 
-    // ── 9. Generic / GDPR catch-all ─────────────────────────────────────────
+    // 9. Generic / GDPR catch-all
     // Most specific → most generic; accept-only buttons never listed. The
     // accept-veto matters most here, since these selectors are broad enough
     // to incidentally match an accept control.
@@ -422,14 +453,14 @@
     },
   ];
 
-  // ── Text-based fallback labels (last resort within a detected container) ──
+  // Text-based fallback labels (last resort within a detected container)
   // Phrases are keyed by 2-letter language code. buildPatterns() picks the
   // page language (document.documentElement.lang → navigator.language) and
   // always appends every other language as a last-resort tier, so language
   // detection failing never costs us a reject button.
   //
   // Accept phrases are localised too, on purpose: the accept-veto is
-  // worthless on a non-English page if it only knows English accept words —
+  // worthless on a non-English page if it only knows English accept words,
   // that's exactly how a French banner could get mis-clicked. Reject and
   // accept coverage grow together for this reason.
   const REJECT_PHRASES_BY_LANG = {
@@ -561,7 +592,7 @@
   // only rebuilds them when the language actually changes.
   let _lastBuiltLang = null;
 
-  // ── Generic heuristic tier, OPTION B: container-scoped (safe backstop) ────
+  // Generic heuristic tier, OPTION B: container-scoped (safe backstop)
   //
   // Why this exists: named frameworks + exact-anchored text only catch CMPs we
   // know. Bespoke walls in any language slip through. This tier is the backstop.
@@ -584,7 +615,7 @@
   //   - reads visible text AND untranslated attributes (Google-Translate-proof)
   //   - 5g accept-veto in every language: never clicks an "accept"-reading label
   const MAX_CONTAINER_SCAN = 1200;      // cap on elements examined for container detection
-  const MIN_CONTAINER_AREA = 12000;     // px^2 — a real banner is sizeable (~ 200x60+)
+  const MIN_CONTAINER_AREA = 12000;     // px^2, a real banner is sizeable (~ 200x60+)
   const HIGH_Z_THRESHOLD = 100;         // z-index at/above this counts as "overlay-ish"
   const HEURISTIC_SWEEP_COOLDOWN_MS = 1500; // negative-cache window: after a sweep finds no
                                             // overlay, skip re-sweeping for this long so a
@@ -608,7 +639,7 @@
   let REJECT_PHRASES_FLAT = flatPhrases(REJECT_PHRASES_BY_LANG);
   let ACCEPT_PHRASES_FLAT = flatPhrases(ACCEPT_PHRASES_BY_LANG);
 
-  // ── Pay-or-consent WALL veto phrases ───────────────────────────────────────
+  // Pay-or-consent WALL veto phrases
   // On cookie WALLS (Le Figaro, Bild, Spiegel, many EU publishers) the only
   // non-accept choice is "Refuse & subscribe" / "Subscribe", which does NOT
   // grant a free refusal, it sends the user to a paid subscription / paywall.
@@ -631,7 +662,7 @@
   };
   let SUBSCRIBE_PHRASES_FLAT = flatPhrases(SUBSCRIBE_PHRASES_BY_LANG);
 
-  // ── Pay-or-consent WALL classifier (contentpass/focus.de, Le Figaro, …) ────
+  // Pay-or-consent WALL classifier (contentpass/focus.de, Le Figaro, …)
   // A "wall" offers NO free reject: the only non-accept choice routes to a paid
   // subscription. Clicking a reject-looking control on these does not opt the
   // user out, it bounces them into the subscribe flow, or (contentpass) simply
@@ -701,7 +732,7 @@
     }
   }
 
-  // ── Unified label classifier (fix: consistent accept-veto across tiers) ────
+  // Unified label classifier (fix: consistent accept-veto across tiers)
   // Both the selector path and the heuristic path must agree on what a button
   // "is". Two failure modes we must avoid:
   //   - anchored ^...$ matching misses "Accept All Cookies" (≠ "accept all") →
@@ -748,7 +779,7 @@
     return classifyLabel(label) === 'reject';
   }
 
-  // ── Multi-step ("Preferences") phrases ─────────────────────────────────────
+  // Multi-step ("Preferences") phrases
   // Some CMPs (Sourcepoint on Spiegel, TrustArc, etc.) hide reject behind a
   // second layer reached via a "Preferences"/"Manage"/"Settings" button. These
   // phrases identify that opener so we can drill in. CONTAINS-matched, 35 langs.
@@ -798,7 +829,7 @@
   // never loop or repeatedly pop a modal. Reset on SPA navigation.
   let _multiStepTried = false;
 
-  // ── Reload-loop circuit breaker ────────────────────────────────────────────
+  // Reload-loop circuit breaker
   // Some CMP "Preferences / Manage" openers NAVIGATE the iframe instead of
   // opening an in-document modal (e.g. corriere.it / Sourcepoint). A full reload
   // re-runs this content script fresh, wiping in-memory guards like
@@ -863,7 +894,7 @@
       _cbSave(rec);
       return true;
     } catch (_) {
-      return true; // fail open — never let the breaker break consent handling
+      return true; // fail open, never let the breaker break consent handling
     }
   }
   // Clear the budget on a genuine same-document (SPA) navigation. Full reloads
@@ -877,7 +908,7 @@
     // survive SPA navigation, which is exactly how these banners loop.
   }
 
-  // ── Banner-regeneration breaker helpers (see constants above) ───────────────
+  // Banner-regeneration breaker helpers (see constants above)
   let _regenMem = null; // in-memory fallback when sessionStorage is unusable
   function _regenLoad() {
     const ss = _cbStore();
@@ -971,12 +1002,12 @@
   const _detectedLogged = new Set();
   const _roleFlowTried = new Set();
 
-  // ── "Detected but couldn't reject" surfacer (fix: popup banner count = 0) ───
+  // "Detected but couldn't reject" surfacer (fix: popup banner count = 0)
   // When a consent banner is plainly present but we cannot complete a reject
   // (classic case: a cross-origin CMP whose reject button lives inside the
   // vendor's OWN iframe, so this frame detects the wrapper but can't click it),
   // the popup used to show 0 because only a CONFIRMED reject is recorded. We now
-  // record ONE honest "seen" catch per page view so the count reflects reality —
+  // record ONE honest "seen" catch per page view so the count reflects reality,
   // flagged seen:true so the popup labels it "Detected", never "Rejected".
   //
   // Deferred + verified: a real reject often lands a beat after detection, so we
@@ -994,7 +1025,7 @@
       setTimeout(function () {
         try {
           if (_seenRecorded || window.__pawsOff_consentGhost_handled) return;
-          // Banner gone? Then it WAS dismissed (by us or the CMP's own iframe) —
+          // Banner gone? Then it WAS dismissed (by us or the CMP's own iframe),
           // don't fabricate a "seen" for a surface that's no longer there.
           if (!anyConsentSurfaceVisible()) return;
           _seenRecorded = true;
@@ -1017,7 +1048,7 @@
    *   is not an accept, and click it.
    * @returns {boolean}
    */
-  // ── Reliable layer-2 drill-in (poll-until-present) ─────────────────────────
+  // Reliable layer-2 drill-in (poll-until-present)
   // After opening the preferences panel we actively poll for a reject control
   // to render, rather than relying on the MutationObserver to fire again. This
   // makes the multi-step flow deterministic instead of timing-dependent.
@@ -1154,7 +1185,7 @@
         _multiStepTried = true;
         prefEl.click();
         setTimeout(() => pollLayerTwoReject(0), WAIT_INTERVAL_MS);
-        return false; // not handled yet — the poll will finish the job
+        return false; // not handled yet, the poll will finish the job
       }
 
       // Pay-or-consent wall with no reject and no preferences (Spiegel layer 1,
@@ -1175,7 +1206,7 @@
     }
   }
 
-  // ── Iframe consent-document handling (Sourcepoint / cross-origin CMP UIs) ──
+  // Iframe consent-document handling (Sourcepoint / cross-origin CMP UIs)
   // Big reliability gap this closes: CMPs like Sourcepoint (The Guardian,
   // idealo.de, Spiegel, Bild) render their banner inside their OWN cross-origin
   // iframe (privacy-mgmt.com / sp-prod.net / sourcepoint.*). Our content script
@@ -1354,7 +1385,7 @@
     }
   }
 
-  // ── Active config (remote-with-bundled-fallback) ───────────────────────────
+  // Active config (remote-with-bundled-fallback)
   // `activeConfig` is what scanAndReject() actually iterates. It STARTS as the
   // bundled array (offline / first-run authority) and is swapped to a verified
   // remote config only if loadRemoteConfig() succeeds. We never start from, or
@@ -1470,7 +1501,7 @@
           // code gated by the accept-veto. Any `steps` in remote config are ignored.
         });
       }
-      return out.length ? out : null; // empty list is unusable — keep bundled
+      return out.length ? out : null; // empty list is unusable, keep bundled
     } catch (_) {
       return null;
     }
@@ -1500,7 +1531,7 @@
     }
   }
 
-  // ── Error / event logging ────────────────────────────────────────────────────
+  // Error / event logging
   //
   // 7a FIX, UNIQUE-KEY WRITES.
   // Consent CMPs commonly load inside iframes, so several content-script
@@ -1536,13 +1567,16 @@
     return 'h:' + h.toString(16).padStart(8, '0');
   }
 
-  // ── Reload-loop breaker (per-origin, COUNTER-based) ─────────────────────────
+  // Reload-loop breaker (per-origin, COUNTER-based)
   // Some CMPs RELOAD the page to apply consent (e.g. check24.de). A naive "don't
   // act twice" stamp over-corrects: it also muted the FIRST reject after a normal
   // manual reload, so banners stopped getting rejected for 15s. Instead we COUNT
   // rejects within a sliding window and only stand down once we've clearly looped
   // (>= LOOP_MAX_REJECTS within REJECT_COOLDOWN_MS). One or two rejects still go
   // through, so normal use keeps working.
+  // Incognito: chrome.storage.local is shared with the normal profile and
+  // written to disk, so no browsing-activity record is persisted there.
+  const PRIVATE = (function(){ try { return !!(chrome.extension && chrome.extension.inIncognitoContext); } catch (_) { return false; } }());
   function _actedKey() { return ACTED_PREFIX + hashHost(location.hostname || ''); }
   async function loopGuardTripped() {
     try {
@@ -1563,7 +1597,8 @@
   }
   function markActed() {
     try {
-      if (!chrome.storage || !chrome.storage.local) return;
+      // In incognito the sessionStorage regen breaker alone bounds reload loops.
+      if (PRIVATE || !chrome.storage || !chrome.storage.local) return;
       const k = _actedKey();
       chrome.storage.local.get(k, (s) => {
         try {
@@ -1595,6 +1630,7 @@
         recordRejectForRegen();
       }
     } catch (_) { /* silent */ }
+    if (PRIVATE) return;
     try {
       // `domain` is a one-way FNV-1a digest of the visited site host, enough to
       // tell two failure sites apart for debugging without storing a plaintext,
@@ -1644,6 +1680,7 @@
    * @returns {Promise<void>}
    */
   async function incrementTotal(key, by) {
+    if (PRIVATE) return;
     try {
       const s = await chrome.storage.local.get(key);
       const cur = (s && typeof s[key] === 'number') ? s[key] : 0;
@@ -1651,7 +1688,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── DOM helpers ────────────────────────────────────────────────────────────
+  // DOM helpers
 
   /**
    * Return an element's shadow root, OPEN or CLOSED.
@@ -1908,7 +1945,7 @@
     return false;
   }
 
-  // ── CSS fast-hide ──────────────────────────────────────────────────────────
+  // CSS fast-hide
   // On a confirmed consent container, inject a targeted `display:none` instantly
   // so the user never sees the banner flash while we look for the reject button.
   // We only do this AFTER matching the container (safe scope) and we undo it if
@@ -1941,7 +1978,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── Pre-paint flash suppression (prehide) ──────────────────────────────────
+  // Pre-paint flash suppression (prehide)
   // At document_start we inject a <style> that hides ONLY the vetted, named-CMP
   // container selectors (activeConfig), so the banner doesn't flash before we can
   // reject it. An UNCONDITIONAL watchdog removes the style after PREHIDE_MAX_MS no
@@ -1978,7 +2015,7 @@
   }
 
   function revealPrehide() {
-    if (_prehideRevealed) return;                  // idempotent — many paths call this
+    if (_prehideRevealed) return;                  // idempotent, many paths call this
     _prehideRevealed = true;
     try {
       const s = _prehideStyle;
@@ -2117,7 +2154,7 @@
     return result;
   }
 
-  // ── Core consent scan ──────────────────────────────────────────────────────
+  // Core consent scan
 
   let _needsRescan = false;
   let _rescanLoopCount = 0; // Guard against anti-block infinite loops
@@ -2131,7 +2168,7 @@
     return !!container && isVisible(container);
   }
 
-  // ── Orphaned-backdrop reaper (fix: "banner gone but the overlay stays") ─────
+  // Orphaned-backdrop reaper (fix: "banner gone but the overlay stays")
   // Cross-origin CMPs (Sourcepoint et al.) render the dialog inside their OWN
   // iframe, but the full-screen click-blocking VEIL and the page scroll-lock live
   // in the TOP document. When the reject is performed from inside that iframe (a
@@ -2252,7 +2289,7 @@
     } catch (_) { /* silent */ }
   }
 
-  // ── Layer 0: declarative CMP rules engine (autoconsent-derived ruleset) ─────
+  // Layer 0: declarative CMP rules engine (autoconsent-derived ruleset)
   // Runs a vendored, MPL-licensed ruleset (from DuckDuckGo autoconsent) through
   // PawsOff's OWN DSL interpreter (consent-rules-engine.js) BEFORE the bundled-
   // selector and heuristic layers. This adds true multi-step opt-out (toggle
@@ -2366,7 +2403,7 @@
     const _myGen = _scanGuard.capture();
 
     try {
-      // ── Layer 0: declarative autoconsent-derived ruleset ──────────────────
+      // Layer 0: declarative autoconsent-derived ruleset
       // Multi-step + paywall-aware. Runs before the flat bundled selectors and
       // the heuristic. A pay-wall result falls through (already logged) so the
       // heuristic can still try; a real reject/hide short-circuits the scan.
@@ -2374,7 +2411,7 @@
       // Superseded by a newer scan/navigation while awaiting? Bail before acting.
       if (!_scanGuard.isCurrent(_myGen)) return;
       if (_ac && (_ac.outcome === 'rejected' || _ac.outcome === 'hidden')) {
-        revealPrehide(); // H2: Layer-0 handled it — don't wait for the watchdog to reveal
+        revealPrehide(); // Layer-0 handled it, don't wait for the watchdog to reveal
         if (window.__pawsOff_consentGhost_observer) {
           try { window.__pawsOff_consentGhost_observer.disconnect(); } catch (_) {}
           window.__pawsOff_consentGhost_observer = null;
@@ -2395,6 +2432,7 @@
         // cannot suppress the framework. scopedQueryAll also contains malformed
         // remote selectors and optionally reaches nested shadow roots.
         const containers = frameworkContainers(framework, pierce);
+        if (containers.some(hasBox)) _cmpBannerSeen.add(framework.name);
         let container = containers.find((candidate) => isVisible(candidate)) || containers[0] || null;
         // Reveal our OWN prehide BEFORE the isVisible() gate, visibility:hidden
         // would otherwise make us skip the very banner we hid. fastHideContainer()
@@ -2457,7 +2495,7 @@
         recordDetectedSurface(framework.name);
       }
 
-      // ── Heuristic backstop ──────────────────────────────────────────────
+      // Heuristic backstop
       // Every named framework missed. Try the generic, multilingual,
       // translation-proof reject before giving up. This is what catches unknown
       // CMPs (Sourcepoint variants, bespoke walls) in any language.
@@ -2498,7 +2536,7 @@
         return;
       }
     } catch (err) {
-      revealPrehide(); // H2: never leave content hidden if the scan threw before a reveal
+      revealPrehide(); // never leave content hidden if the scan threw before a reveal
       try {
         logToStorage({ status: 'error', message: err && err.message });
       } catch (_) {
@@ -2522,7 +2560,7 @@
     }
   }
 
-  // ── MutationObserver setup ─────────────────────────────────────────────────
+  // MutationObserver setup
 
   function startObserver() {
     try {
@@ -2581,7 +2619,7 @@
     }
   }
 
-  // ── Public init function ───────────────────────────────────────────────────
+  // Public init function
 
   window.__pawsOff_consentGhost_init = async function () {
     try {
@@ -2644,7 +2682,7 @@
     }
   };
 
-  // ── Live toggle: react to the popup/options switch without a reload ─────────
+  // Live toggle: react to the popup/options switch without a reload
   // When the user flips ConsentGhost off, stop acting immediately; when they
   // flip it back on, re-run a scan + re-arm the observer on the current page.
   try {
@@ -2678,9 +2716,9 @@
         } catch (_) { /* silent */ }
       });
     }
-  } catch (_) { /* silent — storage API unavailable */ }
+  } catch (_) { /* silent, storage API unavailable */ }
 
-  // ── SPA navigation reset ───────────────────────────────────────────────────
+  // SPA navigation reset
   //
   // Chrome 102+ Navigation API fires on ALL client-side navigation (pushState,
   // replaceState, popstate, anchor clicks, fragment changes) in one handler with
@@ -2696,7 +2734,7 @@
       // Invalidate any in-flight scan: bumping the generation makes the orphaned
       // scan bail after its next await (BEFORE clicking) and skip its finally, so
       // its late-resolving await can never double-click the freshly navigated
-      // page. (Closes v2 2c, the abort-token / generation-counter fix.)
+      // page.
       _scanGuard.invalidate();
       _scanning = false;
       _needsRescan = false;
@@ -2739,7 +2777,7 @@
     }
   }
 
-  // ── MAIN world CMP API tier signal ─────────────────────────────────────────
+  // MAIN world CMP API tier signal
   // cmp-api-main.js (world: MAIN) calls CMP APIs (OneTrust.RejectAll, etc.) and
   // dispatches this event on success. We mark the page handled and disconnect the
   // observer so the DOM-click tier doesn't double-act. CustomEvents cross the
@@ -2753,13 +2791,11 @@
         const cmp = (e && e.detail && e.detail.cmp) || 'CMP-API';
         if (window.__pawsOff_consentGhost_handled) return; // already done
 
-        // The page can dispatch DOM events too. Treat this signal as proof only
-        // when a known banner was visibly present before the extension requested
-        // MAIN-world execution; otherwise it is merely a hint to rescan.
-        if (_cmpApiVisibleBefore.length === 0) {
-          scanAndReject();
-          return;
-        }
+        // The page can dispatch DOM events too. The signal counts as a rejection
+        // only with evidence of a banner (checked after the wait below); until
+        // then it is a hint to rescan.
+        noteCmpBanners();
+        if (_cmpBannerSeen.size === 0) scanAndReject();
 
         // Post-action verification: Wait 1200ms before declaring success.
         // Some CMP APIs silently no-op, and some animate their dismissal over
@@ -2767,7 +2803,18 @@
         // back to Tier 2 (DOM click).
         setTimeout(() => {
           if (window.__pawsOff_consentGhost_handled) return;
-          
+
+          noteCmpBanners();
+          if (!cmpSignalProven(cmp, _cmpBannerSeen.size, document)) {
+            if (!_cmpApiUnprovenLogged) {
+              _cmpApiUnprovenLogged = true;
+              logToStorage({ status: 'api_signal_no_banner', framework: 'CMP-API/' + cmp });
+            }
+            return;
+          }
+
+          // Our prehide would make a banner the API left in place look gone.
+          revealPrehide();
           let stillVisible = false;
           for (const f of activeConfig) {
             if (frameworkContainers(f, f.pierceShadow === true).some(isVisible)) {
@@ -2795,9 +2842,9 @@
         }, 1200);
       } catch (_) { /* silent */ }
     });
-  } catch (_) { /* silent — safe to omit if addEventListener unavailable */ }
+  } catch (_) { /* silent, safe to omit if addEventListener unavailable */ }
 
-  // ── Auto-invoke ────────────────────────────────────────────────────────────
+  // Auto-invoke
   // We now inject at document_start (to catch CMPs the instant they appear and
   // to reach iframes early). At that moment document.body may not exist yet and
   // the scan/heuristic touch it, so defer the FIRST init until the DOM is at
@@ -2840,13 +2887,14 @@
   }
   __pawsOff_consentGhost_boot();
 
-  // ── Test-only export ────────────────────────────────────────────────────────
+  // Test-only export
   // NO-OP IN CHROME: a content script has no CommonJS `module`, so this block is
   // skipped at runtime (typeof module === 'undefined'). Under Jest it exposes the
   // pure helpers for unit testing. Never relied on by the extension itself.
   try {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports.__test = {
+        hasBox, cmpSignalProven,
         escapeRe, phrasesToRegexes, detectLangs, buildPatterns,
         isAcceptLabel, btnText, normalizeRemoteConfig, shouldStandDownAfterRoleResult,
         flatPhrases, looksAccept, looksReject, heuristicLabel, isUnsafeRoleAction,

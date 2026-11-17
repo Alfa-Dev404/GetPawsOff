@@ -1,5 +1,5 @@
 'use strict';
-/* PawsOff — publish the bundled PixelBlock provider table as a signed remote feed.
+/* PawsOff, publish the bundled PixelBlock provider table as a signed remote feed.
  *
  * Same gap as ToS Shield patterns: background.js has fetched
  * /pixel-block/pixel-config.json since 0.1.0 and has always got a 404, because
@@ -10,8 +10,8 @@
  *
  * Only the three fields loadRemoteProviderConfig() actually overlays are
  * published (emailBodySelectors, excludeSelectors, legitimateProxies), keyed by
- * provider id. Everything else in PROVIDER_CONFIG — hosts, nativeProtection, the
- * detection logic — stays bundled, because the shipped overlay ignores it and
+ * provider id. Everything else in PROVIDER_CONFIG, hosts, nativeProtection, the
+ * detection logic, stays bundled, because the shipped overlay ignores it and
  * publishing fields nobody reads is just bytes and attack surface.
  *
  * Note the shipped overlay only replaces a field when the remote array is

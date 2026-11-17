@@ -1,4 +1,4 @@
-/* PawsOff — tests for the OBSERVE-ONLY prevalence collector (content script).
+/* PawsOff, tests for the OBSERVE-ONLY prevalence collector (content script).
  *
  * The collector is mostly browser-lifecycle glue (PerformanceObserver, timers,
  * sendMessage) that can't run headless, but its two PURE helpers carry real

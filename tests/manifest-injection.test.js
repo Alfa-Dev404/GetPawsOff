@@ -1,4 +1,4 @@
-/* PawsOff — manifest content-script injection surface (perf root-cause guard).
+/* PawsOff, manifest content-script injection surface (perf root-cause guard).
  *
  * PERF root cause: the broad consent content script (http(s)://*\/*) ran in
  * EVERY frame, including empty about:blank ad iframes, paying ~234KB parse +
@@ -57,7 +57,7 @@ test('manifest: broad consent script exists and no longer matches about:blank', 
   );
 });
 
-test('manifest: engine bundle entry — document_idle + all_frames, no about:blank', () => {
+test('manifest: engine bundle entry, document_idle + all_frames, no about:blank', () => {
   assert(broadConsent.run_at === 'document_idle', 'engine bundle runs at document_idle (Change 3)');
   assert(broadConsent.all_frames === true, 'engine keeps all_frames:true (cross-origin CMP iframes)');
   assert(broadConsent.match_about_blank !== true, 'engine rule must NOT match about:blank');
@@ -66,7 +66,7 @@ test('manifest: engine bundle entry — document_idle + all_frames, no about:bla
     'fixed role engine loads before the consent scanner');
 });
 
-test('manifest: prehide entry — document_start + all_frames, no about:blank, no engine', () => {
+test('manifest: prehide entry, document_start + all_frames, no about:blank, no engine', () => {
   assert(broadPrehide, 'broad consent-prehide.js entry is present');
   assert(broadPrehide.run_at === 'document_start', 'prehide runs at document_start (pre-paint)');
   assert(broadPrehide.all_frames === true, 'prehide runs in all frames (watchdog protects sub-frames)');
@@ -94,4 +94,12 @@ test('manifest: targeted CMP-host block keeps match_origin_as_fallback', () => {
   assert(targetedCmp.js.includes(ROLE_ENGINE_JS)
     && targetedCmp.js.indexOf(ROLE_ENGINE_JS) < targetedCmp.js.indexOf(CONSENT_JS),
     'targeted frame gets the fixed role engine before the scanner');
+});
+
+test('manifest: version matches package.json and the service worker', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const bg = fs.readFileSync(path.join(__dirname, '..', 'src/background/background.js'), 'utf8');
+  const bgVersion = (bg.match(/const VERSION = '([^']+)'/) || [])[1];
+  assert(pkg.version === manifest.version, 'package.json version matches manifest');
+  assert(bgVersion === manifest.version, 'background VERSION matches manifest');
 });
