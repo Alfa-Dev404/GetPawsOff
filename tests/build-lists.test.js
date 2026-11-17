@@ -175,3 +175,14 @@ test('build lists: upstream downloads retry a 503 but never a redirect', async (
     console.error = originalError;
   }
 });
+
+test('build lists: the ToS feed for 0.1.0 clients is held at their 12-category vocabulary', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { convert } = require('../tools/tos-shield-to-patterns.js');
+  const frozen = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'tools', 'tos-vocabulary-0.1.0.json'), 'utf8'));
+  const { config } = convert(frozen, { configVersion: '20270101000000' });
+  eq(config.categories.length, 12, 'no category the old matcher was not built for');
+  eq(config.patterns.length, 12);
+  eq(config.configVersion, '20270101000000', 'restamped with the release version');
+});

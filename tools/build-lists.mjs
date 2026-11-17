@@ -332,13 +332,14 @@ const SOURCES = [
     }),
   },
   {
-    // No upstream project and no network: the input is our own bundled
-    // vocabulary. Published so a clause-matching fix reaches installed clients
-    // on the next daily refresh instead of waiting for a Store release.
+    // Only Store 0.1.0 clients read this feed, and their matcher predates the
+    // current vocabulary, so it is held at the vocabulary they shipped with.
+    // Once 1.0.0 is in the Store, switch back to
+    // bundledExport(loadTosShield, 'DEFAULT_CONFIG') and delete the frozen file.
     feature: 'ToS Shield (clause vocabulary)',
     name: 'tos-patterns',
     license: 'MPL-2.0',
-    fetchText: async () => bundledExport(loadTosShield, 'DEFAULT_CONFIG'),
+    fetchText: async () => readFileSync(resolve(__dir, 'tos-vocabulary-0.1.0.json'), 'utf8'),
     out: 'dist-lists/tos-shield/patterns.json',
     run: (text, configVersion) => tosPatterns.convert(JSON.parse(text), { configVersion }),
   },
