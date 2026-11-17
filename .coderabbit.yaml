@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  poem: false
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+  # Generated or vendored files: reviewed at their source, not here.
+  path_filters:
+    - "!src/rules/**"
+    - "!src/content/vendor/**"
+    - "!src/data/consent-config.json"
+    - "!tests/fixtures/**"

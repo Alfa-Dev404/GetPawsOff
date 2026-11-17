@@ -2,9 +2,9 @@ name: Publish signed config
 
 # Builds + signs the extension's remote-config feeds and deploys them as
 # static files to Cloudflare Pages at config.getpawsoff.app. This is the
-# publish half of PawsOff's ONE permitted network exception (see CLAUDE.md
-# non-negotiable #2): every feed here is signed ECDSA-P256/SHA-256, and
-# src/background/background.js verifies the signature against the pinned
+# publish half of PawsOff's ONE permitted network exception: every feed here
+# is signed ECDSA-P256/SHA-256, and src/background/background.js verifies the
+# signature against the pinned
 # public key before trusting anything, failing OPEN (falls back to the
 # bundled/cached copy) on any fetch, parse, or signature failure.
 #
@@ -14,14 +14,14 @@ name: Publish signed config
 #   - ConsentGhost v2 (constrained semantic roles) for current clients, plus the
 #     schema-v1 compatibility alias used by Store version 0.1.0. Both are built
 #     from the same pinned AutoConsent release and published every run.
-#   - ToS reputation (tos-shield/reputation.json) — ToS;DR grade data for the
+#   - ToS reputation (tos-shield/reputation.json), ToS;DR grade data for the
 #     next extension release. It is intentionally NOT published as patterns.json
 #     because reputation data does not match the executable pattern schema.
-#   - EasyPrivacy delta (easyprivacy-delta/domains.json) — conservative exact-
+#   - EasyPrivacy delta (easyprivacy-delta/domains.json), conservative exact-
 #     domain additions not covered by the bundled static ruleset. Path/scoped/
 #     frame/media rules are intentionally excluded from the live top-up.
 #   - ToS patterns (tos-shield/patterns.json) and PixelBlock selectors
-#     (pixel-block/pixel-config.json) — the two endpoints background.js has
+#     (pixel-block/pixel-config.json), the two endpoints background.js has
 #     requested since launch and got a 404 on every time. Neither has an upstream
 #     project to convert: they are generated from our OWN shipping content
 #     scripts (DEFAULT_CONFIG in tos-shield.js, PROVIDER_CONFIG in
@@ -34,7 +34,7 @@ name: Publish signed config
 #   Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
 #     CONFIG_SIGNING_PRIVATE_JWK  the raw JSON contents of
 #                                 .keys/config-signing-key.jwk (never commit
-#                                 this file — it's gitignored on purpose).
+#                                 this file, it's gitignored on purpose).
 #     CLOUDFLARE_API_TOKEN        a token scoped to Pages:Edit on ONE project.
 #     CLOUDFLARE_ACCOUNT_ID       your Cloudflare account id.
 #   Variables (same settings page, "Variables" tab):
@@ -67,7 +67,7 @@ on:
       - 'src/rules/easyprivacy-domains.json'
       - '.github/workflows/publish-config.yml'
   schedule:
-    - cron: '0 5 * * *' # daily — matches the extension's own CONFIG_REFRESH_MINUTES cadence
+    - cron: '0 5 * * *' # daily, matches the extension's own CONFIG_REFRESH_MINUTES cadence
   workflow_dispatch: {}
 
 permissions:
