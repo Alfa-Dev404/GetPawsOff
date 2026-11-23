@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const __dir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dir, '..');
-const AUTOCONSENT_VERSION = '16.11.0';
+const AUTOCONSENT_VERSION = '18.9.0';
 const AUTOCONSENT_RULES_URL =
   `https://cdn.jsdelivr.net/npm/@duckduckgo/autoconsent@${AUTOCONSENT_VERSION}/dist/addon-mv3/rules.json`;
 const EASYPRIVACY_URL = 'https://easylist.to/easylist/easyprivacy.txt';
